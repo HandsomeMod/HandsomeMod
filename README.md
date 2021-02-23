@@ -1,7 +1,7 @@
+![HandsomeMod logo](include/logo.png)
+
 # HandsomeMod Attila (21.03)
 ## IOT Freedom For End-user!
-### Warning!!
-## This Project is unstable and un-fully tested right now!
 
 ### HandsomeMod is Not A router-only GNU/Linux distribution.
 ### Right Now Router is not Our Mainly Support Target.
@@ -43,6 +43,7 @@ https://github.com/openwrt/openwrt
 
 - A Simple distribution for IOT devices with screen.
 
+
 #  The Main Target Support By HandsomeMod
 
 - Rapsberry pies (BCM27xx)
@@ -54,4 +55,9 @@ https://github.com/openwrt/openwrt
 - MSM8916 (Planing)
 
 - Samsung Exynos 4412 On samsung i9300(planing)
+
+
+## License
+
+HandsomeMod is licensed under GPL-2.0
 
