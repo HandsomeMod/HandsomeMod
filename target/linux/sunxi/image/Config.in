@@ -1,0 +1,9 @@
+config SUNXI_SD_BOOT_PARTSIZE
+	int "Boot (SD Card) filesystem partition size (in MB)"
+	depends on TARGET_sunxi
+	default 20
+
+config SUNXI_IS_BOOT_FROM_MMC1
+	bool "Boot HandsomeMod From MMC1"
+	depends on TARGET_sunxi
+	default n

@@ -1,0 +1,191 @@
+From 0cb5a4591069e24f6fd9bf471fcd659690814167 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sat, 3 Oct 2020 12:00:10 +0800
+Subject: [PATCH] switch to ubifs
+
+---
+ arch/arm/boot/dts/suniv-widora-tiny200-v2.dts | 48 +++--------
+ arch/arm/boot/dts/suniv-widora-tiny200-v3.dts | 81 +++----------------
+ 2 files changed, 20 insertions(+), 109 deletions(-)
+
+diff --git a/arch/arm/boot/dts/suniv-widora-tiny200-v2.dts b/arch/arm/boot/dts/suniv-widora-tiny200-v2.dts
+index 5f87a7fb2..2933cb310 100644
+--- a/arch/arm/boot/dts/suniv-widora-tiny200-v2.dts
++++ b/arch/arm/boot/dts/suniv-widora-tiny200-v2.dts
+@@ -40,56 +40,30 @@
+ 
+ &spi0 {
+ 	status = "okay";
+-
+-	spi-nor@0 {
+-		#address-cells = <1>;
+-		#size-cells = <1>;
+-		compatible = "winbond,w25q128", "jedec,spi-nor";
+-		reg = <0>;
+-		spi-max-frequency = <50000000>;
+-
+ 	spi-nand@0 {
+ 		#address-cells = <1>;
+ 		#size-cells = <1>;
+ 		compatible = "spi-nand";
+ 		reg = <0>;
+ 		spi-max-frequency = <50000000>;
+-		status = "disabled";
++		status = "okay";
+ 
+ 		partitions {
+ 			compatible = "fixed-partitions";
+ 			#address-cells = <1>;
+ 			#size-cells = <1>;
++			
++		boot@0 {
++			label = "boot";
++			reg = <0x0000000 0x0100000>;
++		};
+ 
+-			partition@0 {
+-				label = "u-boot";
+-				reg = <0x000000 0x80000>;
+-				read-only;
+-			};
+-
+-			partition@1 {
+-				label = "dtb";
+-				reg = <0x80000 0x20000>;
+-				read-only;
+-			};
+-
+-			partition@2 {
+-				label = "kernel";
+-				reg = <0x100000 0x700000>;
+-				read-only;
+-			};
+-
+-			partition@3 {
+-				label = "rom";
+-				reg = <0x800000 0x4000000>;
+-				read-only;
+-			};
+-
+-			partition@4 {
+-				label = "overlay";
+-				reg = <0x4800000 0x3000000>;
+-			};
++		ubi0@100000 {
++			label = "ubi0";
++			reg = <0x0100000 0x0000000>;
+ 		};
++
++	    };
+ 	};
+ };
+ 
+diff --git a/arch/arm/boot/dts/suniv-widora-tiny200-v3.dts b/arch/arm/boot/dts/suniv-widora-tiny200-v3.dts
+index ac6e5beae..9817cda35 100644
+--- a/arch/arm/boot/dts/suniv-widora-tiny200-v3.dts
++++ b/arch/arm/boot/dts/suniv-widora-tiny200-v3.dts
+@@ -40,92 +40,29 @@
+ 
+ &spi0 {
+ 	status = "okay";
+-
+-	spi-nor@0 {
+-		#address-cells = <1>;
+-		#size-cells = <1>;
+-		compatible = "winbond,w25q128", "jedec,spi-nor";
+-		reg = <0>;
+-		spi-max-frequency = <50000000>;
+-
+-		partitions {
+-			compatible = "fixed-partitions";
+-			#address-cells = <1>;
+-			#size-cells = <1>;
+-
+-			partition@0 {
+-				label = "u-boot";
+-				reg = <0x000000 0x70000>;
+-				read-only;
+-			};
+-
+-			partition@1 {
+-				label = "dtb";
+-				reg = <0x70000 0x10000>;
+-				read-only;
+-			};
+-
+-			partition@2 {
+-				label = "kernel";
+-				reg = <0x80000 0x580000>;
+-				read-only;
+-			};
+-
+-			partition@3 {
+-				label = "rom";
+-				reg = <0x600000 0x700000>;
+-				read-only;
+-			};
+-
+-			partition@4 {
+-				label = "overlay";
+-				reg = <0xd00000 0x300000>;
+-			};
+-		};
+-	};
+-
+ 	spi-nand@0 {
+ 		#address-cells = <1>;
+ 		#size-cells = <1>;
+ 		compatible = "spi-nand";
+ 		reg = <0>;
+ 		spi-max-frequency = <50000000>;
+-		status = "disabled";
++		status = "okay";
+ 
+ 		partitions {
+ 			compatible = "fixed-partitions";
+ 			#address-cells = <1>;
+ 			#size-cells = <1>;
+ 
+-			partition@0 {
+-				label = "u-boot";
+-				reg = <0x000000 0x80000>;
+-				read-only;
+-			};
+-
+-			partition@1 {
+-				label = "dtb";
+-				reg = <0x80000 0x20000>;
+-				read-only;
+-			};
+-
+-			partition@2 {
+-				label = "kernel";
+-				reg = <0x100000 0x700000>;
+-				read-only;
+-			};
+-
+-			partition@3 {
+-				label = "rom";
+-				reg = <0x800000 0x4000000>;
+-				read-only;
+-			};
++		boot@0 {
++			label = "boot";
++			reg = <0x0000000 0x0100000>;
++		};
+ 
+-			partition@4 {
+-				label = "overlay";
+-				reg = <0x4800000 0x3000000>;
+-			};
++		ubi0@100000 {
++			label = "ubi0";
++			reg = <0x0100000 0x0000000>;
+ 		};
++	   };
+ 	};
+ };
+ 
+-- 
+2.28.0
+

@@ -1,0 +1,524 @@
+From 2ddc946e9212a61062f65bb7e68efda744186954 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Mon, 5 Oct 2020 21:26:53 +0800
+Subject: [PATCH] add sun8i-v3s lcd support
+
+---
+ arch/arm/dts/sun8i-v3s-licheepi-zero.dts      |  55 ++++++++
+ arch/arm/dts/sun8i-v3s.dtsi                   | 131 +++++++++++++++++-
+ arch/arm/include/asm/arch-sunxi/clock_sun6i.h |   5 +-
+ arch/arm/include/asm/arch-sunxi/gpio.h        |   2 +
+ arch/arm/mach-sunxi/Kconfig                   |   1 +
+ configs/LicheePi_Zero_defconfig               |   4 +
+ configs/widora_tiny200_v2_nand_defconfig      |  29 ++++
+ configs/widora_tiny200_v3_nand_defconfig      |  29 ++++
+ drivers/pwm/sunxi_pwm.c                       |   3 +
+ drivers/video/sunxi/lcdc.c                    |   7 +-
+ drivers/video/sunxi/sunxi_de2.c               |  26 +++-
+ drivers/video/sunxi/sunxi_dw_hdmi.c           |   2 +
+ drivers/video/sunxi/sunxi_lcd.c               |   9 +-
+ 13 files changed, 289 insertions(+), 14 deletions(-)
+
+diff --git a/arch/arm/dts/sun8i-v3s-licheepi-zero.dts b/arch/arm/dts/sun8i-v3s-licheepi-zero.dts
+index 3d9168cb..c3d1b357 100644
+--- a/arch/arm/dts/sun8i-v3s-licheepi-zero.dts
++++ b/arch/arm/dts/sun8i-v3s-licheepi-zero.dts
+@@ -55,6 +55,61 @@
+ 	chosen {
+ 		stdout-path = "serial0:115200n8";
+ 	};
++
++
++	backlight: backlight {
++		compatible = "pwm-backlight";
++		pwms = <&pwm 0 1000000 0>;
++		brightness-levels = <0 30 40 50 60 70 100>;
++		default-brightness-level = <6>;
++	};
++
++	panel: panel {
++		compatible = "lg,lb070wv8", "simple-panel";
++		backlight = <&backlight>;
++
++		port {
++			panel_input: endpoint {
++				remote-endpoint = <&tcon0_out_lcd>;
++			};
++		};
++
++		display-timings {
++			timing0: timing0 {
++				clock-frequency = <33000000>;
++				hactive = <800>;
++				vactive = <480>;
++
++				hfront-porch = <40>;
++				hsync-len = <1>;
++				hback-porch = <87>;
++
++				vback-porch = <31>;
++				vsync-len = <1>;
++				vfront-porch = <13>;
++			};
++		};
++	};
++
++};
++
++&tcon0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&lcd_pins>;
++	status = "okay";
++};
++
++&tcon0_out {
++	tcon0_out_lcd: endpoint@0 {
++		reg = <0>;
++		remote-endpoint = <&panel_input>;
++	};
++};
++
++&pwm {
++	pinctrl-names = "default";
++	pinctrl-0 = <&pwm0_pins>;
++	status = "okay";
+ };
+ 
+ &mmc0 {
+diff --git a/arch/arm/dts/sun8i-v3s.dtsi b/arch/arm/dts/sun8i-v3s.dtsi
+index ebefc0fe..dc62512e 100644
+--- a/arch/arm/dts/sun8i-v3s.dtsi
++++ b/arch/arm/dts/sun8i-v3s.dtsi
+@@ -44,12 +44,29 @@
+ #include <dt-bindings/reset/sun8i-v3s-ccu.h>
+ #include <dt-bindings/interrupt-controller/arm-gic.h>
+ #include <dt-bindings/pinctrl/sun4i-a10.h>
++#include <dt-bindings/clock/sun8i-de2.h>
+ 
+ / {
+ 	#address-cells = <1>;
+ 	#size-cells = <1>;
+ 	interrupt-parent = <&gic>;
+ 
++	chosen {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		ranges;
++
++		framebuffer-lcd {
++			compatible = "allwinner,simple-framebuffer",
++				     "simple-framebuffer";
++			allwinner,pipeline = "mixer0-lcd0";
++			clocks = <&display_clocks CLK_MIXER0>,
++				 <&ccu CLK_TCON0>;
++			status = "disabled";
++		};
++	};
++	
++
+ 	cpus {
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+@@ -89,12 +106,91 @@
+ 			clock-output-names = "osc32k";
+ 		};
+ 	};
++	
++	de: display-engine {
++		compatible = "allwinner,sun8i-v3s-display-engine";
++		allwinner,pipelines = <&mixer0>;
++		status = "disabled";
++	};
+ 
+ 	soc {
+ 		compatible = "simple-bus";
+ 		#address-cells = <1>;
+ 		#size-cells = <1>;
+ 		ranges;
++		
++		display_clocks: clock@1000000 {
++			compatible = "allwinner,sun8i-v3s-de2-clk";
++			reg = <0x01000000 0x10000>;
++			clocks = <&ccu CLK_BUS_DE>,
++				 <&ccu CLK_DE>;
++			clock-names = "bus",
++				      "mod";
++			resets = <&ccu RST_BUS_DE>;
++			#clock-cells = <1>;
++			#reset-cells = <1>;
++		};
++
++		mixer0: mixer@1100000 {
++			compatible = "allwinner,sun8i-v3s-de2-mixer";
++			reg = <0x01100000 0x100000>;
++			clocks = <&display_clocks 0>,
++				 <&display_clocks 6>;
++			clock-names = "bus",
++				      "mod";
++			resets = <&display_clocks 0>;
++
++			ports {
++				#address-cells = <1>;
++				#size-cells = <0>;
++
++				mixer0_out: port@1 {
++					reg = <1>;
++
++					mixer0_out_tcon0: endpoint {
++						remote-endpoint = <&tcon0_in_mixer0>;
++					};
++				};
++			};
++		};
++
++		tcon0: lcd-controller@1c0c000 {
++			compatible = "allwinner,sun8i-v3s-tcon";
++			reg = <0x01c0c000 0x1000>;
++			interrupts = <GIC_SPI 86 IRQ_TYPE_LEVEL_HIGH>;
++			clocks = <&ccu CLK_BUS_TCON0>,
++				 <&ccu CLK_TCON0>;
++			clock-names = "ahb",
++				      "tcon-ch0";
++			clock-output-names = "tcon-pixel-clock";
++			#clock-cells = <0>;
++			resets = <&ccu RST_BUS_TCON0>;
++			reset-names = "lcd";
++			status = "disabled";
++
++			ports {
++				#address-cells = <1>;
++				#size-cells = <0>;
++
++				tcon0_in: port@0 {
++					reg = <0>;
++
++					tcon0_in_mixer0: endpoint {
++						remote-endpoint = <&mixer0_out_tcon0>;
++					};
++				};
++
++				tcon0_out: port@1 {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					reg = <1>;
++					tcon0_out_lcd: endpoint@0 {
++						reg = <0>;
++					};
++				};
++			};
++		};
++
+ 
+ 		mmc0: mmc@01c0f000 {
+ 			compatible = "allwinner,sun7i-a20-mmc";
+@@ -208,10 +304,12 @@
+ 			interrupt-controller;
+ 			#interrupt-cells = <3>;
+ 
+-			uart0_pins_a: uart0@0 {
+-				pins = "PB8", "PB9";
+-				function = "uart0";
+-				bias-pull-up;
++			lcd_pins: lcd-pins {
++				pins = "PE0", "PE1", "PE2", "PE3", "PE4", "PE5",
++				       "PE6", "PE7", "PE8", "PE9", "PE10", "PE11",
++				       "PE12", "PE13", "PE14", "PE15", "PE16", "PE17",
++				       "PE18", "PE19", "PE23", "PE24";
++				function = "lcd";
+ 			};
+ 
+ 			mmc0_pins_a: mmc0@0 {
+@@ -221,6 +319,23 @@
+ 				drive-strength = <30>;
+ 				bias-pull-up;
+ 			};
++			
++			pwm0_pins: pwm0-pins {
++				pins = "PB4";
++				function = "pwm0";
++			};
++
++			pwm1_pins: pwm1-pins {
++				pins = "PB5";
++				function = "pwm1";
++			};
++
++			uart0_pins_a: uart0@0 {
++				pins = "PB8", "PB9";
++				function = "uart0";
++				bias-pull-up;
++			};
++			
+ 		};
+ 
+ 		timer@01c20c00 {
+@@ -280,5 +395,13 @@
+ 			#interrupt-cells = <3>;
+ 			interrupts = <GIC_PPI 9 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_HIGH)>;
+ 		};
++
++		pwm: pwm@1c21400 {
++			compatible = "allwinner,sun7i-a20-pwm";
++			reg = <0x01c21400 0x400>;
++			clocks = <&osc24M>;
++			#pwm-cells = <3>;
++			status = "disabled";
++		};
+ 	};
+ };
+diff --git a/arch/arm/include/asm/arch-sunxi/clock_sun6i.h b/arch/arm/include/asm/arch-sunxi/clock_sun6i.h
+index 5ecdf58b..facee4b3 100644
+--- a/arch/arm/include/asm/arch-sunxi/clock_sun6i.h
++++ b/arch/arm/include/asm/arch-sunxi/clock_sun6i.h
+@@ -344,7 +344,7 @@ struct sunxi_ccm_reg {
+ #define AHB_GATE_OFFSET_DE		12
+ #define AHB_GATE_OFFSET_HDMI		11
+ #define AHB_GATE_OFFSET_TVE		9
+-#ifndef CONFIG_SUNXI_DE2
++#if !defined CONFIG_SUNXI_DE2 || defined CONFIG_MACH_SUN8I_V3S
+ #define AHB_GATE_OFFSET_LCD1		5
+ #define AHB_GATE_OFFSET_LCD0		4
+ #else
+@@ -493,7 +493,7 @@ struct sunxi_ccm_reg {
+ #define AHB_RESET_OFFSET_HDMI		11
+ #define AHB_RESET_OFFSET_HDMI2		10
+ #define AHB_RESET_OFFSET_TVE		9
+-#ifndef CONFIG_SUNXI_DE2
++#if !defined CONFIG_SUNXI_DE2 || defined CONFIG_MACH_SUN8I_V3S
+ #define AHB_RESET_OFFSET_LCD1		5
+ #define AHB_RESET_OFFSET_LCD0		4
+ #else
+@@ -535,6 +535,7 @@ struct sunxi_ccm_reg {
+ #define CCM_DE2_CTRL_PLL_MASK		(3 << 24)
+ #define CCM_DE2_CTRL_PLL6_2X		(0 << 24)
+ #define CCM_DE2_CTRL_PLL10		(1 << 24)
++#define CCM_DE2_CTRL_PLL3_V3S		(0 << 24)
+ #define CCM_DE2_CTRL_GATE		(0x1 << 31)
+ 
+ /* CCU security switch, H3 only */
+diff --git a/arch/arm/include/asm/arch-sunxi/gpio.h b/arch/arm/include/asm/arch-sunxi/gpio.h
+index 43088e2f..afa8eccc 100644
+--- a/arch/arm/include/asm/arch-sunxi/gpio.h
++++ b/arch/arm/include/asm/arch-sunxi/gpio.h
+@@ -164,6 +164,7 @@ enum sunxi_gpio_number {
+ #define SUN8I_A33_GPB_UART0	3
+ #define SUN8I_A83T_GPB_UART0	2
+ #define SUN8I_V3S_GPB_UART0	3
++#define SUN8I_V3S_GPB_PWM0	2
+ #define SUN50I_GPB_UART0	4
+ 
+ #define SUNXI_GPC_NAND		2
+@@ -182,6 +183,7 @@ enum sunxi_gpio_number {
+ #define SUN5I_GPE_SDC2		3
+ #define SUN8I_GPE_TWI2		3
+ #define SUN50I_GPE_TWI2		3
++#define SUN8I_V3S_GPE_LCD0	3
+ 
+ #define SUNXI_GPF_SDC0		2
+ #define SUNXI_GPF_UART0		4
+diff --git a/arch/arm/mach-sunxi/Kconfig b/arch/arm/mach-sunxi/Kconfig
+index 015fd59a..f45bbd94 100644
+--- a/arch/arm/mach-sunxi/Kconfig
++++ b/arch/arm/mach-sunxi/Kconfig
+@@ -265,6 +265,7 @@ config MACH_SUN8I_V3S
+ 	select CPU_V7_HAS_NONSEC
+ 	select CPU_V7_HAS_VIRT
+ 	select ARCH_SUPPORT_PSCI
++	select SUNXI_DE2
+ 	select SUNXI_GEN_SUN6I
+ 	select SUNXI_DRAM_DW
+ 	select SUNXI_DRAM_DW_16BIT
+diff --git a/configs/LicheePi_Zero_defconfig b/configs/LicheePi_Zero_defconfig
+index 04d7b645..83d785a4 100644
+--- a/configs/LicheePi_Zero_defconfig
++++ b/configs/LicheePi_Zero_defconfig
+@@ -3,5 +3,9 @@ CONFIG_ARCH_SUNXI=y
+ CONFIG_SPL=y
+ CONFIG_MACH_SUN8I_V3S=y
+ CONFIG_DRAM_CLK=360
++CONFIG_VIDEO_LCD_DCLK_PHASE=0
+ CONFIG_DEFAULT_DEVICE_TREE="sun8i-v3s-licheepi-zero"
++CONFIG_DM_REGULATOR=y
++CONFIG_DM_PWM=y
++CONFIG_PWM_SUNXI=y
+ # CONFIG_NETDEVICES is not set
+
+diff --git a/drivers/pwm/sunxi_pwm.c b/drivers/pwm/sunxi_pwm.c
+index 56215dbf..0c3047fb 100644
+--- a/drivers/pwm/sunxi_pwm.c
++++ b/drivers/pwm/sunxi_pwm.c
+@@ -48,6 +48,8 @@ static int sunxi_pwm_config_pinmux(void)
+ {
+ #ifdef CONFIG_MACH_SUN50I
+ 	sunxi_gpio_set_cfgpin(SUNXI_GPD(22), SUNXI_GPD_PWM);
++#elif defined CONFIG_MACH_SUN8I_V3S
++	sunxi_gpio_set_cfgpin(SUNXI_GPB(4), SUN8I_V3S_GPB_PWM0);
+ #endif
+ 	return 0;
+ }
+@@ -171,6 +173,7 @@ static const struct pwm_ops sunxi_pwm_ops = {
+ static const struct udevice_id sunxi_pwm_ids[] = {
+ 	{ .compatible = "allwinner,sun5i-a13-pwm" },
+ 	{ .compatible = "allwinner,sun50i-a64-pwm" },
++	{ .compatible = "allwinner,sun7i-a20-pwm" },
+ 	{ }
+ };
+ 
+diff --git a/drivers/video/sunxi/lcdc.c b/drivers/video/sunxi/lcdc.c
+index 73033c3b..b772947a 100644
+--- a/drivers/video/sunxi/lcdc.c
++++ b/drivers/video/sunxi/lcdc.c
+@@ -244,7 +244,6 @@ void lcdc_pll_set(struct sunxi_ccm_reg *ccm, int tcon, int dotclock,
+ 	 * not sync to higher frequencies.
+ 	 */
+ 	for (m = min_m; m <= max_m; m++) {
+-#ifndef CONFIG_SUNXI_DE2
+ 		n = (m * dotclock) / step;
+ 
+ 		if ((n >= 9) && (n <= 127)) {
+@@ -261,8 +260,8 @@ void lcdc_pll_set(struct sunxi_ccm_reg *ccm, int tcon, int dotclock,
+ 		/* These are just duplicates */
+ 		if (!(m & 1))
+ 			continue;
+-#endif
+ 
++#ifndef CONFIG_SUNXI_DE2
+ 		/* No double clock on DE2 */
+ 		n = (m * dotclock) / (step * 2);
+ 		if ((n >= 9) && (n <= 127)) {
+@@ -275,6 +274,7 @@ void lcdc_pll_set(struct sunxi_ccm_reg *ccm, int tcon, int dotclock,
+ 				best_double = 1;
+ 			}
+ 		}
++#endif
+ 	}
+ 
+ #ifdef CONFIG_MACH_SUN6I
+@@ -315,8 +315,7 @@ void lcdc_pll_set(struct sunxi_ccm_reg *ccm, int tcon, int dotclock,
+ 		writel(CCM_LCD_CH0_CTRL_GATE | CCM_LCD_CH0_CTRL_RST | pll,
+ 		       &ccm->lcd0_ch0_clk_cfg);
+ #else
+-		writel(CCM_LCD_CH0_CTRL_GATE | CCM_LCD_CH0_CTRL_RST | pll,
+-		       &ccm->lcd0_clk_cfg);
++		writel(CCM_LCD0_CTRL_GATE | pll, &ccm->lcd0_clk_cfg);
+ #endif
+ 	}
+ #ifndef CONFIG_SUNXI_DE2
+diff --git a/drivers/video/sunxi/sunxi_de2.c b/drivers/video/sunxi/sunxi_de2.c
+index b657e163..2a0d2368 100644
+--- a/drivers/video/sunxi/sunxi_de2.c
++++ b/drivers/video/sunxi/sunxi_de2.c
+@@ -26,12 +26,22 @@
+ 
+ DECLARE_GLOBAL_DATA_PTR;
+ 
++#ifdef CONFIG_MACH_SUN8I_V3S
++enum {
++	/* Maximum LCD size we support */
++	LCD_MAX_WIDTH		= 1024,
++	LCD_MAX_HEIGHT		= 1024,
++	LCD_MAX_LOG2_BPP	= VIDEO_BPP32,
++};
++#else
++
+ enum {
+ 	/* Maximum LCD size we support */
+ 	LCD_MAX_WIDTH		= 3840,
+ 	LCD_MAX_HEIGHT		= 2160,
+ 	LCD_MAX_LOG2_BPP	= VIDEO_BPP32,
+ };
++#endif
+ 
+ static void sunxi_de2_composer_init(void)
+ {
+@@ -47,11 +57,19 @@ static void sunxi_de2_composer_init(void)
+ 	writel(reg_value, SUNXI_SRAMC_BASE + 0x04);
+ #endif
+ 
++#ifdef CONFIG_MACH_SUN8I_V3S
++	clock_set_pll3(50000000);
++	/* pll3 is also used for pixelclock and speed will be recomputed */
++	/* Set DE parent to pll3 */
++	clrsetbits_le32(&ccm->de_clk_cfg, CCM_DE2_CTRL_PLL_MASK,
++			CCM_DE2_CTRL_PLL3_V3S);
++#else
+ 	clock_set_pll10(432000000);
+ 
+ 	/* Set DE parent to pll10 */
+ 	clrsetbits_le32(&ccm->de_clk_cfg, CCM_DE2_CTRL_PLL_MASK,
+ 			CCM_DE2_CTRL_PLL10);
++#endif
+ 
+ 	/* Set ahb gating to pass */
+ 	setbits_le32(&ccm->ahb_reset1_cfg, 1 << AHB_RESET_OFFSET_DE);
+@@ -77,7 +95,8 @@ static void sunxi_de2_mode_set(int mux, const struct display_timing *mode,
+ 	struct de_ui * const de_ui_regs =
+ 		(struct de_ui *)(de_mux_base +
+ 				 SUNXI_DE2_MUX_CHAN_REGS +
+-				 SUNXI_DE2_MUX_CHAN_SZ * 1);
++				 SUNXI_DE2_MUX_CHAN_SZ *
++				 (IS_ENABLED(CONFIG_MACH_SUN8I_V3S) ? 2 : 1));
+ 	struct de_csc * const de_csc_regs =
+ 		(struct de_csc *)(de_mux_base +
+ 				  SUNXI_DE2_MUX_DCSC_REGS);
+@@ -104,14 +123,15 @@ static void sunxi_de2_mode_set(int mux, const struct display_timing *mode,
+ 	for (channel = 0; channel < 4; channel++) {
+ 		void *ch = (void *)(de_mux_base + SUNXI_DE2_MUX_CHAN_REGS +
+ 				    SUNXI_DE2_MUX_CHAN_SZ * channel);
+-		memset(ch, 0, (channel == 0) ?
++		memset(ch, 0, (channel == 0 ||
++			       (IS_ENABLED(CONFIG_MACH_SUN8I_V3S) && channel == 1)) ?
+ 			sizeof(struct de_vi) : sizeof(struct de_ui));
+ 	}
+ 	memset(de_bld_regs, 0, sizeof(struct de_bld));
+ 
+ 	writel(0x00000101, &de_bld_regs->fcolor_ctl);
+ 
+-	writel(1, &de_bld_regs->route);
++	writel(IS_ENABLED(CONFIG_MACH_SUN8I_V3S) ? 2 : 1, &de_bld_regs->route);
+ 
+ 	writel(0, &de_bld_regs->premultiply);
+ 	writel(0xff000000, &de_bld_regs->bkcolor);
+diff --git a/drivers/video/sunxi/sunxi_dw_hdmi.c b/drivers/video/sunxi/sunxi_dw_hdmi.c
+index 01d4b7a1..899fbe2f 100644
+--- a/drivers/video/sunxi/sunxi_dw_hdmi.c
++++ b/drivers/video/sunxi/sunxi_dw_hdmi.c
+@@ -398,6 +398,8 @@ U_BOOT_DRIVER(sunxi_dw_hdmi) = {
+ 	.priv_auto_alloc_size = sizeof(struct sunxi_dw_hdmi_priv),
+ };
+ 
++#ifndef CONFIG_MACH_SUN8I_V3S
+ U_BOOT_DEVICE(sunxi_dw_hdmi) = {
+ 	.name = "sunxi_dw_hdmi"
+ };
++#endif
+diff --git a/drivers/video/sunxi/sunxi_lcd.c b/drivers/video/sunxi/sunxi_lcd.c
+index 49bf083a..132e970e 100644
+--- a/drivers/video/sunxi/sunxi_lcd.c
++++ b/drivers/video/sunxi/sunxi_lcd.c
+@@ -32,6 +32,13 @@ static void sunxi_lcdc_config_pinmux(void)
+ 		sunxi_gpio_set_cfgpin(pin, SUNXI_GPD_LCD0);
+ 		sunxi_gpio_set_drv(pin, 3);
+ 	}
++#elif defined CONFIG_MACH_SUN8I_V3S
++	int pin;
++
++	for (pin = SUNXI_GPE(0); pin <= SUNXI_GPE(19); pin++)
++		sunxi_gpio_set_cfgpin(pin, SUN8I_V3S_GPE_LCD0);
++	sunxi_gpio_set_cfgpin(SUNXI_GPE(23), SUN8I_V3S_GPE_LCD0);
++	sunxi_gpio_set_cfgpin(SUNXI_GPE(24), SUN8I_V3S_GPE_LCD0);
+ #endif
+ }
+ 
+@@ -145,7 +152,7 @@ U_BOOT_DRIVER(sunxi_lcd) = {
+ 	.priv_auto_alloc_size = sizeof(struct sunxi_lcd_priv),
+ };
+ 
+-#ifdef CONFIG_MACH_SUN50I
++#if defined CONFIG_MACH_SUN50I || defined CONFIG_MACH_SUN8I_V3S
+ U_BOOT_DEVICE(sunxi_lcd) = {
+ 	.name = "sunxi_lcd"
+ };
+-- 
+2.28.0
+

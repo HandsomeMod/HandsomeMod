@@ -1,0 +1,21 @@
+--- a/nl80211.h
++++ b/nl80211.h
+@@ -2527,6 +2527,9 @@ enum nl80211_commands {
+  *	override mask. Used with NL80211_ATTR_S1G_CAPABILITY in
+  *	NL80211_CMD_ASSOCIATE or NL80211_CMD_CONNECT.
+  *
++ * @NL80211_ATTR_WIPHY_ANTENNA_GAIN: Configured antenna gain. Used to reduce
++ *	transmit power to stay within regulatory limits. u32, dBi.
++ *
+  * @NUM_NL80211_ATTR: total number of nl80211_attrs available
+  * @NL80211_ATTR_MAX: highest attribute number currently defined
+  * @__NL80211_ATTR_AFTER_LAST: internal use
+@@ -3016,6 +3019,8 @@ enum nl80211_attrs {
+ 	NL80211_ATTR_S1G_CAPABILITY,
+ 	NL80211_ATTR_S1G_CAPABILITY_MASK,
+ 
++	NL80211_ATTR_WIPHY_ANTENNA_GAIN,
++
+ 	/* add attributes here, update the policy in nl80211.c */
+ 
+ 	__NL80211_ATTR_AFTER_LAST,

@@ -1,0 +1,150 @@
+From 6ac77bca6ad66c6dbeaabf5c60bf6f1fef2194f8 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Tue, 1 Dec 2020 20:30:42 +0800
+Subject: [PATCH] add rgb666 support for cubieboard2
+Warning : this patch is outdate touchscreen not working!!!
+---
+ arch/arm/boot/dts/sun7i-a20-cubieboard2.dts | 78 ++++++++++++++++++++-
+ arch/arm/boot/dts/sun7i-a20.dtsi            | 13 ++++
+ 2 files changed, 88 insertions(+), 3 deletions(-)
+
+diff --git a/arch/arm/boot/dts/sun7i-a20-cubieboard2.dts b/arch/arm/boot/dts/sun7i-a20-cubieboard2.dts
+index b8203e4ef..fb34187af 100644
+--- a/arch/arm/boot/dts/sun7i-a20-cubieboard2.dts
++++ b/arch/arm/boot/dts/sun7i-a20-cubieboard2.dts
+@@ -1,7 +1,6 @@
+ /*
+- * Copyright 2013 Maxime Ripard
+- *
+- * Maxime Ripard <maxime.ripard@free-electrons.com>
++ * Copyright 2013 Maxime Ripard <maxime.ripard@free-electrons.com>
++ * Copyright 2020 HandsomeYingyan <handsomeyingyan@gmail.com>
+  *
+  * This file is dual-licensed: you can use it either under the terms
+  * of the GPL or the X11 license, at your option. Note that this dual
+@@ -72,6 +71,38 @@ hdmi_con_in: endpoint {
+ 		};
+ 	};
+ 
++	backlight_display: backlight_display {
++		compatible = "pwm-backlight";
++		pwms = <&pwm 0 10000000 0>;
++		power-supply = <&reg_vcc5v0>;
++
++		brightness-levels = <0 64 93 122 151 180 209 240>;
++		default-brightness-level = <7>;
++	};
++
++	panel: panel {
++		compatible = "netron-dy,e231732", "simple-panel";
++		backlight = <&backlight_display>;
++		power-supply = <&reg_vcc5v0>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&lcd_enable_pin &lcd_rgb666_pins>;
++		enable-gpios = <&pio 1 10 GPIO_ACTIVE_HIGH>; /* PB10 */
++
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		port {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			panel_input: endpoint {
++				remote-endpoint = <&tcon0_out_lcd>;
++			};
++		};
++	};
++
++
+ 	leds {
+ 		compatible = "gpio-leds";
+ 
+@@ -141,7 +172,21 @@ axp209: pmic@34 {
+ };
+ 
+ &i2c1 {
++	#address-cells = <1>;
++	#size-cells = <0>;
++	status = "okay";
++      /*DVK522 board has a ft5406 touchscreen*/
++	ft5406ee8: touchscreen@38 {
++        compatible = "edt,edt-ft5x06";
++	reg = <0x38>;
++	interrupt-parent = <&pio>;
++	interrupts = <&pio 7 7 IRQ_TYPE_EDGE_FALLING>; /* PH7 */
++	reset-gpios = <&pio 1 13 GPIO_ACTIVE_HIGH>; /* RST (PB13) */
++	touchscreen-size-x = <1024>;
++	touchscreen-size-y = <600>;
++        touchscreen-inverted-y;
+ 	status = "okay";
++     };
+ };
+ 
+ &ir0 {
+@@ -150,6 +195,8 @@ &ir0 {
+ 	status = "okay";
+ };
+ 
++
++
+ &mmc0 {
+ 	vmmc-supply = <&reg_vcc3v3>;
+ 	bus-width = <4>;
+@@ -235,3 +282,28 @@ &usbphy {
+ 	usb2_vbus-supply = <&reg_usb2_vbus>;
+ 	status = "okay";
+ };
++
++&pwm {
++	pinctrl-names = "default";
++	pinctrl-0 = <&pwm0_pin>;
++	status = "okay";
++};
++
++
++&be0 {
++	status = "okay";
++};
++
++&tcon0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&lcd_rgb666_pins>;
++	status = "okay";
++};
++
++&tcon0_out {
++	tcon0_out_lcd: endpoint@0 {
++		reg = <0>;
++		remote-endpoint = <&panel_input>;
++	};
++};
++
+diff --git a/arch/arm/boot/dts/sun7i-a20.dtsi b/arch/arm/boot/dts/sun7i-a20.dtsi
+index 6d6a37940..d41f0575f 100644
+--- a/arch/arm/boot/dts/sun7i-a20.dtsi
++++ b/arch/arm/boot/dts/sun7i-a20.dtsi
+@@ -948,6 +948,19 @@ lcd_lvds1_pins: lcd-lvds1-pins {
+ 				function = "lvds1";
+ 			};
+ 
++	                lcd_enable_pin: lcd_enable_pin@0 {
++		                pins = "PB10";
++				function = "gpio_out";
++			};
++
++			lcd_rgb666_pins: lcd-rgb666@0 {
++				pins = "PD2", "PD3", "PD4", "PD5", "PD6", "PD7",
++				       "PD10", "PD11", "PD12", "PD13", "PD14", "PD15",
++				       "PD18", "PD19", "PD20", "PD21", "PD22", "PD23",
++				       "PD24", "PD25", "PD26", "PD27";
++				function = "lcd0";
++			};
++
+ 			/omit-if-no-ref/
+ 			mmc0_pins: mmc0-pins {
+ 				pins = "PF0", "PF1", "PF2",
+-- 
+2.25.1
+

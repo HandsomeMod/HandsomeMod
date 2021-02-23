@@ -1,0 +1,13 @@
+           |_| _  _  _| _ _  _ _  _ |\/| _  _|
+           | |(_|| |(_|_\(_)| | |(/_|  |(_)(_|
+           -----------------------------------
+================= FAILSAFE MODE active ================
+special commands:
+* firstboot	     reset settings to factory defaults
+* mount_root	 mount root-partition with config files
+
+after mount_root:
+* passwd			 change root's password
+* /etc/config		 directory with config files
+=======================================================
+

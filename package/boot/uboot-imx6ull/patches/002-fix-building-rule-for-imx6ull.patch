@@ -1,0 +1,230 @@
+From 720dd1e6168c4d367a4df9e7e5eb57b6ca086725 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Fri, 15 Jan 2021 10:24:59 +0800
+Subject: [PATCH] fix building rule for imx6ull
+
+---
+ arch/arm/dts/imx6ull-alientek-mini-emmc.dts  | 86 +-------------------
+ configs/imx6ull_alientek_mini_emmc_defconfig |  8 ++
+ include/configs/mx6ullevk.h                  | 18 ++--
+ 3 files changed, 18 insertions(+), 94 deletions(-)
+
+diff --git a/arch/arm/dts/imx6ull-alientek-mini-emmc.dts b/arch/arm/dts/imx6ull-alientek-mini-emmc.dts
+index ac78c361..0638f2a7 100644
+--- a/arch/arm/dts/imx6ull-alientek-mini-emmc.dts
++++ b/arch/arm/dts/imx6ull-alientek-mini-emmc.dts
+@@ -35,7 +35,7 @@
+ 		};
+ 	};
+ 	
+-	backlight {
++	backlight: backlight {
+ 		compatible = "pwm-backlight";
+ 		pwms = <&pwm1 0 5000000>;
+ 		brightness-levels = <0 4 8 16 32 64 128 255>;
+@@ -93,15 +93,6 @@
+ 			regulator-always-on;
+ 		};
+ 
+-		reg_can_3v3: regulator@0 {
+-			compatible = "regulator-fixed";
+-			reg = <0>;
+-			regulator-name = "can-3v3";
+-			regulator-min-microvolt = <3300000>;
+-			regulator-max-microvolt = <3300000>;
+-			gpios = <&gpio_spi 3 GPIO_ACTIVE_LOW>;
+-		};
+-
+ 		reg_gpio_dvfs: regulator-gpio {
+ 			compatible = "regulator-gpio";
+ 			pinctrl-names = "default";
+@@ -165,19 +156,6 @@
+ 	};
+ };
+ 
+-&flexcan1 {
+-	pinctrl-names = "default";
+-	pinctrl-0 = <&pinctrl_flexcan1>;
+-	xceiver-supply = <&reg_can_3v3>;
+-	status = "okay";
+-};
+-
+-&flexcan2 {
+-	pinctrl-names = "default";
+-	pinctrl-0 = <&pinctrl_flexcan2>;
+-	xceiver-supply = <&reg_can_3v3>;
+-	status = "disabled";
+-};
+ 
+ &gpc {
+ 	fsl,cpu_pupscr_sw2iso = <0x1>;
+@@ -192,20 +170,6 @@
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_i2c1>;
+ 	status = "okay";
+-	
+-	mag3110@0e {
+-		compatible = "fsl,mag3110";
+-		reg = <0x0e>;
+-		position = <2>;
+-	};
+-
+-	fxls8471@1e {
+-		compatible = "fsl,fxls8471";
+-		reg = <0x1e>;
+-		position = <0>;
+-		interrupt-parent = <&gpio5>;
+-		interrupts = <0 8>;
+-	};
+ };
+ 
+ &i2c2 {
+@@ -213,41 +177,6 @@
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_i2c2>;
+ 	status = "okay";
+-
+-	ov7670: ov7670@3c {
+-		compatible = "ovti,ov7670";
+-		reg = <0x3c>;
+-		pinctrl-names = "default";
+-		pinctrl-0 = <&pinctrl_csi1
+-			     &csi_pwn_rst>;
+-		clocks = <&clks IMX6UL_CLK_CSI>;
+-		clock-names = "csi_mclk";
+-		pwn-gpios = <&gpio1 4 1>;
+-		rst-gpios = <&gpio1 2 0>;
+-		csi_id = <0>;
+-		mclk = <24000000>;
+-		mclk_source = <0>;
+-		status = "okay";
+-		port {
+-			ov7670_ep: endpoint {
+-				remote-endpoint = <&csi1_ep>;
+-			};
+-		};
+-	};
+-
+-        edt-ft5x06@38 {
+-		compatible = "edt,edt-ft5306", "edt,edt-ft5x06";
+-		pinctrl-names = "default";
+-		pinctrl-0 = <&ts_int_pin
+-			     &ts_reset_pin>;
+-		reg = <0x38>;
+-		interrupt-parent = <&gpio1>;
+-		interrupts = <9 0>;
+-		reset-gpios = <&gpio5 9 GPIO_ACTIVE_LOW>;
+-		irq-gpios = <&gpio1 9 GPIO_ACTIVE_LOW>;
+-		status = "okay";
+-	};
+-
+ };
+ 
+ &iomuxc {
+@@ -295,19 +224,6 @@
+ 			>;
+ 		};
+ 		
+-		pinctrl_flexcan1: flexcan1grp{
+-			fsl,pins = <
+-				MX6UL_PAD_UART3_RTS_B__FLEXCAN1_RX	0x1b020
+-				MX6UL_PAD_UART3_CTS_B__FLEXCAN1_TX	0x1b020
+-			>;
+-		};
+-
+-		pinctrl_flexcan2: flexcan2grp{
+-			fsl,pins = <
+-				MX6UL_PAD_UART2_RTS_B__FLEXCAN2_RX	0x1b020
+-				MX6UL_PAD_UART2_CTS_B__FLEXCAN2_TX	0x1b020
+-			>;
+-		};
+ 		pinctrl_i2c1: i2c1grp {
+ 			fsl,pins = <
+ 				MX6UL_PAD_UART4_TX_DATA__I2C1_SCL 0x4001b8b0
+diff --git a/configs/imx6ull_alientek_mini_emmc_defconfig b/configs/imx6ull_alientek_mini_emmc_defconfig
+index 274922c6..d66c7aa4 100644
+--- a/configs/imx6ull_alientek_mini_emmc_defconfig
++++ b/configs/imx6ull_alientek_mini_emmc_defconfig
+@@ -31,6 +31,14 @@ CONFIG_DM_74X164=y
+ CONFIG_DM_I2C=y
+ CONFIG_DM_MMC=y
+ CONFIG_FSL_ESDHC=y
++CONFIG_DM_SPI_FLASH=y
++CONFIG_SPI_FLASH=y
++CONFIG_SF_DEFAULT_MODE=0
++CONFIG_SF_DEFAULT_SPEED=40000000
++CONFIG_SPI_FLASH_STMICRO=y
+ CONFIG_PINCTRL=y
+ CONFIG_PINCTRL_IMX6=y
+ CONFIG_DM_REGULATOR=y
++CONFIG_SPI=y
++CONFIG_DM_SPI=y
++CONFIG_FSL_QSPI=y
+diff --git a/include/configs/mx6ullevk.h b/include/configs/mx6ullevk.h
+index 1fc5c24d..efe137c9 100644
+--- a/include/configs/mx6ullevk.h
++++ b/include/configs/mx6ullevk.h
+@@ -55,7 +55,7 @@
+ 	"console=ttymxc0\0" \
+ 	"fdt_high=0xffffffff\0" \
+ 	"initrd_high=0xffffffff\0" \
+-	"fdt_file=imx6ull-14x14-evk.dtb\0" \
++	"fdt_file=dtb\0" \
+ 	"fdt_addr=0x83000000\0" \
+ 	"boot_fdt=try\0" \
+ 	"ip_dyn=yes\0" \
+@@ -76,16 +76,16 @@
+ 		"run mmcargs; " \
+ 		"if test ${boot_fdt} = yes || test ${boot_fdt} = try; then " \
+ 			"if run loadfdt; then " \
+-				"bootz ${loadaddr} - ${fdt_addr}; " \
++				"bootm ${loadaddr} - ${fdt_addr}; " \
+ 			"else " \
+ 				"if test ${boot_fdt} = try; then " \
+-					"bootz; " \
++					"bootm; " \
+ 				"else " \
+ 					"echo WARN: Cannot load the DT; " \
+ 				"fi; " \
+ 			"fi; " \
+ 		"else " \
+-			"bootz; " \
++			"bootm; " \
+ 		"fi;\0" \
+ 	"netargs=setenv bootargs console=${console},${baudrate} " \
+ 		"root=/dev/nfs " \
+@@ -100,16 +100,16 @@
+ 		"${get_cmd} ${image}; " \
+ 		"if test ${boot_fdt} = yes || test ${boot_fdt} = try; then " \
+ 			"if ${get_cmd} ${fdt_addr} ${fdt_file}; then " \
+-				"bootz ${loadaddr} - ${fdt_addr}; " \
++				"bootm ${loadaddr} - ${fdt_addr}; " \
+ 			"else " \
+ 				"if test ${boot_fdt} = try; then " \
+-					"bootz; " \
++					"bootm; " \
+ 				"else " \
+ 					"echo WARN: Cannot load the DT; " \
+ 				"fi; " \
+ 			"fi; " \
+ 		"else " \
+-			"bootz; " \
++			"bootm; " \
+ 		"fi;\0" \
+ 
+ #define CONFIG_BOOTCOMMAND \
+@@ -145,9 +145,9 @@
+ 	(CONFIG_SYS_INIT_RAM_ADDR + CONFIG_SYS_INIT_SP_OFFSET)
+ 
+ /* environment organization */
+-#define CONFIG_SYS_MMC_ENV_DEV		1	/* USDHC2 */
++#define CONFIG_SYS_MMC_ENV_DEV		0	/* USDHC1 */
+ #define CONFIG_SYS_MMC_ENV_PART		0	/* user area */
+-#define CONFIG_MMCROOT			"/dev/mmcblk1p2"  /* USDHC2 */
++#define CONFIG_MMCROOT			"/dev/mmcblk0p2"  /* USDHC2 */
+ 
+ #define CONFIG_ENV_SIZE			SZ_8K
+ #define CONFIG_ENV_OFFSET		(12 * SZ_64K)
+-- 
+2.30.0
+

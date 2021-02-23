@@ -1,0 +1,3436 @@
+From 993979671a4ad028c9fd191b40146dbc25ce5618 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sat, 3 Oct 2020 11:13:42 +0800
+Subject: [PATCH] add support for suniv
+
+---
+ arch/arm/cpu/arm926ejs/Makefile               |   1 +
+ arch/arm/cpu/arm926ejs/start.S                |  19 +
+ arch/arm/cpu/arm926ejs/sunxi/Makefile         |  16 +
+ arch/arm/cpu/arm926ejs/sunxi/config.mk        |   6 +
+ arch/arm/cpu/arm926ejs/sunxi/fel_utils.S      |  38 ++
+ arch/arm/cpu/arm926ejs/sunxi/lowlevel_init.S  |  68 +++
+ arch/arm/cpu/arm926ejs/sunxi/start.c          |   1 +
+ arch/arm/cpu/arm926ejs/sunxi/timer.c          | 113 ++++
+ arch/arm/cpu/arm926ejs/sunxi/u-boot-spl.lds   |  63 +++
+ arch/arm/dts/Makefile                         |   4 +
+ arch/arm/dts/suniv-f1c100s-licheepi-nano.dts  |  75 +++
+ arch/arm/dts/suniv-f1c100s-tiny200-v2.dts     |  76 +++
+ arch/arm/dts/suniv-f1c100s-tiny200-v3.dts     |  75 +++
+ arch/arm/dts/suniv-f1c100s.dtsi               | 245 +++++++++
+ arch/arm/include/asm/arch-sunxi/clock.h       |   2 +-
+ arch/arm/include/asm/arch-sunxi/clock_sun6i.h |  25 +
+ arch/arm/include/asm/arch-sunxi/cpu_sun4i.h   |  12 +
+ arch/arm/include/asm/arch-sunxi/dram.h        |   2 +
+ arch/arm/include/asm/arch-sunxi/dram_suniv.h  |  47 ++
+ arch/arm/include/asm/arch-sunxi/gpio.h        |   2 +
+ arch/arm/mach-sunxi/Kconfig                   |  16 +-
+ arch/arm/mach-sunxi/Makefile                  |   2 +
+ arch/arm/mach-sunxi/board.c                   |  46 +-
+ arch/arm/mach-sunxi/clock.c                   |   3 +-
+ arch/arm/mach-sunxi/clock_sun6i.c             |  47 +-
+ arch/arm/mach-sunxi/cpu_info.c                |   2 +
+ arch/arm/mach-sunxi/dram_helpers.c            |   4 +
+ arch/arm/mach-sunxi/dram_suniv.c              | 498 ++++++++++++++++++
+ arch/arm/mach-sunxi/spl_spi_sunxi.c           | 216 ++++++--
+ board/sunxi/board.c                           |  45 +-
+ common/spl/Kconfig                            |   9 +
+ common/spl/spl.c                              |  19 +-
+ common/spl/spl_mmc.c                          |   9 +
+ configs/LicheePi_Nano_defconfig               |  63 +++
+ configs/widora_tiny200_v2_defconfig           |  63 +++
+ configs/widora_tiny200_v3_defconfig           |  66 +++
+ drivers/clk/sunxi/Kconfig                     |   7 +
+ drivers/clk/sunxi/Makefile                    |   1 +
+ drivers/clk/sunxi/clk_suniv.c                 |  80 +++
+ drivers/gpio/sunxi_gpio.c                     |   1 +
+ drivers/mmc/Kconfig                           |   2 +-
+ drivers/mtd/nand/spi/core.c                   |  15 +-
+ drivers/mtd/nand/spi/gigadevice.c             |  67 +++
+ drivers/phy/allwinner/phy-sun4i-usb.c         |  12 +-
+ drivers/spi/spi-sunxi.c                       |  21 +-
+ drivers/usb/musb-new/musb_core.c              |   1 +
+ include/configs/suniv.h                       |  17 +
+ include/configs/sunxi-common.h                |  65 ++-
+ include/dt-bindings/clock/suniv-ccu.h         |  69 +++
+ include/dt-bindings/reset/suniv-ccu.h         |  38 ++
+ 50 files changed, 2310 insertions(+), 84 deletions(-)
+ create mode 100644 arch/arm/cpu/arm926ejs/sunxi/Makefile
+ create mode 100644 arch/arm/cpu/arm926ejs/sunxi/config.mk
+ create mode 100644 arch/arm/cpu/arm926ejs/sunxi/fel_utils.S
+ create mode 100644 arch/arm/cpu/arm926ejs/sunxi/lowlevel_init.S
+ create mode 100644 arch/arm/cpu/arm926ejs/sunxi/start.c
+ create mode 100644 arch/arm/cpu/arm926ejs/sunxi/timer.c
+ create mode 100644 arch/arm/cpu/arm926ejs/sunxi/u-boot-spl.lds
+ create mode 100644 arch/arm/dts/suniv-f1c100s-licheepi-nano.dts
+ create mode 100644 arch/arm/dts/suniv-f1c100s-tiny200-v2.dts
+ create mode 100644 arch/arm/dts/suniv-f1c100s-tiny200-v3.dts
+ create mode 100644 arch/arm/dts/suniv-f1c100s.dtsi
+ create mode 100644 arch/arm/include/asm/arch-sunxi/dram_suniv.h
+ create mode 100644 arch/arm/mach-sunxi/dram_suniv.c
+ create mode 100644 configs/LicheePi_Nano_defconfig
+ create mode 100644 configs/widora_tiny200_v2_defconfig
+ create mode 100644 configs/widora_tiny200_v3_defconfig
+ create mode 100644 drivers/clk/sunxi/clk_suniv.c
+ create mode 100644 include/configs/suniv.h
+ create mode 100644 include/dt-bindings/clock/suniv-ccu.h
+ create mode 100644 include/dt-bindings/reset/suniv-ccu.h
+
+diff --git a/arch/arm/cpu/arm926ejs/Makefile b/arch/arm/cpu/arm926ejs/Makefile
+index af63d5cc..1a884794 100644
+--- a/arch/arm/cpu/arm926ejs/Makefile
++++ b/arch/arm/cpu/arm926ejs/Makefile
+@@ -17,6 +17,7 @@ obj-$(CONFIG_MX25) += mx25/
+ obj-$(CONFIG_MX27) += mx27/
+ obj-$(if $(filter mxs,$(SOC)),y) += mxs/
+ obj-$(if $(filter spear,$(SOC)),y) += spear/
++obj-$(CONFIG_ARCH_SUNXI) += sunxi/
+ 
+ # some files can only build in ARM or THUMB2, not THUMB1
+ 
+diff --git a/arch/arm/cpu/arm926ejs/start.S b/arch/arm/cpu/arm926ejs/start.S
+index ff592ba8..9011afed 100644
+--- a/arch/arm/cpu/arm926ejs/start.S
++++ b/arch/arm/cpu/arm926ejs/start.S
+@@ -17,6 +17,7 @@
+ #include <asm-offsets.h>
+ #include <config.h>
+ #include <common.h>
++#include <linux/linkage.h>
+ 
+ /*
+  *************************************************************************
+@@ -32,8 +33,13 @@
+  */
+ 
+ 	.globl	reset
++	.globl	save_boot_params_ret
++	.type   save_boot_params_ret,%function
+ 
+ reset:
++	/* Allow the board to save important registers */
++	b	save_boot_params
++save_boot_params_ret:
+ 	/*
+ 	 * set the cpu to SVC32 mode
+ 	 */
+@@ -110,3 +116,16 @@ flush_dcache:
+ #endif
+ 	mov	pc, lr		/* back to my caller */
+ #endif /* CONFIG_SKIP_LOWLEVEL_INIT */
++
++/*************************************************************************
++ *
++ * void save_boot_params(u32 r0, u32 r1, u32 r2, u32 r3)
++ *	__attribute__((weak));
++ *
++ * Stack pointer is not yet initialized at this moment
++ * Don't save anything to stack even if compiled with -O0
++ *
++ *************************************************************************/
++WEAK(save_boot_params)
++	b	save_boot_params_ret	/* back to my caller */
++ENDPROC(save_boot_params)
+diff --git a/arch/arm/cpu/arm926ejs/sunxi/Makefile b/arch/arm/cpu/arm926ejs/sunxi/Makefile
+new file mode 100644
+index 00000000..61b9864f
+--- /dev/null
++++ b/arch/arm/cpu/arm926ejs/sunxi/Makefile
+@@ -0,0 +1,16 @@
++#
++# (C) Copyright 2012 Henrik Nordstrom <henrik@henriknordstrom.net>
++#
++# Based on some other Makefile
++# (C) Copyright 2000-2003
++# Wolfgang Denk, DENX Software Engineering, wd@denx.de.
++#
++# SPDX-License-Identifier:	GPL-2.0+
++#
++obj-y	+= timer.o
++obj-y	+= lowlevel_init.o
++
++ifdef CONFIG_SPL_BUILD
++obj-y	+= fel_utils.o
++CFLAGS_fel_utils.o := -marm
++endif
+diff --git a/arch/arm/cpu/arm926ejs/sunxi/config.mk b/arch/arm/cpu/arm926ejs/sunxi/config.mk
+new file mode 100644
+index 00000000..76ffec9d
+--- /dev/null
++++ b/arch/arm/cpu/arm926ejs/sunxi/config.mk
+@@ -0,0 +1,6 @@
++# Build a combined spl + u-boot image
++ifdef CONFIG_SPL
++ifndef CONFIG_SPL_BUILD
++ALL-y += u-boot-sunxi-with-spl.bin
++endif
++endif
+diff --git a/arch/arm/cpu/arm926ejs/sunxi/fel_utils.S b/arch/arm/cpu/arm926ejs/sunxi/fel_utils.S
+new file mode 100644
+index 00000000..ca913770
+--- /dev/null
++++ b/arch/arm/cpu/arm926ejs/sunxi/fel_utils.S
+@@ -0,0 +1,38 @@
++/*
++ * Utility functions for FEL mode.
++ *
++ * Copyright (c) 2015 Google, Inc
++ *
++ * SPDX-License-Identifier:	GPL-2.0+
++ */
++
++#include <asm-offsets.h>
++#include <config.h>
++#include <asm/system.h>
++#include <linux/linkage.h>
++
++ENTRY(save_boot_params)
++	ldr	r0, =fel_stash
++	str	sp, [r0, #0]
++	str	lr, [r0, #4]
++	mrs	lr, cpsr		@ Read CPSR
++	str	lr, [r0, #8]
++	mrc	p15, 0, lr, c1, c0, 0	@ Read CP15 SCTLR Register
++	str	lr, [r0, #12]
++	mrc	p15, 0, lr, c1, c0, 0	@ Read CP15 Control Register
++	str	lr, [r0, #16]
++	b	save_boot_params_ret
++ENDPROC(save_boot_params)
++
++ENTRY(return_to_fel)
++	mov	sp, r0
++	mov	lr, r1
++	ldr	r0, =fel_stash
++	ldr	r1, [r0, #16]
++	mcr	p15, 0, r1, c1, c0, 0	@ Write CP15 Control Register
++	ldr	r1, [r0, #12]
++	mcr	p15, 0, r1, c1, c0, 0	@ Write CP15 SCTLR Register
++	ldr	r1, [r0, #8]
++	msr	cpsr, r1		@ Write CPSR
++	bx	lr
++ENDPROC(return_to_fel)
+diff --git a/arch/arm/cpu/arm926ejs/sunxi/lowlevel_init.S b/arch/arm/cpu/arm926ejs/sunxi/lowlevel_init.S
+new file mode 100644
+index 00000000..2bfd9070
+--- /dev/null
++++ b/arch/arm/cpu/arm926ejs/sunxi/lowlevel_init.S
+@@ -0,0 +1,68 @@
++/*
++ * A lowlevel_init function that sets up the stack to call a C function to
++ * perform further init.
++ *
++ * Based on lowlevel_init.S in armv7 directory, which is:
++ *   (C) Copyright 2010 Texas Instruments, <www.ti.com>
++ *
++ * SPDX-License-Identifier:	GPL-2.0+
++ */
++
++#include <asm-offsets.h>
++#include <config.h>
++#include <linux/linkage.h>
++
++.pushsection .text.s_init, "ax"
++WEAK(s_init)
++	bx	lr
++ENDPROC(s_init)
++.popsection
++
++.pushsection .text.lowlevel_init, "ax"
++WEAK(lowlevel_init)
++	/*
++	 * Setup a temporary stack. Global data is not available yet.
++	 */
++#if defined(CONFIG_SPL_BUILD) && defined(CONFIG_SPL_STACK)
++	ldr	sp, =CONFIG_SPL_STACK
++#else
++	ldr	sp, =CONFIG_SYS_INIT_SP_ADDR
++#endif
++	bic	sp, sp, #7 /* 8-byte alignment for ABI compliance */
++#ifdef CONFIG_SPL_DM
++	mov	r9, #0
++#else
++	/*
++	 * Set up global data for boards that still need it. This will be
++	 * removed soon.
++	 */
++#ifdef CONFIG_SPL_BUILD
++	ldr	r9, =gdata
++#else
++	sub	sp, sp, #GD_SIZE
++	bic	sp, sp, #7
++	mov	r9, sp
++#endif
++#endif
++	/*
++	 * Save the old lr(passed in ip) and the current lr to stack
++	 */
++	push	{ip, lr}
++
++	/*
++	 * Call the very early init function. This should do only the
++	 * absolute bare minimum to get started. It should not:
++	 *
++	 * - set up DRAM
++	 * - use global_data
++	 * - clear BSS
++	 * - try to start a console
++	 *
++	 * For boards with SPL this should be empty since SPL can do all of
++	 * this init in the SPL board_init_f() function which is called
++	 * immediately after this.
++	 */
++	bl	s_init
++	pop	{ip, pc}
++ENDPROC(lowlevel_init)
++.popsection
+diff --git a/arch/arm/cpu/arm926ejs/sunxi/start.c b/arch/arm/cpu/arm926ejs/sunxi/start.c
+new file mode 100644
+index 00000000..6b392fa8
+--- /dev/null
++++ b/arch/arm/cpu/arm926ejs/sunxi/start.c
+@@ -0,0 +1 @@
++/* Intentionally empty. Only needed to get FEL SPL link line right */
+diff --git a/arch/arm/cpu/arm926ejs/sunxi/timer.c b/arch/arm/cpu/arm926ejs/sunxi/timer.c
+new file mode 100644
+index 00000000..6375285f
+--- /dev/null
++++ b/arch/arm/cpu/arm926ejs/sunxi/timer.c
+@@ -0,0 +1,113 @@
++/*
++ * (C) Copyright 2007-2011
++ * Allwinner Technology Co., Ltd. <www.allwinnertech.com>
++ * Tom Cubie <tangliang@allwinnertech.com>
++ *
++ * SPDX-License-Identifier:	GPL-2.0+
++ */
++
++#include <common.h>
++#include <asm/io.h>
++#include <asm/arch/timer.h>
++
++DECLARE_GLOBAL_DATA_PTR;
++
++#define TIMER_MODE   (0x0 << 7)	/* continuous mode */
++#define TIMER_DIV    (0x0 << 4)	/* pre scale 1 */
++#define TIMER_SRC    (0x1 << 2)	/* osc24m */
++#define TIMER_RELOAD (0x1 << 1)	/* reload internal value */
++#define TIMER_EN     (0x1 << 0)	/* enable timer */
++
++#define TIMER_CLOCK		(24 * 1000 * 1000)
++#define COUNT_TO_USEC(x)	((x) / 24)
++#define USEC_TO_COUNT(x)	((x) * 24)
++#define TICKS_PER_HZ		(TIMER_CLOCK / CONFIG_SYS_HZ)
++#define TICKS_TO_HZ(x)		((x) / TICKS_PER_HZ)
++
++#define TIMER_LOAD_VAL		0xffffffff
++
++#define TIMER_NUM		0	/* we use timer 0 */
++
++/* read the 32-bit timer */
++static ulong read_timer(void)
++{
++	struct sunxi_timer_reg *timers =
++		(struct sunxi_timer_reg *)SUNXI_TIMER_BASE;
++	struct sunxi_timer *timer = &timers->timer[TIMER_NUM];
++
++	/*
++	 * The hardware timer counts down, therefore we invert to
++	 * produce an incrementing timer.
++	 */
++	return ~readl(&timer->val);
++}
++
++/* init timer register */
++int timer_init(void)
++{
++	struct sunxi_timer_reg *timers =
++		(struct sunxi_timer_reg *)SUNXI_TIMER_BASE;
++	struct sunxi_timer *timer = &timers->timer[TIMER_NUM];
++	writel(TIMER_LOAD_VAL, &timer->inter);
++	writel(TIMER_MODE | TIMER_DIV | TIMER_SRC | TIMER_RELOAD | TIMER_EN,
++	       &timer->ctl);
++
++	return 0;
++}
++
++ulong get_timer_masked(void)
++{
++	/* current tick value */
++	ulong now = TICKS_TO_HZ(read_timer());
++
++	if (now >= gd->arch.lastinc)	/* normal (non rollover) */
++		gd->arch.tbl += (now - gd->arch.lastinc);
++	else {
++		/* rollover */
++		gd->arch.tbl += (TICKS_TO_HZ(TIMER_LOAD_VAL)
++				- gd->arch.lastinc) + now;
++	}
++	gd->arch.lastinc = now;
++
++	return gd->arch.tbl;
++}
++
++/* timer without interrupts */
++ulong get_timer(ulong base)
++{
++	return get_timer_masked() - base;
++}
++
++/* delay x useconds */
++void __udelay(unsigned long usec)
++{
++	long tmo = USEC_TO_COUNT(usec);
++	ulong now, last = read_timer();
++
++	while (tmo > 0) {
++		now = read_timer();
++		if (now > last)	/* normal (non rollover) */
++			tmo -= now - last;
++		else		/* rollover */
++			tmo -= TIMER_LOAD_VAL - last + now;
++		last = now;
++	}
++}
++
++/*
++ * This function is derived from PowerPC code (read timebase as long long).
++ * On ARM it just returns the timer value.
++ */
++unsigned long long get_ticks(void)
++{
++	return get_timer(0);
++}
++
++/*
++ * This function is derived from PowerPC code (timebase clock frequency).
++ * On ARM it returns the number of timer ticks per second.
++ */
++ulong get_tbclk(void)
++{
++	return CONFIG_SYS_HZ;
++}
+diff --git a/arch/arm/cpu/arm926ejs/sunxi/u-boot-spl.lds b/arch/arm/cpu/arm926ejs/sunxi/u-boot-spl.lds
+new file mode 100644
+index 00000000..1b667807
+--- /dev/null
++++ b/arch/arm/cpu/arm926ejs/sunxi/u-boot-spl.lds
+@@ -0,0 +1,63 @@
++/*
++ * (C) Copyright 2018
++ * Icenowy Zheng <icenowy@aosc.io>
++ *
++ * Based on arch/arm/cpu/armv7/sunxi/u-boot-spl.lds:
++ *
++ * (C) Copyright 2012
++ * Allwinner Technology Co., Ltd. <www.allwinnertech.com>
++ * Tom Cubie <tangliang@allwinnertech.com>
++ *
++ * Based on omap-common/u-boot-spl.lds:
++ *
++ * (C) Copyright 2002
++ * Gary Jennejohn, DENX Software Engineering, <garyj@denx.de>
++ *
++ * (C) Copyright 2010
++ * Texas Instruments, <www.ti.com>
++ *	Aneesh V <aneesh@ti.com>
++ *
++ * SPDX-License-Identifier:	GPL-2.0+
++ */
++MEMORY { .sram : ORIGIN = CONFIG_SPL_TEXT_BASE,\
++		LENGTH = CONFIG_SPL_MAX_SIZE }
++MEMORY { .sdram : ORIGIN = CONFIG_SPL_BSS_START_ADDR, \
++		LENGTH = CONFIG_SPL_BSS_MAX_SIZE }
++
++OUTPUT_FORMAT("elf32-littlearm", "elf32-littlearm", "elf32-littlearm")
++OUTPUT_ARCH(arm)
++ENTRY(_start)
++SECTIONS
++{
++	.text      :
++	{
++		__start = .;
++		*(.vectors)
++		arch/arm/cpu/arm926ejs/start.o	(.text)
++		*(.text*)
++	} > .sram
++
++	. = ALIGN(4);
++	.rodata : { *(SORT_BY_ALIGNMENT(.rodata*)) } >.sram
++
++	. = ALIGN(4);
++	.data : { *(SORT_BY_ALIGNMENT(.data*)) } >.sram
++
++	. = ALIGN(4);
++	.u_boot_list : {
++		KEEP(*(SORT(.u_boot_list*)));
++	} > .sram
++
++	. = ALIGN(4);
++	__image_copy_end = .;
++	_end = .;
++
++	.bss :
++	{
++		. = ALIGN(4);
++		__bss_start = .;
++		*(.bss*)
++		. = ALIGN(4);
++		__bss_end = .;
++	} > .sdram
++}
+diff --git a/arch/arm/dts/Makefile b/arch/arm/dts/Makefile
+index 9900b442..fbcdf936 100644
+--- a/arch/arm/dts/Makefile
++++ b/arch/arm/dts/Makefile
+@@ -599,6 +599,10 @@ dtb-$(CONFIG_MACH_SUN9I) += \
+ 	sun9i-a80-optimus.dtb \
+ 	sun9i-a80-cubieboard4.dtb \
+ 	sun9i-a80-cx-a99.dtb
++dtb-$(CONFIG_MACH_SUNIV) += \
++	suniv-f1c100s-tiny200-v2.dtb \
++	suniv-f1c100s-tiny200-v3.dtb \
++	suniv-f1c100s-licheepi-nano.dtb
+ 
+ dtb-$(CONFIG_VF610) += vf500-colibri.dtb \
+ 	vf610-colibri.dtb \
+diff --git a/arch/arm/dts/suniv-f1c100s-licheepi-nano.dts b/arch/arm/dts/suniv-f1c100s-licheepi-nano.dts
+new file mode 100644
+index 00000000..c8a11f43
+--- /dev/null
++++ b/arch/arm/dts/suniv-f1c100s-licheepi-nano.dts
+@@ -0,0 +1,75 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR X11)
++
++/dts-v1/;
++#include "suniv-f1c100s.dtsi"
++
++#include <dt-bindings/gpio/gpio.h>
++
++/ {
++	model = "Sipeed Lichee Pi Nano";
++	compatible = "allwinner,suniv-f1c100s",
++		     "allwinner,suniv";
++
++	aliases {
++		serial0 = &uart0;
++		spi0 = &spi0;
++	};
++
++	chosen {
++		stdout-path = "serial0:115200n8";
++	};
++};
++
++&otg_sram {
++	status = "okay";
++};
++
++&spi0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&spi0_pins_a>;
++	status = "okay";
++
++	spi-nor@0 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		reg = <0>;
++		compatible = "winbond,w25q128", "jedec,spi-nor";
++		spi-max-frequency = <50000000>;
++	};
++
++	spi-nand@1 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		reg = <0>;
++		compatible = "spi-nand";
++		spi-max-frequency = <50000000>;
++	};
++};
++
++&uart0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart0_pins_a>;
++	status = "okay";
++};
++
++&uart1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart1_pins_a>;
++	status = "okay";
++};
++
++&usb_otg {
++	status = "okay";
++};
++
++&usbphy {
++	status = "okay";
++};
++
++&mmc0 {
++	status = "okay";
++};
++
++&mmc2 {
++	status = "okay";
++};
+diff --git a/arch/arm/dts/suniv-f1c100s-tiny200-v2.dts b/arch/arm/dts/suniv-f1c100s-tiny200-v2.dts
+new file mode 100644
+index 00000000..267bc7b7
+--- /dev/null
++++ b/arch/arm/dts/suniv-f1c100s-tiny200-v2.dts
+@@ -0,0 +1,76 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR X11)
++
++/dts-v1/;
++#include "suniv-f1c100s.dtsi"
++
++#include <dt-bindings/gpio/gpio.h>
++
++/ {
++	model = "Widora Tiny200 V2";
++	compatible = "allwinner,suniv-f1c100s",
++		     "allwinner,suniv";
++
++	aliases {
++		serial0 = &uart1;
++		spi0 = &spi0;
++	};
++
++	chosen {
++		stdout-path = "serial0:115200n8";
++	};
++};
++
++&otg_sram {
++	status = "okay";
++};
++
++&spi0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&spi0_pins_a>;
++	status = "okay";
++
++	spi-nor@0 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		reg = <0>;
++		compatible = "winbond,w25q128", "jedec,spi-nor";
++		spi-max-frequency = <50000000>;
++	};
++
++	spi-nand@1 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		reg = <0>;
++		compatible = "spi-nand";
++		spi-max-frequency = <50000000>;
++	};
++};
++
++
++&uart0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart0_pins_a>;
++	status = "okay";
++};
++
++&uart1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart1_pins_a>;
++	status = "okay";
++};
++
++&usb_otg {
++	status = "okay";
++};
++
++&usbphy {
++	status = "okay";
++};
++
++&mmc0 {
++	status = "okay";
++};
++
++&mmc2 {
++	status = "okay";
++};
+diff --git a/arch/arm/dts/suniv-f1c100s-tiny200-v3.dts b/arch/arm/dts/suniv-f1c100s-tiny200-v3.dts
+new file mode 100644
+index 00000000..5704afc6
+--- /dev/null
++++ b/arch/arm/dts/suniv-f1c100s-tiny200-v3.dts
+@@ -0,0 +1,75 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR X11)
++
++/dts-v1/;
++#include "suniv-f1c100s.dtsi"
++
++#include <dt-bindings/gpio/gpio.h>
++
++/ {
++	model = "Widora Tiny200 V3";
++	compatible = "allwinner,suniv-f1c100s",
++		     "allwinner,suniv";
++
++	aliases {
++		serial0 = &uart1;
++		spi0 = &spi0;
++	};
++
++	chosen {
++		stdout-path = "serial0:115200n8";
++	};
++};
++
++&otg_sram {
++	status = "okay";
++};
++
++&spi0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&spi0_pins_a>;
++	status = "okay";
++
++	spi-nor@0 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		reg = <0>;
++		compatible = "winbond,w25q128", "jedec,spi-nor";
++		spi-max-frequency = <50000000>;
++	};
++
++	spi-nand@1 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		reg = <0>;
++		compatible = "spi-nand";
++		spi-max-frequency = <50000000>;
++	};
++};
++
++&uart0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart0_pins_a>;
++	status = "okay";
++};
++
++&uart1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart1_pins_a>;
++	status = "okay";
++};
++
++&usb_otg {
++	status = "okay";
++};
++
++&usbphy {
++	status = "okay";
++};
++
++&mmc0 {
++	status = "okay";
++};
++
++&mmc2 {
++	status = "okay";
++};
+diff --git a/arch/arm/dts/suniv-f1c100s.dtsi b/arch/arm/dts/suniv-f1c100s.dtsi
+new file mode 100644
+index 00000000..2c856529
+--- /dev/null
++++ b/arch/arm/dts/suniv-f1c100s.dtsi
+@@ -0,0 +1,245 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR X11)
++/*
++ * Copyright 2018 Icenowy Zheng <icenowy@aosc.io>
++ */
++
++#include <dt-bindings/clock/suniv-ccu.h>
++#include <dt-bindings/reset/suniv-ccu.h>
++
++/ {
++	#address-cells = <1>;
++	#size-cells = <1>;
++	interrupt-parent = <&intc>;
++
++	clocks {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		ranges;
++
++		osc24M: clk-24M {
++			#clock-cells = <0>;
++			compatible = "fixed-clock";
++			clock-frequency = <24000000>;
++			clock-output-names = "osc24M";
++		};
++
++		osc32k: clk-32k {
++			#clock-cells = <0>;
++			compatible = "fixed-clock";
++			clock-frequency = <32768>;
++			clock-output-names = "osc32k";
++		};
++	};
++
++	cpus {
++		#address-cells = <0>;
++		#size-cells = <0>;
++
++		cpu {
++			compatible = "arm,arm926ej-s";
++			device_type = "cpu";
++		};
++	};
++
++	soc {
++		compatible = "simple-bus";
++		#address-cells = <1>;
++		#size-cells = <1>;
++		ranges;
++
++		sram-controller@1c00000 {
++			compatible = "allwinner,sun4i-a10-sram-controller";
++			reg = <0x01c00000 0x30>;
++			#address-cells = <1>;
++			#size-cells = <1>;
++			ranges;
++
++			sram_d: sram@10000 {
++				compatible = "mmio-sram";
++				reg = <0x00010000 0x1000>;
++				#address-cells = <1>;
++				#size-cells = <1>;
++				ranges = <0 0x00010000 0x1000>;
++
++				otg_sram: sram-section@0 {
++					compatible = "allwinner,sun4i-a10-sram-d";
++					reg = <0x0000 0x1000>;
++					status = "disabled";
++				};
++			};
++		};
++
++		spi0: spi@1c05000 {
++			compatible = "allwinner,suniv-spi";
++			reg = <0x01c05000 0x1000>;
++			interrupts = <10>;
++			clocks = <&ccu CLK_BUS_SPI0>, <&ccu CLK_BUS_SPI0>;
++			clock-names = "ahb", "mod";
++			resets = <&ccu RST_BUS_SPI0>;
++			status = "disabled";
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++
++		ccu: clock@1c20000 {
++			compatible = "allwinner,suniv-ccu";
++			reg = <0x01c20000 0x400>;
++			clocks = <&osc24M>, <&osc32k>;
++			clock-names = "hosc", "losc";
++			#clock-cells = <1>;
++			#reset-cells = <1>;
++		};
++
++		intc: interrupt-controller@1c20400 {
++			compatible = "allwinner,suniv-ic";
++			reg = <0x01c20400 0x400>;
++			interrupt-controller;
++			#interrupt-cells = <1>;
++		};
++
++		pio: pinctrl@1c20800 {
++			compatible = "allwinner,suniv-pinctrl";
++			reg = <0x01c20800 0x400>;
++			interrupts = <38>, <39>, <40>;
++			clocks = <&ccu CLK_BUS_PIO>, <&osc24M>, <&osc32k>;
++			clock-names = "apb", "hosc", "losc";
++			gpio-controller;
++			interrupt-controller;
++			#interrupt-cells = <3>;
++			#gpio-cells = <3>;
++
++			spi0_pins_a: spi0-pins-pc {
++				pins = "PC0", "PC1", "PC2", "PC3";
++				function = "spi0";
++			};
++
++			uart0_pins_a: uart-pins-pe {
++				pins = "PE0", "PE1";
++				function = "uart0";
++			};
++
++			uart1_pins_a: uart1-pins {
++				pins = "PA2", "PA3";
++				function = "uart1";
++			};
++
++			mmc0_pins: mmc0-pins {
++				pins = "PF0", "PF1", "PF2", "PF3", "PF4", "PF5";
++				function = "mmc0";
++				drive-strength = <30>;
++				bias-pull-up;
++			};
++
++			mmc1_pins: mmc2-pins {
++				pins = "PC0", "PC1", "PC2";
++				function = "mmc1";
++				drive-strength = <30>;
++				bias-pull-up;
++			};
++		};
++
++		timer@1c20c00 {
++			compatible = "allwinner,sun4i-a10-timer";
++			reg = <0x01c20c00 0x90>;
++			interrupts = <13>;
++			clocks = <&osc24M>;
++		};
++
++		wdt: watchdog@1c20ca0 {
++			compatible = "allwinner,sun6i-a31-wdt";
++			reg = <0x01c20ca0 0x20>;
++		};
++
++		uart0: serial@1c25000 {
++			compatible = "snps,dw-apb-uart";
++			reg = <0x01c25000 0x400>;
++			interrupts = <1>;
++			reg-shift = <2>;
++			reg-io-width = <4>;
++			clocks = <&ccu CLK_BUS_UART0>;
++			resets = <&ccu RST_BUS_UART0>;
++			status = "disabled";
++		};
++
++		uart1: serial@1c25400 {
++			compatible = "snps,dw-apb-uart";
++			reg = <0x01c25400 0x400>;
++			interrupts = <2>;
++			reg-shift = <2>;
++			reg-io-width = <4>;
++			clocks = <&ccu CLK_BUS_UART1>;
++			resets = <&ccu RST_BUS_UART1>;
++			status = "disabled";
++		};
++
++		usb_otg: usb@1c13000 {
++			compatible = "allwinner,sun8i-h3-musb";
++			reg = <0x01c13000 0x0400>;
++			clocks = <&ccu CLK_BUS_OTG>;
++			resets = <&ccu RST_BUS_OTG>;
++			interrupts = <26>;
++			interrupt-names = "mc";
++			phys = <&usbphy 0>;
++			phy-names = "usb";
++			extcon = <&usbphy 0>;
++			allwinner,sram = <&otg_sram 1>;
++			status = "disabled";
++		};
++
++		usbphy: phy@1c13400 {
++			compatible = "allwinner,suniv-usb-phy";
++			reg = <0x01c13400 0x10>;
++			reg-names = "phy_ctrl";
++			clocks = <&ccu CLK_USB_PHY0>;
++			clock-names = "usb0_phy";
++			resets = <&ccu RST_USB_PHY0>;
++			reset-names = "usb0_reset";
++			#phy-cells = <1>;
++			status = "disabled";
++		};
++
++		mmc0: mmc@1c0f000 {
++			compatible = "allwinner,suniv-mmc",
++				     "allwinner,sun7i-a20-mmc";
++			reg = <0x01c0f000 0x1000>;
++			clocks = <&ccu CLK_BUS_MMC0>,
++				 <&ccu CLK_MMC0>,
++				 <&ccu CLK_MMC0_OUTPUT>,
++				 <&ccu CLK_MMC0_SAMPLE>;
++			clock-names = "ahb",
++				      "mmc",
++				      "output",
++				      "sample";
++			resets = <&ccu RST_BUS_MMC0>;
++			reset-names = "ahb";
++			interrupts = <23>;
++			pinctrl-names = "default";
++			pinctrl-0 = <&mmc0_pins>;
++			status = "disabled";
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++
++		mmc2: mmc@1c10000 {
++			compatible = "allwinner,suniv-mmc",
++				     "allwinner,sun7i-a20-mmc";
++			reg = <0x01c10000 0x1000>;
++			clocks = <&ccu CLK_BUS_MMC1>,
++				 <&ccu CLK_MMC1>,
++				 <&ccu CLK_MMC1_OUTPUT>,
++				 <&ccu CLK_MMC1_SAMPLE>;
++			clock-names = "ahb",
++				      "mmc",
++				      "output",
++				      "sample";
++			resets = <&ccu RST_BUS_MMC1>;
++			reset-names = "ahb";
++			interrupts = <24>;
++			pinctrl-names = "default";
++			pinctrl-0 = <&mmc1_pins>;
++			status = "disabled";
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++	};
++};
+\ No newline at end of file
+diff --git a/arch/arm/include/asm/arch-sunxi/clock.h b/arch/arm/include/asm/arch-sunxi/clock.h
+index 5994130e..97b45d34 100644
+--- a/arch/arm/include/asm/arch-sunxi/clock.h
++++ b/arch/arm/include/asm/arch-sunxi/clock.h
+@@ -19,7 +19,7 @@
+ #elif defined(CONFIG_MACH_SUN50I_H6)
+ #include <asm/arch/clock_sun50i_h6.h>
+ #elif defined(CONFIG_MACH_SUN6I) || defined(CONFIG_MACH_SUN8I) || \
+-      defined(CONFIG_MACH_SUN50I)
++      defined(CONFIG_MACH_SUN50I) || defined(CONFIG_MACH_SUNIV)
+ #include <asm/arch/clock_sun6i.h>
+ #elif defined(CONFIG_MACH_SUN9I)
+ #include <asm/arch/clock_sun9i.h>
+diff --git a/arch/arm/include/asm/arch-sunxi/clock_sun6i.h b/arch/arm/include/asm/arch-sunxi/clock_sun6i.h
+index ee387127..5ecdf58b 100644
+--- a/arch/arm/include/asm/arch-sunxi/clock_sun6i.h
++++ b/arch/arm/include/asm/arch-sunxi/clock_sun6i.h
+@@ -168,6 +168,14 @@ struct sunxi_ccm_reg {
+ 	u32 pll_lock_ctrl;	/* 0x320 PLL lock control, R40 only */
+ };
+ 
++/* apb1 bit field */
++#ifdef CONFIG_MACH_SUNIV
++#define APB1_GATE_UART_SHIFT	(20)
++#define APB1_GATE_UART_MASK		(0x7 << APB1_GATE_UART_SHIFT)
++#define APB1_GATE_TWI_SHIFT	(16)
++#define APB1_GATE_TWI_MASK		(0x7 << APB1_GATE_TWI_SHIFT)
++#endif
++
+ /* apb2 bit field */
+ #define APB2_CLK_SRC_LOSC		(0x0 << 24)
+ #define APB2_CLK_SRC_OSC24M		(0x1 << 24)
+@@ -226,7 +234,12 @@ struct sunxi_ccm_reg {
+ #define CCM_PLL5_CTRL_SIGMA_DELTA_EN	(0x1 << 24)
+ #define CCM_PLL5_CTRL_EN		(0x1 << 31)
+ 
++#if !defined(CONFIG_MACH_SUNIV)
+ #define PLL6_CFG_DEFAULT		0x90041811 /* 600 MHz */
++#else
++/* suniv pll6 doesn't have postdiv 2, so k is set to 0 */
++#define PLL6_CFG_DEFAULT		0x90041800
++#endif
+ 
+ #define CCM_PLL6_CTRL_N_SHIFT		8
+ #define CCM_PLL6_CTRL_N_MASK		(0x1f << CCM_PLL6_CTRL_N_SHIFT)
+@@ -310,6 +323,8 @@ struct sunxi_ccm_reg {
+ #define AHB_GATE_OFFSET_USB0		25
+ #define AHB_GATE_OFFSET_SATA		24
+ #endif
++#define AHB_GATE_OFFSET_SPI1		21
++#define AHB_GATE_OFFSET_SPI0		20
+ #define AHB_GATE_OFFSET_MCTL		14
+ #define AHB_GATE_OFFSET_GMAC		17
+ #define AHB_GATE_OFFSET_NAND0		13
+@@ -458,6 +473,8 @@ struct sunxi_ccm_reg {
+ #ifdef CONFIG_MACH_SUN8I_R40
+ #define AHB_RESET_OFFSET_SATA		24
+ #endif
++#define AHB_RESET_OFFSET_SPI1		21
++#define AHB_RESET_OFFSET_SPI0		20
+ #define AHB_RESET_OFFSET_GMAC		17
+ #define AHB_RESET_OFFSET_MCTL		14
+ #define AHB_RESET_OFFSET_MMC3		11
+@@ -488,6 +505,14 @@ struct sunxi_ccm_reg {
+ #define AHB_RESET_OFFSET_EPHY		2
+ #define AHB_RESET_OFFSET_LVDS		0
+ 
++/* apb1 reset */
++#ifdef CONFIG_MACH_SUNIV
++#define APB1_RESET_UART_SHIFT	(20)
++#define APB1_RESET_UART_MASK		(0x7 << APB1_RESET_UART_SHIFT)
++#define APB1_RESET_TWI_SHIFT	(16)
++#define APB1_RESET_TWI_MASK		(0x7 << APB1_RESET_TWI_SHIFT)
++#endif
++
+ /* apb2 reset */
+ #define APB2_RESET_UART_SHIFT		(16)
+ #define APB2_RESET_UART_MASK		(0xff << APB2_RESET_UART_SHIFT)
+diff --git a/arch/arm/include/asm/arch-sunxi/cpu_sun4i.h b/arch/arm/include/asm/arch-sunxi/cpu_sun4i.h
+index 02ce7395..a9461e9d 100644
+--- a/arch/arm/include/asm/arch-sunxi/cpu_sun4i.h
++++ b/arch/arm/include/asm/arch-sunxi/cpu_sun4i.h
+@@ -42,7 +42,11 @@
+ #define SUNXI_VE_BASE			0x01c0e000
+ #define SUNXI_MMC0_BASE			0x01c0f000
+ #define SUNXI_MMC1_BASE			0x01c10000
++#ifndef CONFIG_MACH_SUNIV
+ #define SUNXI_MMC2_BASE			0x01c11000
++#else
++#define SUNXI_MMC2_BASE			0x01c10000
++#endif
+ #define SUNXI_MMC3_BASE			0x01c12000
+ #ifdef CONFIG_SUNXI_GEN_SUN4I
+ #define SUNXI_USB0_BASE			0x01c13000
+@@ -111,6 +115,12 @@ defined(CONFIG_MACH_SUN50I)
+ 
+ #define SUNXI_SJTAG_BASE		0x01c23c00
+ 
++#ifdef CONFIG_MACH_SUNIV
++#define SUNXI_UART0_BASE		0x01c25000
++#define SUNXI_UART1_BASE		0x01c25400
++#define SUNXI_UART2_BASE		0x01c25800
++#endif
++
+ #define SUNXI_TP_BASE			0x01c25000
+ #define SUNXI_PMU_BASE			0x01c25400
+ 
+@@ -118,9 +128,11 @@ defined(CONFIG_MACH_SUN50I)
+ #define SUNXI_CPUCFG_BASE		0x01c25c00
+ #endif
+ 
++#ifndef CONFIG_MACH_SUNIV
+ #define SUNXI_UART0_BASE		0x01c28000
+ #define SUNXI_UART1_BASE		0x01c28400
+ #define SUNXI_UART2_BASE		0x01c28800
++#endif
+ #define SUNXI_UART3_BASE		0x01c28c00
+ #define SUNXI_UART4_BASE		0x01c29000
+ #define SUNXI_UART5_BASE		0x01c29400
+diff --git a/arch/arm/include/asm/arch-sunxi/dram.h b/arch/arm/include/asm/arch-sunxi/dram.h
+index 8002b7ef..523dd71c 100644
+--- a/arch/arm/include/asm/arch-sunxi/dram.h
++++ b/arch/arm/include/asm/arch-sunxi/dram.h
+@@ -29,6 +29,8 @@
+ #include <asm/arch/dram_sun9i.h>
+ #elif defined(CONFIG_MACH_SUN50I_H6)
+ #include <asm/arch/dram_sun50i_h6.h>
++#elif defined(CONFIG_MACH_SUNIV)
++#include <asm/arch/dram_suniv.h>
+ #else
+ #include <asm/arch/dram_sun4i.h>
+ #endif
+diff --git a/arch/arm/include/asm/arch-sunxi/dram_suniv.h b/arch/arm/include/asm/arch-sunxi/dram_suniv.h
+new file mode 100644
+index 00000000..088eb5b9
+--- /dev/null
++++ b/arch/arm/include/asm/arch-sunxi/dram_suniv.h
+@@ -0,0 +1,47 @@
++/*
++ * suniv DRAM controller register definition
++ *
++ * Copyright (C) 2018 Icenowy Zheng <icenowy@aosc.io>
++ *
++ * Based on xboot's arch/arm32/mach-f1c100s/sys-dram.c, which is:
++ *
++ * Copyright(c) 2007-2018 Jianjun Jiang <8192542@qq.com>
++ *
++ * SPDX-License-Identifier:	GPL-2.0+
++ */
++
++#define PIO_SDRAM_DRV			(0x2c0)
++#define PIO_SDRAM_PULL			(0x2c4)
++
++#define DRAM_SCONR			(0x00)
++#define DRAM_STMG0R			(0x04)
++#define DRAM_STMG1R			(0x08)
++#define DRAM_SCTLR			(0x0c)
++#define DRAM_SREFR			(0x10)
++#define DRAM_SEXTMR			(0x14)
++#define DRAM_DDLYR			(0x24)
++#define DRAM_DADRR			(0x28)
++#define DRAM_DVALR			(0x2c)
++#define DRAM_DRPTR0			(0x30)
++#define DRAM_DRPTR1			(0x34)
++#define DRAM_DRPTR2			(0x38)
++#define DRAM_DRPTR3			(0x3c)
++#define DRAM_SEFR			(0x40)
++#define DRAM_MAE			(0x44)
++#define DRAM_ASPR			(0x48)
++#define DRAM_SDLY0			(0x4C)
++#define DRAM_SDLY1			(0x50)
++#define DRAM_SDLY2			(0x54)
++#define DRAM_MCR0			(0x100)
++#define DRAM_MCR1			(0x104)
++#define DRAM_MCR2			(0x108)
++#define DRAM_MCR3			(0x10c)
++#define DRAM_MCR4			(0x110)
++#define DRAM_MCR5			(0x114)
++#define DRAM_MCR6			(0x118)
++#define DRAM_MCR7			(0x11c)
++#define DRAM_MCR8			(0x120)
++#define DRAM_MCR9			(0x124)
++#define DRAM_MCR10			(0x128)
++#define DRAM_MCR11			(0x12c)
++#define DRAM_BWCR			(0x140)
+diff --git a/arch/arm/include/asm/arch-sunxi/gpio.h b/arch/arm/include/asm/arch-sunxi/gpio.h
+index a646ea6a..43088e2f 100644
+--- a/arch/arm/include/asm/arch-sunxi/gpio.h
++++ b/arch/arm/include/asm/arch-sunxi/gpio.h
+@@ -169,6 +169,7 @@ enum sunxi_gpio_number {
+ #define SUNXI_GPC_NAND		2
+ #define SUNXI_GPC_SPI0		3
+ #define SUNXI_GPC_SDC2		3
++#define SUNIV_GPC_SPI0		2
+ #define SUN6I_GPC_SDC3		4
+ #define SUN50I_GPC_SPI0		4
+ 
+@@ -177,6 +178,7 @@ enum sunxi_gpio_number {
+ #define SUNXI_GPD_LVDS0		3
+ #define SUNXI_GPD_PWM		2
+ 
++#define SUNIV_GPE_UART0		5
+ #define SUN5I_GPE_SDC2		3
+ #define SUN8I_GPE_TWI2		3
+ #define SUN50I_GPE_TWI2		3
+diff --git a/arch/arm/mach-sunxi/Kconfig b/arch/arm/mach-sunxi/Kconfig
+index be0822bf..015fd59a 100644
+--- a/arch/arm/mach-sunxi/Kconfig
++++ b/arch/arm/mach-sunxi/Kconfig
+@@ -1,7 +1,8 @@
+ if ARCH_SUNXI
+ 
+ config SPL_LDSCRIPT
+-	default "arch/arm/cpu/armv7/sunxi/u-boot-spl.lds" if !ARM64
++	default "arch/arm/cpu/arm926ejs/sunxi/u-boot-spl.lds" if MACH_SUNIV
++	default "arch/arm/cpu/armv7/sunxi/u-boot-spl.lds" if !ARM64 && !MACH_SUNIV
+ 
+ config IDENT_STRING
+ 	default " Allwinner Technology"
+@@ -150,6 +151,12 @@ choice
+ 	prompt "Sunxi SoC Variant"
+ 	optional
+ 
++config MACH_SUNIV
++	bool "suniv (Allwinner F1C100s/F1C200s/F1C600/R6)"
++	select CPU_ARM926EJS
++	select SUNXI_GEN_SUN6I
++	select SUPPORT_SPL
++
+ config MACH_SUN4I
+ 	bool "sun4i (Allwinner A10)"
+ 	select CPU_V7A
+@@ -534,6 +541,7 @@ config DRAM_ODT_CORRECTION
+ endif
+ 
+ config SYS_CLK_FREQ
++	default 408000000 if MACH_SUNIV
+ 	default 1008000000 if MACH_SUN4I
+ 	default 1008000000 if MACH_SUN5I
+ 	default 1008000000 if MACH_SUN6I
+@@ -544,6 +552,7 @@ config SYS_CLK_FREQ
+ 	default 888000000 if MACH_SUN50I_H6
+ 
+ config SYS_CONFIG_NAME
++	default "suniv" if MACH_SUNIV
+ 	default "sun4i" if MACH_SUN4I
+ 	default "sun5i" if MACH_SUN5I
+ 	default "sun6i" if MACH_SUN6I
+@@ -768,7 +777,7 @@ config VIDEO_SUNXI
+ 
+ config VIDEO_HDMI
+ 	bool "HDMI output support"
+-	depends on VIDEO_SUNXI && !MACH_SUN8I
++	depends on VIDEO_SUNXI && !MACH_SUN8I && !MACH_SUNIV
+ 	default y
+ 	---help---
+ 	Say Y here to add support for outputting video over HDMI.
+@@ -983,6 +992,7 @@ config GMAC_TX_DELAY
+ 	Set the GMAC Transmit Clock Delay Chain value.
+ 
+ config SPL_STACK_R_ADDR
++	default 0x81e00000 if MACH_SUNIV
+ 	default 0x4fe00000 if MACH_SUN4I
+ 	default 0x4fe00000 if MACH_SUN5I
+ 	default 0x4fe00000 if MACH_SUN6I
+@@ -994,7 +1004,7 @@ config SPL_STACK_R_ADDR
+ 
+ config SPL_SPI_SUNXI
+ 	bool "Support for SPI Flash on Allwinner SoCs in SPL"
+-	depends on MACH_SUN4I || MACH_SUN5I || MACH_SUN7I || MACH_SUNXI_H3_H5 || MACH_SUN50I || MACH_SUN8I_R40 || MACH_SUN50I_H6
++	depends on MACH_SUN4I || MACH_SUN5I || MACH_SUN7I || MACH_SUNXI_H3_H5 || MACH_SUN50I || MACH_SUN8I_R40 || MACH_SUN50I_H6 || MACH_SUNIV
+ 	help
+ 	  Enable support for SPI Flash. This option allows SPL to read from
+ 	  sunxi SPI Flash. It uses the same method as the boot ROM, so does
+diff --git a/arch/arm/mach-sunxi/Makefile b/arch/arm/mach-sunxi/Makefile
+index d129f334..2ef75ee6 100644
+--- a/arch/arm/mach-sunxi/Makefile
++++ b/arch/arm/mach-sunxi/Makefile
+@@ -27,6 +27,7 @@ obj-$(CONFIG_MACH_SUN8I)	+= clock_sun6i.o
+ endif
+ obj-$(CONFIG_MACH_SUN9I)	+= clock_sun9i.o gtbus_sun9i.o
+ obj-$(CONFIG_MACH_SUN50I_H6)	+= clock_sun50i_h6.o
++obj-$(CONFIG_MACH_SUNIV)	+= clock_sun6i.o
+ 
+ ifdef CONFIG_SPL_BUILD
+ obj-$(CONFIG_DRAM_SUN4I)	+= dram_sun4i.o
+@@ -40,4 +41,5 @@ obj-$(CONFIG_SUNXI_DRAM_DW)	+= dram_sunxi_dw.o
+ obj-$(CONFIG_SUNXI_DRAM_DW)	+= dram_timings/
+ obj-$(CONFIG_DRAM_SUN50I_H6)	+= dram_sun50i_h6.o
+ obj-$(CONFIG_DRAM_SUN50I_H6)	+= dram_timings/
++obj-$(CONFIG_MACH_SUNIV)	+= dram_suniv.o
+ endif
+diff --git a/arch/arm/mach-sunxi/board.c b/arch/arm/mach-sunxi/board.c
+index f40fccd8..62ad49ec 100644
+--- a/arch/arm/mach-sunxi/board.c
++++ b/arch/arm/mach-sunxi/board.c
+@@ -78,7 +78,8 @@ static int gpio_init(void)
+ 	sunxi_gpio_set_cfgpin(SUNXI_GPB(22), SUNXI_GPIO_INPUT);
+ 	sunxi_gpio_set_cfgpin(SUNXI_GPB(23), SUNXI_GPIO_INPUT);
+ #endif
+-#if defined(CONFIG_MACH_SUN8I) && !defined(CONFIG_MACH_SUN8I_R40)
++#if (defined(CONFIG_MACH_SUN8I) && !defined(CONFIG_MACH_SUN8I_R40)) || \
++    defined(CONFIG_MACH_SUNIV)
+ 	sunxi_gpio_set_cfgpin(SUNXI_GPF(2), SUN8I_GPF_UART0);
+ 	sunxi_gpio_set_cfgpin(SUNXI_GPF(4), SUN8I_GPF_UART0);
+ #else
+@@ -86,6 +87,10 @@ static int gpio_init(void)
+ 	sunxi_gpio_set_cfgpin(SUNXI_GPF(4), SUNXI_GPF_UART0);
+ #endif
+ 	sunxi_gpio_set_pull(SUNXI_GPF(4), 1);
++#elif CONFIG_CONS_INDEX == 1 && defined(CONFIG_MACH_SUNIV)
++	sunxi_gpio_set_cfgpin(SUNXI_GPE(0), SUNIV_GPE_UART0);
++	sunxi_gpio_set_cfgpin(SUNXI_GPE(1), SUNIV_GPE_UART0);
++	sunxi_gpio_set_pull(SUNXI_GPE(1), SUNXI_GPIO_PULL_UP);
+ #elif CONFIG_CONS_INDEX == 1 && (defined(CONFIG_MACH_SUN4I) || \
+ 				 defined(CONFIG_MACH_SUN7I) || \
+ 				 defined(CONFIG_MACH_SUN8I_R40))
+@@ -132,6 +137,10 @@ static int gpio_init(void)
+ 	sunxi_gpio_set_cfgpin(SUNXI_GPG(3), SUN5I_GPG_UART1);
+ 	sunxi_gpio_set_cfgpin(SUNXI_GPG(4), SUN5I_GPG_UART1);
+ 	sunxi_gpio_set_pull(SUNXI_GPG(4), SUNXI_GPIO_PULL_UP);
++#elif CONFIG_CONS_INDEX == 2 && defined(CONFIG_MACH_SUNIV)
++	sunxi_gpio_set_cfgpin(SUNXI_GPA(2), SUNIV_GPE_UART0);
++	sunxi_gpio_set_cfgpin(SUNXI_GPA(3), SUNIV_GPE_UART0);
++	sunxi_gpio_set_pull(SUNXI_GPA(3), SUNXI_GPIO_PULL_UP);
+ #elif CONFIG_CONS_INDEX == 3 && defined(CONFIG_MACH_SUN8I)
+ 	sunxi_gpio_set_cfgpin(SUNXI_GPB(0), SUN8I_GPB_UART2);
+ 	sunxi_gpio_set_cfgpin(SUNXI_GPB(1), SUN8I_GPB_UART2);
+@@ -202,7 +211,8 @@ void s_init(void)
+ 	/* No H3 BSP, boot0 seems to not modify SUNXI_SRAMC_BASE + 0x44 */
+ #endif
+ 
+-#if !defined(CONFIG_ARM_CORTEX_CPU_IS_UP) && !defined(CONFIG_ARM64)
++#if !defined(CONFIG_ARM_CORTEX_CPU_IS_UP) && !defined(CONFIG_ARM64) && \
++	!defined(CONFIG_MACH_SUNIV)
+ 	/* Enable SMP mode for CPU0, by setting bit 6 of Auxiliary Ctl reg */
+ 	asm volatile(
+ 		"mrc p15, 0, r0, c1, c0, 1\n"
+@@ -226,6 +236,12 @@ void s_init(void)
+ 
+ #define SUNXI_INVALID_BOOT_SOURCE	-1
+ 
++#ifdef CONFIG_MACH_SUNIV
++static int sunxi_get_boot_source(void)
++{
++	return (s8)readb(SPL_ADDR + 0x6fff);
++}
++#else
+ static int sunxi_get_boot_source(void)
+ {
+ 	if (!is_boot0_magic(SPL_ADDR + 4)) /* eGON.BT0 */
+@@ -233,7 +249,7 @@ static int sunxi_get_boot_source(void)
+ 
+ 	return readb(SPL_ADDR + 0x28);
+ }
+-
++#endif
+ /* The sunxi internal brom will try to loader external bootloader
+  * from mmc0, nand flash, mmc2.
+  */
+@@ -297,10 +313,32 @@ unsigned long spl_mmc_get_uboot_raw_sector(struct mmc *mmc)
+ 	return sector;
+ }
+ 
++#ifndef CONFIG_MACH_SUNIV
+ u32 spl_boot_device(void)
+ {
+ 	return sunxi_get_boot_device();
+ }
++#else
++/*
++ * suniv BROM do not pass the boot media type to SPL, so we try with the
++ * boot sequence in BROM: mmc0->spinor->fail.
++ */
++void board_boot_order(u32 *spl_boot_list)
++{
++	/*
++	 * See the comments above in sunxi_get_boot_device() for infomation
++	 * about FEL boot.
++	 */
++	if (!is_boot0_magic(SPL_ADDR + 4)) {
++		spl_boot_list[0] = BOOT_DEVICE_BOARD;
++		return;
++	}
++
++	spl_boot_list[0] = BOOT_DEVICE_MMC1;
++	spl_boot_list[1] = BOOT_DEVICE_MMC2;
++	spl_boot_list[2] = BOOT_DEVICE_SPI;
++}
++#endif
+ 
+ void board_init_f(ulong dummy)
+ {
+@@ -346,7 +384,7 @@ void reset_cpu(ulong addr)
+ #endif
+ }
+ 
+-#if !CONFIG_IS_ENABLED(SYS_DCACHE_OFF) && !defined(CONFIG_ARM64)
++#if !CONFIG_IS_ENABLED(SYS_DCACHE_OFF) && !defined(CONFIG_ARM64) && !defined(CONFIG_MACH_SUNIV)
+ void enable_caches(void)
+ {
+ 	/* Enable D-cache. I-cache is already enabled in start.S */
+diff --git a/arch/arm/mach-sunxi/clock.c b/arch/arm/mach-sunxi/clock.c
+index f591affe..636b3b6b 100644
+--- a/arch/arm/mach-sunxi/clock.c
++++ b/arch/arm/mach-sunxi/clock.c
+@@ -36,7 +36,8 @@ int clock_init(void)
+ }
+ 
+ /* These functions are shared between various SoCs so put them here. */
+-#if defined CONFIG_SUNXI_GEN_SUN6I && !defined CONFIG_MACH_SUN9I
++#if defined CONFIG_SUNXI_GEN_SUN6I && !defined CONFIG_MACH_SUN9I && \
++	!defined CONFIG_MACH_SUNIV
+ int clock_twi_onoff(int port, int state)
+ {
+ 	struct sunxi_ccm_reg *const ccm =
+diff --git a/arch/arm/mach-sunxi/clock_sun6i.c b/arch/arm/mach-sunxi/clock_sun6i.c
+index 8e84062b..6bd94f0a 100644
+--- a/arch/arm/mach-sunxi/clock_sun6i.c
++++ b/arch/arm/mach-sunxi/clock_sun6i.c
+@@ -23,7 +23,8 @@ void clock_init_safe(void)
+ 	struct sunxi_ccm_reg * const ccm =
+ 		(struct sunxi_ccm_reg *)SUNXI_CCM_BASE;
+ 
+-#if !defined(CONFIG_MACH_SUNXI_H3_H5) && !defined(CONFIG_MACH_SUN50I)
++#if !defined(CONFIG_MACH_SUNXI_H3_H5) && !defined(CONFIG_MACH_SUN50I) && \
++	!defined(CONFIG_MACH_SUNIV)
+ 	struct sunxi_prcm_reg * const prcm =
+ 		(struct sunxi_prcm_reg *)SUNXI_PRCM_BASE;
+ 
+@@ -49,9 +50,11 @@ void clock_init_safe(void)
+ 
+ 	writel(AHB1_ABP1_DIV_DEFAULT, &ccm->ahb1_apb1_div);
+ 
++#ifndef CONFIG_MACH_SUNIV
+ 	writel(MBUS_CLK_DEFAULT, &ccm->mbus0_clk_cfg);
+ 	if (IS_ENABLED(CONFIG_MACH_SUN6I))
+ 		writel(MBUS_CLK_DEFAULT, &ccm->mbus1_clk_cfg);
++#endif
+ 
+ #if defined(CONFIG_MACH_SUN8I_R40) && defined(CONFIG_SUNXI_AHCI)
+ 	setbits_le32(&ccm->sata_pll_cfg, CCM_SATA_PLL_DEFAULT);
+@@ -87,6 +90,7 @@ void clock_init_uart(void)
+ 	struct sunxi_ccm_reg *const ccm =
+ 		(struct sunxi_ccm_reg *)SUNXI_CCM_BASE;
+ 
++#ifndef CONFIG_MACH_SUNIV
+ 	/* uart clock source is apb2 */
+ 	writel(APB2_CLK_SRC_OSC24M|
+ 	       APB2_CLK_RATE_N_1|
+@@ -102,6 +106,24 @@ void clock_init_uart(void)
+ 	setbits_le32(&ccm->apb2_reset_cfg,
+ 		     1 << (APB2_RESET_UART_SHIFT +
+ 			   CONFIG_CONS_INDEX - 1));
++#else
++	/* suniv doesn't have apb2, so uart clock source is apb1 */
++	writel(PLL6_CFG_DEFAULT, &ccm->pll6_cfg);
++	while (!(readl(&ccm->pll6_cfg) & CCM_PLL6_CTRL_LOCK))
++		;
++
++	writel(AHB1_ABP1_DIV_DEFAULT, &ccm->ahb1_apb1_div);
++
++	/* open the clock for uart */
++	setbits_le32(&ccm->apb1_gate,
++		     CLK_GATE_OPEN << (APB1_GATE_UART_SHIFT +
++				       CONFIG_CONS_INDEX - 1));
++
++	/* deassert uart reset */
++	setbits_le32(&ccm->apb1_reset_cfg,
++		     1 << (APB1_RESET_UART_SHIFT +
++			   CONFIG_CONS_INDEX - 1));
++#endif
+ #else
+ 	/* enable R_PIO and R_UART clocks, and de-assert resets */
+ 	prcm_apb0_enable(PRCM_APB0_GATE_PIO | PRCM_APB0_GATE_UART);
+@@ -125,10 +147,15 @@ void clock_set_pll1(unsigned int clk)
+ 	}
+ 
+ 	/* Switch to 24MHz clock while changing PLL1 */
++#ifndef CONFIG_MACH_SUNIV
+ 	writel(AXI_DIV_3 << AXI_DIV_SHIFT |
+ 	       ATB_DIV_2 << ATB_DIV_SHIFT |
+ 	       CPU_CLK_SRC_OSC24M << CPU_CLK_SRC_SHIFT,
+ 	       &ccm->cpu_axi_cfg);
++#else
++	writel(CPU_CLK_SRC_OSC24M << CPU_CLK_SRC_SHIFT,
++	       &ccm->cpu_axi_cfg);
++#endif
+ 
+ 	/*
+ 	 * sun6i: PLL1 rate = ((24000000 * n * k) >> 0) / m   (p is ignored)
+@@ -137,13 +164,27 @@ void clock_set_pll1(unsigned int clk)
+ 	writel(CCM_PLL1_CTRL_EN | CCM_PLL1_CTRL_P(p) |
+ 	       CCM_PLL1_CTRL_N(clk / (24000000 * k / m)) |
+ 	       CCM_PLL1_CTRL_K(k) | CCM_PLL1_CTRL_M(m), &ccm->pll1_cfg);
++#ifndef CONFIG_MACH_SUNIV
+ 	sdelay(200);
++#else
++	do {
++		/* ARM926EJ-S code do not have sdelay */
++		volatile int i = 200;
++
++		while (i > 0) i--;
++	} while(0);
++#endif
+ 
+ 	/* Switch CPU to PLL1 */
++#ifndef CONFIG_MACH_SUNIV
+ 	writel(AXI_DIV_3 << AXI_DIV_SHIFT |
+ 	       ATB_DIV_2 << ATB_DIV_SHIFT |
+ 	       CPU_CLK_SRC_PLL1 << CPU_CLK_SRC_SHIFT,
+ 	       &ccm->cpu_axi_cfg);
++#else
++	writel(CPU_CLK_SRC_PLL1 << CPU_CLK_SRC_SHIFT,
++	       &ccm->cpu_axi_cfg);
++#endif
+ }
+ #endif
+ 
+@@ -317,7 +358,11 @@ unsigned int clock_get_pll6(void)
+ 	uint32_t rval = readl(&ccm->pll6_cfg);
+ 	int n = ((rval & CCM_PLL6_CTRL_N_MASK) >> CCM_PLL6_CTRL_N_SHIFT) + 1;
+ 	int k = ((rval & CCM_PLL6_CTRL_K_MASK) >> CCM_PLL6_CTRL_K_SHIFT) + 1;
++#ifndef CONFIG_MACH_SUNIV
+ 	return 24000000 * n * k / 2;
++#else
++	return 24000000 * n * k;
++#endif
+ }
+ 
+ unsigned int clock_get_mipi_pll(void)
+diff --git a/arch/arm/mach-sunxi/cpu_info.c b/arch/arm/mach-sunxi/cpu_info.c
+index 875e5a1a..803b849f 100644
+--- a/arch/arm/mach-sunxi/cpu_info.c
++++ b/arch/arm/mach-sunxi/cpu_info.c
+@@ -57,6 +57,8 @@ int print_cpuinfo(void)
+ {
+ #ifdef CONFIG_MACH_SUN4I
+ 	puts("CPU:   Allwinner A10 (SUN4I)\n");
++#elif defined CONFIG_MACH_SUNIV
++	puts("CPU:   Allwinner F Series (SUNIV)\n");
+ #elif defined CONFIG_MACH_SUN5I
+ 	u32 val = readl(SUNXI_SID_BASE + 0x08);
+ 	switch ((val >> 12) & 0xf) {
+diff --git a/arch/arm/mach-sunxi/dram_helpers.c b/arch/arm/mach-sunxi/dram_helpers.c
+index 520b597f..2c873192 100644
+--- a/arch/arm/mach-sunxi/dram_helpers.c
++++ b/arch/arm/mach-sunxi/dram_helpers.c
+@@ -26,7 +26,10 @@ void mctl_await_completion(u32 *reg, u32 mask, u32 val)
+ 
+ /*
+  * Test if memory at offset offset matches memory at begin of DRAM
++ *
++ * Note: dsb() is not available on ARMv5 in Thumb mode
+  */
++#ifndef CONFIG_MACH_SUNIV
+ bool mctl_mem_matches(u32 offset)
+ {
+ 	/* Try to write different values to RAM at two addresses */
+@@ -37,3 +40,4 @@ bool mctl_mem_matches(u32 offset)
+ 	return readl(CONFIG_SYS_SDRAM_BASE) ==
+ 	       readl((ulong)CONFIG_SYS_SDRAM_BASE + offset);
+ }
++#endif
+diff --git a/arch/arm/mach-sunxi/dram_suniv.c b/arch/arm/mach-sunxi/dram_suniv.c
+new file mode 100644
+index 00000000..17906eae
+--- /dev/null
++++ b/arch/arm/mach-sunxi/dram_suniv.c
+@@ -0,0 +1,498 @@
++/*
++ * suniv DRAM initialization
++ *
++ * Copyright (C) 2018 Icenowy Zheng <icenowy@aosc.io>
++ *
++ * Based on xboot's arch/arm32/mach-f1c100s/sys-dram.c, which is:
++ *
++ * Copyright(c) 2007-2018 Jianjun Jiang <8192542@qq.com>
++ *
++ * SPDX-License-Identifier:	GPL-2.0+
++ */
++
++#include <common.h>
++#include <asm/io.h>
++#include <asm/arch/clock.h>
++#include <asm/arch/dram.h>
++#include <asm/arch/gpio.h>
++#include <linux/bitops.h>
++#include <linux/delay.h>
++
++#define SDR_T_CAS			(0x2)
++#define SDR_T_RAS			(0x8)
++#define SDR_T_RCD			(0x3)
++#define SDR_T_RP			(0x3)
++#define SDR_T_WR			(0x3)
++#define SDR_T_RFC			(0xd)
++#define SDR_T_XSR			(0xf9)
++#define SDR_T_RC			(0xb)
++#define SDR_T_INIT			(0x8)
++#define SDR_T_INIT_REF			(0x7)
++#define SDR_T_WTR			(0x2)
++#define SDR_T_RRD			(0x2)
++#define SDR_T_XP			(0x0)
++
++enum dram_type
++{
++	DRAM_TYPE_SDR	= 0,
++	DRAM_TYPE_DDR	= 1,
++	/* Not supported yet. */
++	DRAM_TYPE_MDDR	= 2,
++};
++
++struct dram_para
++{
++	u32 size;		/* dram size (unit: MByte) */
++	u32 clk;		/* dram work clock (unit: MHz) */
++	u32 access_mode;	/* 0: interleave mode 1: sequence mode */
++	u32 cs_num;		/* dram chip count  1: one chip  2: two chip */
++	u32 ddr8_remap;		/* for 8bits data width DDR 0: normal  1: 8bits */
++	enum dram_type sdr_ddr;
++	u32 bwidth;		/* dram bus width */
++	u32 col_width;		/* column address width */
++	u32 row_width;		/* row address width */
++	u32 bank_size;		/* dram bank count */
++	u32 cas;		/* dram cas */
++};
++
++struct dram_para suniv_dram_para = {
++	.size = 32,
++	.clk = CONFIG_DRAM_CLK,
++	.access_mode = 1,
++	.cs_num = 1,
++	.ddr8_remap = 0,
++	.sdr_ddr = DRAM_TYPE_DDR,
++	.bwidth = 16,
++	.col_width = 10,
++	.row_width = 13,
++	.bank_size = 4,
++	.cas = 0x3,
++};
++
++static int dram_initial(void)
++{
++	unsigned int time = 0xffffff;
++
++	setbits_le32(SUNXI_DRAMC_BASE + DRAM_SCTLR, 0x1);
++	while((readl(SUNXI_DRAMC_BASE + DRAM_SCTLR) & 0x1) && time--)
++	{
++		if(time == 0)
++			return 0;
++	}
++	return 1;
++}
++
++static int dram_delay_scan(void)
++{
++	unsigned int time = 0xffffff;
++
++	setbits_le32(SUNXI_DRAMC_BASE + DRAM_DDLYR, 0x1);
++	while((readl(SUNXI_DRAMC_BASE + DRAM_DDLYR) & 0x1) && time--)
++	{
++		if(time == 0)
++			return 0;
++	}
++	return 1;
++}
++
++static void dram_set_autofresh_cycle(u32 clk)
++{
++	u32 val = 0;
++	u32 row = 0;
++	u32 temp = 0;
++
++	row = readl(SUNXI_DRAMC_BASE + DRAM_SCONR);
++	row &= 0x1e0;
++	row >>= 0x5;
++
++	if(row == 0xc)
++	{
++		if(clk >= 1000000)
++		{
++			temp = clk + (clk >> 3) + (clk >> 4) + (clk >> 5);
++			while(temp >= (10000000 >> 6))
++			{
++				temp -= (10000000 >> 6);
++				val++;
++			}
++		}
++		else
++		{
++			val = (clk * 499) >> 6;
++		}
++	}
++	else if(row == 0xb)
++	{
++		if(clk >= 1000000)
++		{
++			temp = clk + (clk >> 3) + (clk >> 4) + (clk >> 5);
++			while(temp >= (10000000 >> 7))
++			{
++				temp -= (10000000 >> 7);
++				val++;
++			}
++		}
++		else
++		{
++			val = (clk * 499) >> 5;
++		}
++	}
++	writel(val, SUNXI_DRAMC_BASE + DRAM_SREFR);
++}
++
++static int dram_para_setup(struct dram_para * para)
++{
++	u32 val = 0;
++
++	val = (para->ddr8_remap) | (0x1 << 1) |
++	      ((para->bank_size >> 2) << 3) |
++	      ((para->cs_num >> 1) << 4) |
++	      ((para->row_width - 1) << 5) |
++	      ((para->col_width - 1) << 9) |
++	      ((para->sdr_ddr ? (para->bwidth >> 4) : (para->bwidth >> 5)) << 13) |
++	      (para->access_mode << 15) |
++	      (para->sdr_ddr << 16);
++
++	writel(val, SUNXI_DRAMC_BASE + DRAM_SCONR);
++	setbits_le32(SUNXI_DRAMC_BASE + DRAM_SCTLR, 0x1 << 19);
++	return dram_initial();
++}
++
++static u32 dram_check_delay(u32 bwidth)
++{
++	u32 dsize;
++	int i,j;
++	u32 num = 0;
++	u32 dflag = 0;
++
++	dsize = ((bwidth == 16) ? 4 : 2);
++	for(i = 0; i < dsize; i++)
++	{
++		if(i == 0)
++			dflag = readl(SUNXI_DRAMC_BASE + DRAM_DRPTR0);
++		else if(i == 1)
++			dflag = readl(SUNXI_DRAMC_BASE + DRAM_DRPTR1);
++		else if(i == 2)
++			dflag = readl(SUNXI_DRAMC_BASE + DRAM_DRPTR2);
++		else if(i == 3)
++			dflag = readl(SUNXI_DRAMC_BASE + DRAM_DRPTR3);
++
++		for(j = 0; j < 32; j++)
++		{
++			if(dflag & 0x1)
++				num++;
++			dflag >>= 1;
++		}
++	}
++	return num;
++}
++
++static int sdr_readpipe_scan(void)
++{
++	u32 k = 0;
++
++	for(k = 0; k < 32; k++)
++	{
++		writel(k, CONFIG_SYS_SDRAM_BASE + 4 * k);
++	}
++	for(k = 0; k < 32; k++)
++	{
++		if(readl(CONFIG_SYS_SDRAM_BASE + 4 * k) != k)
++			return 0;
++	}
++	return 1;
++}
++
++static u32 sdr_readpipe_select(void)
++{
++	u32 value = 0;
++	u32 i = 0;
++	for(i = 0; i < 8; i++)
++	{
++		clrsetbits_le32(SUNXI_DRAMC_BASE + DRAM_SCTLR,
++				0x7 << 6, i << 6);
++		if(sdr_readpipe_scan())
++		{
++			value = i;
++			return value;
++		}
++	}
++	return value;
++}
++
++static u32 dram_check_type(struct dram_para * para)
++{
++	u32 times = 0;
++	int i;
++
++	for(i = 0; i < 8; i++)
++	{
++		clrsetbits_le32(SUNXI_DRAMC_BASE + DRAM_SCTLR,
++				0x7 << 6, i << 6);
++		dram_delay_scan();
++		if(readl(SUNXI_DRAMC_BASE + DRAM_DDLYR) & 0x30)
++			times++;
++	}
++
++	if(times == 8)
++	{
++		para->sdr_ddr = DRAM_TYPE_SDR;
++		return 0;
++	}
++	else
++	{
++		para->sdr_ddr = DRAM_TYPE_DDR;
++		return 1;
++	}
++}
++
++static u32 dram_scan_readpipe(struct dram_para * para)
++{
++	u32 rp_best = 0, rp_val = 0;
++	u32 readpipe[8];
++	int i;
++
++	if(para->sdr_ddr == DRAM_TYPE_DDR)
++	{
++		for(i = 0; i < 8; i++)
++		{
++			clrsetbits_le32(SUNXI_DRAMC_BASE + DRAM_SCTLR,
++					0x7 << 6, i << 6);
++			dram_delay_scan();
++			readpipe[i] = 0;
++			if((((readl(SUNXI_DRAMC_BASE + DRAM_DDLYR) >> 4) & 0x3) == 0x0) &&
++				(((readl(SUNXI_DRAMC_BASE + DRAM_DDLYR) >> 4) & 0x1) == 0x0))
++			{
++				readpipe[i] = dram_check_delay(para->bwidth);
++			}
++			if(rp_val < readpipe[i])
++			{
++				rp_val = readpipe[i];
++				rp_best = i;
++			}
++		}
++		clrsetbits_le32(SUNXI_DRAMC_BASE + DRAM_SCTLR,
++				0x7 << 6, rp_best << 6);
++		dram_delay_scan();
++	}
++	else
++	{
++		clrbits_le32(SUNXI_DRAMC_BASE + DRAM_SCONR,
++			     (0x1 << 16) | (0x3 << 13));
++		rp_best = sdr_readpipe_select();
++		clrsetbits_le32(SUNXI_DRAMC_BASE + DRAM_SCTLR,
++				0x7 << 6, rp_best << 6);
++	}
++	return 0;
++}
++
++static u32 dram_get_dram_size(struct dram_para * para)
++{
++	u32 colflag = 10, rowflag = 13;
++	u32 val1 = 0;
++	u32 count = 0;
++	u32 addr1, addr2;
++	int i;
++
++	para->col_width = colflag;
++	para->row_width = rowflag;
++	dram_para_setup(para);
++	dram_scan_readpipe(para);
++	for(i = 0; i < 32; i++)
++	{
++		*((u8 *)(CONFIG_SYS_SDRAM_BASE + 0x200 + i)) = 0x11;
++		*((u8 *)(CONFIG_SYS_SDRAM_BASE + 0x600 + i)) = 0x22;
++	}
++	for(i = 0; i < 32; i++)
++	{
++		val1 = *((u8 *)(CONFIG_SYS_SDRAM_BASE + 0x200 + i));
++		if(val1 == 0x22)
++			count++;
++	}
++	if(count == 32)
++	{
++		colflag = 9;
++	}
++	else
++	{
++		colflag = 10;
++	}
++	count = 0;
++	para->col_width = colflag;
++	para->row_width = rowflag;
++	dram_para_setup(para);
++	if(colflag == 10)
++	{
++		addr1 = CONFIG_SYS_SDRAM_BASE + 0x400000;
++		addr2 = CONFIG_SYS_SDRAM_BASE + 0xc00000;
++	}
++	else
++	{
++		addr1 = CONFIG_SYS_SDRAM_BASE + 0x200000;
++		addr2 = CONFIG_SYS_SDRAM_BASE + 0x600000;
++	}
++	for(i = 0; i < 32; i++)
++	{
++		*((u8 *)(addr1 + i)) = 0x33;
++		*((u8 *)(addr2 + i)) = 0x44;
++	}
++	for(i = 0; i < 32; i++)
++	{
++		val1 = *((u8 *)(addr1 + i));
++		if(val1 == 0x44)
++		{
++			count++;
++		}
++	}
++	if(count == 32)
++	{
++		rowflag = 12;
++	}
++	else
++	{
++		rowflag = 13;
++	}
++	para->col_width = colflag;
++	para->row_width = rowflag;
++	if(para->row_width != 13)
++	{
++		para->size = 16;
++	}
++	else if(para->col_width == 10)
++	{
++		para->size = 64;
++	}
++	else
++	{
++		para->size = 32;
++	}
++	dram_set_autofresh_cycle(para->clk);
++	para->access_mode = 0;
++	dram_para_setup(para);
++
++	return 0;
++}
++
++static void simple_dram_check(void)
++{
++	volatile u32 *dram = (u32*) CONFIG_SYS_SDRAM_BASE;
++	int i;
++
++	for(i = 0; i < 0x40; i++)
++	{
++		dram[i] = i;
++	}
++
++	for(i = 0; i < 0x40; i++)
++	{
++		if (dram[i] != i) {
++			printf("DRAM initialization failed: dram[0x%x] != 0x%x.", i, dram[i]);
++			while(1) {}
++		}
++	}
++
++	for(i = 0; i < 0x10000; i += 0x40)
++	{
++		dram[i] = i;
++	}
++
++	for(i = 0; i < 0x10000; i += 0x40)
++	{
++		if (dram[i] != i) {
++			printf("DRAM initialization failed: dram[0x%x] != 0x%x.", i, dram[i]);
++			while(1) {}
++		}
++	}
++}
++
++static void do_dram_init(struct dram_para * para)
++{
++	struct sunxi_ccm_reg * const ccm =
++		(struct sunxi_ccm_reg *)SUNXI_CCM_BASE;
++	u32 val;
++	u8 m; /* PLL_DDR clock factor */
++
++	sunxi_gpio_set_cfgpin(SUNXI_GPB(3), 0x7);
++	udelay(5000);
++	/* TODO: dig out what's them... some analog register? */
++	if(((para->cas) >> 3) & 0x1)
++	{
++		setbits_le32(SUNXI_PIO_BASE + 0x2c4, (0x1 << 23) | (0x20 << 17));
++	}
++
++	if((para->clk >= 144) && (para->clk <= 180))
++	{
++		writel(0xaaa, SUNXI_PIO_BASE + 0x2c0);
++	}
++	if(para->clk >= 180)
++	{
++		writel(0xfff, SUNXI_PIO_BASE + 0x2c0);
++	}
++
++	if(para->cas & BIT(4))
++	{
++		writel(0xd1303333, &ccm->pll5_pattern_cfg);
++	}
++	else if(para->cas & BIT(5))
++	{
++		writel(0xcce06666, &ccm->pll5_pattern_cfg);
++	}
++	else if(para->cas & BIT(6))
++	{
++		writel(0xc8909999, &ccm->pll5_pattern_cfg);
++	}
++	else if(para->cas & BIT(7))
++	{
++		writel(0xc440cccc, &ccm->pll5_pattern_cfg);
++	}
++
++	if((para->clk) <= 96)
++		m = 2;
++	else
++		m = 1;
++
++	val = CCM_PLL5_CTRL_EN | CCM_PLL5_CTRL_UPD |
++	      CCM_PLL5_CTRL_N((para->clk * 2) / (24 / m)) |
++	      CCM_PLL5_CTRL_K(1) | CCM_PLL5_CTRL_M(m);
++	if(para->cas & GENMASK(7, 4))
++	{
++		val |= CCM_PLL5_CTRL_SIGMA_DELTA_EN;
++	}
++	writel(val, &ccm->pll5_cfg);
++	setbits_le32(&ccm->pll5_cfg, CCM_PLL5_CTRL_UPD);
++	mctl_await_completion(&ccm->pll5_cfg, BIT(28), BIT(28));
++	udelay(5000);
++
++	setbits_le32(&ccm->ahb_gate0, (1 << AHB_GATE_OFFSET_MCTL));
++	clrbits_le32(&ccm->ahb_reset0_cfg, (1 << AHB_RESET_OFFSET_MCTL));
++	udelay(50);
++	setbits_le32(&ccm->ahb_reset0_cfg, (1 << AHB_RESET_OFFSET_MCTL));
++
++	clrsetbits_le32(SUNXI_PIO_BASE + 0x2c4, (1 << 16),
++			((para->sdr_ddr == DRAM_TYPE_DDR) << 16));
++
++	val = (SDR_T_CAS << 0) | (SDR_T_RAS << 3) | (SDR_T_RCD << 7) |
++	      (SDR_T_RP << 10) | (SDR_T_WR << 13) | (SDR_T_RFC << 15) |
++	      (SDR_T_XSR << 19) | (SDR_T_RC << 28);
++	writel(val, SUNXI_DRAMC_BASE + DRAM_STMG0R);
++	val = (SDR_T_INIT << 0) | (SDR_T_INIT_REF << 16) | (SDR_T_WTR << 20) |
++	      (SDR_T_RRD << 22) | (SDR_T_XP << 25);
++	writel(val, SUNXI_DRAMC_BASE + DRAM_STMG1R);
++	dram_para_setup(para);
++	dram_check_type(para);
++
++	clrsetbits_le32(SUNXI_PIO_BASE + 0x2c4, (1 << 16),
++			((para->sdr_ddr == DRAM_TYPE_DDR) << 16));
++
++	dram_set_autofresh_cycle(para->clk);
++	dram_scan_readpipe(para);
++	dram_get_dram_size(para);
++	simple_dram_check();
++}
++
++unsigned long sunxi_dram_init(void)
++{
++	do_dram_init(&suniv_dram_para);
++
++	return suniv_dram_para.size * 1024 * 1024;
++}
+diff --git a/arch/arm/mach-sunxi/spl_spi_sunxi.c b/arch/arm/mach-sunxi/spl_spi_sunxi.c
+index 15e86cba..8902a64a 100644
+--- a/arch/arm/mach-sunxi/spl_spi_sunxi.c
++++ b/arch/arm/mach-sunxi/spl_spi_sunxi.c
+@@ -12,6 +12,7 @@
+ #include <linux/bitops.h>
+ #include <linux/delay.h>
+ #include <linux/libfdt.h>
++#include <asm/arch/spl.h>
+ 
+ #ifdef CONFIG_SPL_OS_BOOT
+ #error CONFIG_SPL_OS_BOOT is not supported yet
+@@ -89,6 +90,7 @@
+ 
+ #define SPI0_CLK_DIV_BY_2           0x1000
+ #define SPI0_CLK_DIV_BY_4           0x1001
++#define SPI0_CLK_DIV_BY_32          0x100f
+ 
+ /*****************************************************************************/
+ 
+@@ -120,7 +122,8 @@ static void spi0_pinmux_setup(unsigned int pin_function)
+ static bool is_sun6i_gen_spi(void)
+ {
+ 	return IS_ENABLED(CONFIG_SUNXI_GEN_SUN6I) ||
+-	       IS_ENABLED(CONFIG_MACH_SUN50I_H6);
++	       IS_ENABLED(CONFIG_MACH_SUN50I_H6) ||
++		   IS_ENABLED(CONFIG_MACH_SUNIV);
+ }
+ 
+ static uintptr_t spi0_base_address(void)
+@@ -131,6 +134,9 @@ static uintptr_t spi0_base_address(void)
+ 	if (IS_ENABLED(CONFIG_MACH_SUN50I_H6))
+ 		return 0x05010000;
+ 
++	if (IS_ENABLED(CONFIG_MACH_SUNIV))
++		return 0x01C05000;
++
+ 	if (!is_sun6i_gen_spi())
+ 		return 0x01C05000;
+ 
+@@ -155,11 +161,17 @@ static void spi0_enable_clock(void)
+ 	if (!IS_ENABLED(CONFIG_MACH_SUN50I_H6))
+ 		setbits_le32(CCM_AHB_GATING0, (1 << AHB_GATE_OFFSET_SPI0));
+ 
++#ifndef CONFIG_MACH_SUNIV
+ 	/* Divide by 4 */
+ 	writel(SPI0_CLK_DIV_BY_4, base + (is_sun6i_gen_spi() ?
+ 				  SUN6I_SPI0_CCTL : SUN4I_SPI0_CCTL));
+ 	/* 24MHz from OSC24M */
+ 	writel((1 << 31), CCM_SPI0_CLK);
++#else
++	/* Divide by 32, clock source is AHB clock 200MHz */
++	writel(SPI0_CLK_DIV_BY_32, base + (is_sun6i_gen_spi() ?
++				  SUN6I_SPI0_CCTL : SUN4I_SPI0_CCTL));
++#endif
+ 
+ 	if (is_sun6i_gen_spi()) {
+ 		/* Enable SPI in the master mode and do a soft reset */
+@@ -189,8 +201,10 @@ static void spi0_disable_clock(void)
+ 		clrbits_le32(base + SUN4I_SPI0_CTL, SUN4I_CTL_MASTER |
+ 					     SUN4I_CTL_ENABLE);
+ 
++#ifndef CONFIG_MACH_SUNIV
+ 	/* Disable the SPI0 clock */
+ 	writel(0, CCM_SPI0_CLK);
++#endif
+ 
+ 	/* Close the SPI0 gate */
+ 	if (!IS_ENABLED(CONFIG_MACH_SUN50I_H6))
+@@ -212,6 +226,9 @@ static void spi0_init(void)
+ 	    IS_ENABLED(CONFIG_MACH_SUN50I_H6))
+ 		pin_function = SUN50I_GPC_SPI0;
+ 
++	if (IS_ENABLED(CONFIG_MACH_SUNIV))
++		pin_function = SUNIV_GPC_SPI0;
++
+ 	spi0_pinmux_setup(pin_function);
+ 	spi0_enable_clock();
+ }
+@@ -228,11 +245,9 @@ static void spi0_deinit(void)
+ 	spi0_pinmux_setup(pin_function);
+ }
+ 
+-/*****************************************************************************/
+-
+-#define SPI_READ_MAX_SIZE 60 /* FIFO size, minus 4 bytes of the header */
+-
+-static void sunxi_spi0_read_data(u8 *buf, u32 addr, u32 bufsize,
++static void sunxi_spi0_transmit(
++				 u8 *send, u32 ssize,
++				 u8*recv, u32 rsize,
+ 				 ulong spi_ctl_reg,
+ 				 ulong spi_ctl_xch_bitmask,
+ 				 ulong spi_fifo_reg,
+@@ -242,67 +257,160 @@ static void sunxi_spi0_read_data(u8 *buf, u32 addr, u32 bufsize,
+ 				 ulong spi_tc_reg,
+ 				 ulong spi_bcc_reg)
+ {
+-	writel(4 + bufsize, spi_bc_reg); /* Burst counter (total bytes) */
+-	writel(4, spi_tc_reg);           /* Transfer counter (bytes to send) */
++	writel(ssize + rsize, spi_bc_reg); /* Burst counter (total bytes) */
++	writel(ssize, spi_tc_reg);           /* Transfer counter (bytes to send) */
+ 	if (spi_bcc_reg)
+-		writel(4, spi_bcc_reg);  /* SUN6I also needs this */
++		writel(ssize, spi_bcc_reg);  /* SUN6I also needs this */
+ 
+-	/* Send the Read Data Bytes (03h) command header */
+-	writeb(0x03, spi_tx_reg);
+-	writeb((u8)(addr >> 16), spi_tx_reg);
+-	writeb((u8)(addr >> 8), spi_tx_reg);
+-	writeb((u8)(addr), spi_tx_reg);
++	/* Send buffer */
++	for(u32 i = 0; i < ssize; i++)
++		writeb(send[i], spi_tx_reg);
+ 
+ 	/* Start the data transfer */
+ 	setbits_le32(spi_ctl_reg, spi_ctl_xch_bitmask);
+ 
+ 	/* Wait until everything is received in the RX FIFO */
+-	while ((readl(spi_fifo_reg) & 0x7F) < 4 + bufsize)
++	while ((readl(spi_fifo_reg) & 0x7F) < ssize + rsize)
+ 		;
+ 
+-	/* Skip 4 bytes */
+-	readl(spi_rx_reg);
++	/* Skip send bytes */
++	for(u32 i = 0; i < ssize; i++)
++		readb(spi_rx_reg);
+ 
+ 	/* Read the data */
+-	while (bufsize-- > 0)
+-		*buf++ = readb(spi_rx_reg);
++	while (rsize-- > 0)
++		*recv++ = readb(spi_rx_reg);
+ 
+ 	/* tSHSL time is up to 100 ns in various SPI flash datasheets */
+ 	udelay(1);
+ }
+ 
++static void spi0_transmit(
++				 void *send, u32 ssize,
++				 void *recv, u32 rsize)
++{
++	u8 *sbuf = send;
++	u8 *rbuf = recv;
++	uintptr_t base = spi0_base_address();
++	if (is_sun6i_gen_spi()) {
++		sunxi_spi0_transmit(
++					 sbuf, ssize,
++					 rbuf, rsize,
++					 base + SUN6I_SPI0_TCR,
++					 SUN6I_TCR_XCH,
++					 base + SUN6I_SPI0_FIFO_STA,
++					 base + SUN6I_SPI0_TXD,
++					 base + SUN6I_SPI0_RXD,
++					 base + SUN6I_SPI0_MBC,
++					 base + SUN6I_SPI0_MTC,
++					 base + SUN6I_SPI0_BCC);
++	} else {
++		sunxi_spi0_transmit(
++					 sbuf, ssize,
++					 rbuf, rsize,
++					 base + SUN4I_SPI0_CTL,
++					 SUN4I_CTL_XCH,
++					 base + SUN4I_SPI0_FIFO_STA,
++					 base + SUN4I_SPI0_TX,
++					 base + SUN4I_SPI0_RX,
++					 base + SUN4I_SPI0_BC,
++					 base + SUN4I_SPI0_TC,
++					 0);
++	}
++}
++
++enum flashtype
++{
++	FLASHTYPE_UNINIT,
++	FLASHTYPE_NOR,
++	FLASHTYPE_NAND,
++};
++
++static enum flashtype spi0_get_flash_type(void)
++{
++	static enum flashtype type;
++	static u8 chipid[2];
++	if(type == FLASHTYPE_UNINIT)
++	{
++		type = FLASHTYPE_NOR;
++		spi0_transmit("\x9f\x00", 2, chipid, 2); // Read Chip ID
++		if (!memcmp(chipid, "\xc8\xf1", 2)) {
++			printf("SPI-NAND: GigaDevice GD5F1GQ4UAxxG\n");
++			type = FLASHTYPE_NAND;
++		}
++	}
++	return type;
++}
++
++static u32 nandpage = -1;
++
++static u32 spi0_read_small_data(void *buf, u32 addr, u32 len)
++{
++	switch(spi0_get_flash_type())
++	{
++	case FLASHTYPE_NAND:
++	{
++		u32 page, wrap;
++		page = addr >> 11;
++		if (nandpage != page) {
++			u8 readcache[] = {0x13, (u8)(page >> 16), (u8)(page >> 8), (u8)(page)};
++			spi0_transmit(readcache, 4, NULL, 0);
++			udelay(300);
++			nandpage = page;
++		}
++		addr &= 0x7FF;
++		if (len + addr > 0x800) 
++			len = 0x800 - addr;
++		if (len > 0 && len <= 16) {
++            wrap = 12;
++        } else if(len > 16 && len <= 64) {
++            wrap = 8;
++        } else if(len > 65 && len <= 2048) {
++            wrap = 4;
++        } else {
++            wrap = 0;
++        }
++		switch(wrap)
++		{
++		case 12:
++			if((addr & 0xF) + len > 16) wrap = 8;
++			break;
++		case 8:
++			if((addr & 0x3F) + len > 65) wrap = 4;
++			break;
++		default:
++			wrap = 0;
++			break;
++		}
++		u8 read[] = {0x03, (u8)((addr >> 8) & 0xF) | (wrap << 4), addr & 0xFF, 0};
++		spi0_transmit(read, 4, buf, len);
++	}
++	break;
++	default:
++	{
++		u8 read[] = {0x03, (u8)(addr >> 16), (u8)(addr >> 8), (u8)(addr)};
++		spi0_transmit(read, 4, buf, len);
++	}
++	break;
++	}
++	return len;
++}
++
++/*****************************************************************************/
++
++#define SPI_READ_MAX_SIZE 60 /* FIFO size, minus 4 bytes of the header */
++
+ static void spi0_read_data(void *buf, u32 addr, u32 len)
+ {
+ 	u8 *buf8 = buf;
+ 	u32 chunk_len;
+-	uintptr_t base = spi0_base_address();
+ 
+ 	while (len > 0) {
+ 		chunk_len = len;
+ 		if (chunk_len > SPI_READ_MAX_SIZE)
+ 			chunk_len = SPI_READ_MAX_SIZE;
+-
+-		if (is_sun6i_gen_spi()) {
+-			sunxi_spi0_read_data(buf8, addr, chunk_len,
+-					     base + SUN6I_SPI0_TCR,
+-					     SUN6I_TCR_XCH,
+-					     base + SUN6I_SPI0_FIFO_STA,
+-					     base + SUN6I_SPI0_TXD,
+-					     base + SUN6I_SPI0_RXD,
+-					     base + SUN6I_SPI0_MBC,
+-					     base + SUN6I_SPI0_MTC,
+-					     base + SUN6I_SPI0_BCC);
+-		} else {
+-			sunxi_spi0_read_data(buf8, addr, chunk_len,
+-					     base + SUN4I_SPI0_CTL,
+-					     SUN4I_CTL_XCH,
+-					     base + SUN4I_SPI0_FIFO_STA,
+-					     base + SUN4I_SPI0_TX,
+-					     base + SUN4I_SPI0_RX,
+-					     base + SUN4I_SPI0_BC,
+-					     base + SUN4I_SPI0_TC,
+-					     0);
+-		}
++		
++		chunk_len = spi0_read_small_data(buf8, addr, chunk_len);
+ 
+ 		len  -= chunk_len;
+ 		buf8 += chunk_len;
+@@ -324,14 +432,28 @@ static int spl_spi_load_image(struct spl_image_info *spl_image,
+ 			      struct spl_boot_device *bootdev)
+ {
+ 	int ret = 0;
++	u32 uboot_addr;
+ 	struct image_header *header;
+ 	header = (struct image_header *)(CONFIG_SYS_TEXT_BASE);
++	uboot_addr = CONFIG_SYS_SPI_U_BOOT_OFFS;
+ 
+ 	spi0_init();
++	
++#ifdef CONFIG_MACH_SUNIV
++	unsigned char *buffer = (unsigned char *)(CONFIG_SYS_TEXT_BASE);
++	spi0_read_data(buffer, 0, 16);
++	if (!is_boot0_magic(buffer + 4)) {
++		return -1;
++	}
++	if (spi0_get_flash_type() == FLASHTYPE_NAND) {
++		printf("SPI-NAND: U-Boot address: %u\n", CONFIG_SYS_SPI_NAND_U_BOOT_OFFS);
++		uboot_addr = CONFIG_SYS_SPI_NAND_U_BOOT_OFFS;
++	}
++#endif
++	
++	spi0_read_data((void *)header, uboot_addr, 0x40);
+ 
+-	spi0_read_data((void *)header, CONFIG_SYS_SPI_U_BOOT_OFFS, 0x40);
+-
+-        if (IS_ENABLED(CONFIG_SPL_LOAD_FIT) &&
++    if (IS_ENABLED(CONFIG_SPL_LOAD_FIT) &&
+ 		image_get_magic(header) == FDT_MAGIC) {
+ 		struct spl_load_info load;
+ 
+@@ -342,14 +464,14 @@ static int spl_spi_load_image(struct spl_image_info *spl_image,
+ 		load.bl_len = 1;
+ 		load.read = spi_load_read;
+ 		ret = spl_load_simple_fit(spl_image, &load,
+-					  CONFIG_SYS_SPI_U_BOOT_OFFS, header);
++					  uboot_addr, header);
+ 	} else {
+ 		ret = spl_parse_image_header(spl_image, header);
+ 		if (ret)
+ 			return ret;
+ 
+ 		spi0_read_data((void *)spl_image->load_addr,
+-			       CONFIG_SYS_SPI_U_BOOT_OFFS, spl_image->size);
++			       uboot_addr, spl_image->size);
+ 	}
+ 
+ 	spi0_deinit();
+diff --git a/board/sunxi/board.c b/board/sunxi/board.c
+index f32e8f58..c6b6a7fc 100644
+--- a/board/sunxi/board.c
++++ b/board/sunxi/board.c
+@@ -226,7 +226,7 @@ int board_init(void)
+ 
+ 	gd->bd->bi_boot_params = (PHYS_SDRAM_0 + 0x100);
+ 
+-#ifndef CONFIG_ARM64
++#if !defined(CONFIG_ARM64) && !defined(CONFIG_MACH_SUNIV)
+ 	asm volatile("mrc p15, 0, %0, c0, c1, 1" : "=r"(id_pfr1));
+ 	debug("id_pfr1: 0x%08x\n", id_pfr1);
+ 	/* Generic Timer Extension available? */
+@@ -253,7 +253,7 @@ int board_init(void)
+ #endif
+ 		}
+ 	}
+-#endif /* !CONFIG_ARM64 */
++#endif /* !CONFIG_ARM64 && !CONFIG_MACH_SUNIV */
+ 
+ 	ret = axp_gpio_init();
+ 	if (ret)
+@@ -380,22 +380,31 @@ void board_nand_init(void)
+ #ifdef CONFIG_MMC
+ static void mmc_pinmux_setup(int sdc)
+ {
+-	unsigned int pin;
++	__maybe_unused unsigned int pin;
+ 	__maybe_unused int pins;
+ 
+ 	switch (sdc) {
+ 	case 0:
+ 		/* SDC0: PF0-PF5 */
++#ifndef CONFIG_UART0_PORT_F
+ 		for (pin = SUNXI_GPF(0); pin <= SUNXI_GPF(5); pin++) {
+ 			sunxi_gpio_set_cfgpin(pin, SUNXI_GPF_SDC0);
+ 			sunxi_gpio_set_pull(pin, SUNXI_GPIO_PULL_UP);
+ 			sunxi_gpio_set_drv(pin, 2);
+ 		}
++#endif
+ 		break;
+ 
+ 	case 1:
+ 		pins = sunxi_name_to_gpio_bank(CONFIG_MMC1_PINS);
+ 
++#if defined(CONFIG_MACH_SUNIV)
++		for (pin = SUNXI_GPC(0); pin <= SUNXI_GPC(2); pin++) {
++			sunxi_gpio_set_cfgpin(pin, SUNXI_GPC_SDC2);
++			sunxi_gpio_set_pull(pin, SUNXI_GPIO_PULL_UP);
++			sunxi_gpio_set_drv(pin, 2);
++		}
++#endif
+ #if defined(CONFIG_MACH_SUN4I) || defined(CONFIG_MACH_SUN7I) || \
+     defined(CONFIG_MACH_SUN8I_R40)
+ 		if (pins == SUNXI_GPIO_H) {
+@@ -841,6 +850,17 @@ static void setup_environment(const void *fdt)
+ 	}
+ }
+ 
++static int usb_gadget_init(void)
++{
++	int ret;
++	struct udevice *usb_dev;
++	ret = uclass_first_device(UCLASS_USB_GADGET_GENERIC, &usb_dev);
++	if (!usb_dev || ret) {
++		pr_err("No USB gadget device found\n");
++	}
++	return ret;
++}
++
+ int misc_init_r(void)
+ {
+ 	uint boot;
+@@ -861,12 +881,31 @@ int misc_init_r(void)
+ 		env_set("mmc_bootdev", "1");
+ 	}
+ 
++	switch (boot) {
++		case BOOT_DEVICE_MMC1:
++			env_set("boot_device", "mmc0");
++			break;
++		case BOOT_DEVICE_MMC2:
++			env_set("boot_device", "mmc1");
++			break;
++		case BOOT_DEVICE_SPI:
++			env_set("boot_device", "spi");
++			break;
++		default:
++			env_set("boot_device", "fel");
++			break;
++	}
++
+ 	setup_environment(gd->fdt_blob);
+ 
+ #ifdef CONFIG_USB_ETHER
+ 	usb_ether_init();
+ #endif
+ 
++#ifdef CONFIG_USB_GADGET
++	usb_gadget_init();
++#endif
++
+ 	return 0;
+ }
+ 
+diff --git a/common/spl/Kconfig b/common/spl/Kconfig
+index 8ece9057..d0555024 100644
+--- a/common/spl/Kconfig
++++ b/common/spl/Kconfig
+@@ -1093,6 +1093,15 @@ config SYS_SPI_U_BOOT_OFFS
+ 	 Address within SPI-Flash from where the u-boot payload is fetched
+ 	 from.
+ 
++config SYS_SPI_NAND_U_BOOT_OFFS
++	hex "address of u-boot payload in SPI NAND flash"
++	default 0xd000 if ARCH_SUNXI
++	default 0x0
++	depends on SPL_SPI_LOAD || SPL_SPI_SUNXI
++	help
++	 Address within SPI-NAND Flash from where the u-boot payload is fetched
++	 from.
++
+ config SPL_THERMAL
+ 	bool "Driver support for thermal devices"
+ 	help
+diff --git a/common/spl/spl.c b/common/spl/spl.c
+index 0e96a8cd..3af8a89a 100644
+--- a/common/spl/spl.c
++++ b/common/spl/spl.c
+@@ -553,8 +553,25 @@ static int boot_from_devices(struct spl_image_info *spl_image,
+ 
+ 		loader = spl_ll_find_loader(spl_boot_list[i]);
+ #if defined(CONFIG_SPL_SERIAL_SUPPORT) && defined(CONFIG_SPL_LIBCOMMON_SUPPORT)
+-		if (loader)
++		if (loader) {
+ 			printf("Trying to boot from %s\n", loader->name);
++#ifdef CONFIG_MACH_SUNIV
++			switch (spl_boot_list[i]) {
++				case BOOT_DEVICE_MMC1:
++					writeb(0, CONFIG_SUNXI_SRAM_ADDRESS + 0x6fff);
++					break;
++				case BOOT_DEVICE_MMC2:
++					writeb(2, CONFIG_SUNXI_SRAM_ADDRESS + 0x6fff);
++					break;
++				case BOOT_DEVICE_SPI:
++					writeb(3, CONFIG_SUNXI_SRAM_ADDRESS + 0x6fff);
++					break;
++				default:
++					writeb(-1, CONFIG_SUNXI_SRAM_ADDRESS + 0x6fff);
++					break;
++			}
++#endif
++		}
+ 		else
+ 			puts(SPL_TPL_PROMPT "Unsupported Boot Device!\n");
+ #endif
+diff --git a/common/spl/spl_mmc.c b/common/spl/spl_mmc.c
+index add2785b..3f4746ab 100644
+--- a/common/spl/spl_mmc.c
++++ b/common/spl/spl_mmc.c
+@@ -16,6 +16,7 @@
+ #include <errno.h>
+ #include <mmc.h>
+ #include <image.h>
++#include <asm/arch/spl.h>
+ 
+ static int mmc_load_legacy(struct spl_image_info *spl_image, struct mmc *mmc,
+ 			   ulong sector, struct image_header *header)
+@@ -70,6 +71,14 @@ int mmc_load_image_raw_sector(struct spl_image_info *spl_image,
+ 	struct blk_desc *bd = mmc_get_blk_desc(mmc);
+ 	int ret = 0;
+ 
++#ifdef CONFIG_MACH_SUNIV
++	unsigned char *buffer = (unsigned char *)(CONFIG_SYS_TEXT_BASE);
++	count = blk_dread(bd, 16, 1, buffer);
++	if (!is_boot0_magic(buffer + 4)) {
++		return -1;
++	}
++#endif
++
+ 	header = spl_get_load_buffer(-sizeof(*header), bd->blksz);
+ 
+ 	/* read image header to find the image size & load address */
+diff --git a/configs/LicheePi_Nano_defconfig b/configs/LicheePi_Nano_defconfig
+new file mode 100644
+index 00000000..b019de0f
+--- /dev/null
++++ b/configs/LicheePi_Nano_defconfig
+@@ -0,0 +1,63 @@
++CONFIG_ARM=y
++CONFIG_ARCH_SUNXI=y
++CONFIG_MACH_SUNIV=y
++CONFIG_DEFAULT_DEVICE_TREE="suniv-f1c100s-licheepi-nano"
++
++CONFIG_SYS_CLK_FREQ=408000000
++CONFIG_DRAM_CLK=168
++CONFIG_DRAM_ZQ=0
++
++CONFIG_CONS_INDEX=2
++
++CONFIG_SPL=y
++CONFIG_SPL_SPI_SUNXI=y
++CONFIG_MMC_SUNXI_SLOT_EXTRA=1
++
++CONFIG_SYS_TEXT_BASE=0x81700000
++CONFIG_VIDEO_LCD_MODE="x:800,y:480,depth:18,pclk_khz:30000,le:16,ri:209,up:22,lo:22,hs:30,vs:1,sync:0,vmode:0"
++CONFIG_VIDEO_LCD_BL_PWM="PE12"
++CONFIG_VIDEO_LCD_BL_PWM_ACTIVE_LOW=n
++
++CONFIG_NET=n
++
++CONFIG_SPI=y
++CONFIG_DM_SPI=y
++CONFIG_SPI_SUNXI=y
++
++CONFIG_MTD=y
++CONFIG_DM_MTD=y
++CONFIG_CMD_MTD=y
++CONFIG_MTD_SPI_NAND=y
++
++CONFIG_SPI_FLASH=y
++CONFIG_DM_SPI_FLASH=y
++CONFIG_SPI_FLASH_BAR=y
++CONFIG_SPI_FLASH_WINBOND=y
++
++CONFIG_PHY=y
++CONFIG_PHY_SUN4I_USB=y
++
++CONFIG_USB_MUSB_SUNXI=y
++CONFIG_USB_MUSB_GADGET=y
++CONFIG_USB_MUSB_PIO_ONLY=y
++CONFIG_USB_MUSB_DISABLE_BULK_COMBINE_SPLIT=y
++CONFIG_USB_GADGET_VBUS_DRAW=250
++
++CONFIG_USB_STORAGE=y
++CONFIG_CMD_USB_MASS_STORAGE=y
++
++CONFIG_CMD_FASTBOOT=n
++CONFIG_FASTBOOT=n
++CONFIG_USB_FUNCTION_FASTBOOT=n
++
++CONFIG_CMD_MTDPARTS=y
++
++CONFIG_USB_GADGET_DOWNLOAD=y
++
++CONFIG_CMD_DFU=y
++CONFIG_DFU=y
++CONFIG_DFU_OVER_USB=y
++CONFIG_DFU_TIMEOUT=y
++CONFIG_DFU_MMC=y
++CONFIG_DFU_SF=y
++CONFIG_DFU_MTD=y
+diff --git a/configs/widora_tiny200_v2_defconfig b/configs/widora_tiny200_v2_defconfig
+new file mode 100644
+index 00000000..1181d749
+--- /dev/null
++++ b/configs/widora_tiny200_v2_defconfig
+@@ -0,0 +1,63 @@
++CONFIG_ARM=y
++CONFIG_ARCH_SUNXI=y
++CONFIG_MACH_SUNIV=y
++CONFIG_DEFAULT_DEVICE_TREE="suniv-f1c100s-tiny200-v2"
++
++CONFIG_SYS_CLK_FREQ=408000000
++CONFIG_DRAM_CLK=168
++CONFIG_DRAM_ZQ=0
++
++CONFIG_CONS_INDEX=2
++
++CONFIG_SPL=y
++CONFIG_SPL_SPI_SUNXI=y
++CONFIG_MMC_SUNXI_SLOT_EXTRA=1
++
++CONFIG_SYS_TEXT_BASE=0x81700000
++CONFIG_VIDEO_LCD_MODE="x:800,y:480,depth:18,pclk_khz:30000,le:16,ri:209,up:22,lo:22,hs:30,vs:1,sync:0,vmode:0"
++CONFIG_VIDEO_LCD_BL_PWM="PE12"
++CONFIG_VIDEO_LCD_BL_PWM_ACTIVE_LOW=n
++
++CONFIG_NET=n
++
++CONFIG_SPI=y
++CONFIG_DM_SPI=y
++CONFIG_SPI_SUNXI=y
++
++CONFIG_MTD=y
++CONFIG_DM_MTD=y
++CONFIG_CMD_MTD=y
++CONFIG_MTD_SPI_NAND=y
++
++CONFIG_SPI_FLASH=y
++CONFIG_DM_SPI_FLASH=y
++CONFIG_SPI_FLASH_BAR=y
++CONFIG_SPI_FLASH_WINBOND=y
++
++CONFIG_PHY=y
++CONFIG_PHY_SUN4I_USB=y
++
++CONFIG_USB_MUSB_SUNXI=y
++CONFIG_USB_MUSB_GADGET=y
++CONFIG_USB_MUSB_PIO_ONLY=y
++CONFIG_USB_MUSB_DISABLE_BULK_COMBINE_SPLIT=y
++CONFIG_USB_GADGET_VBUS_DRAW=250
++
++CONFIG_USB_STORAGE=y
++CONFIG_CMD_USB_MASS_STORAGE=y
++
++CONFIG_CMD_FASTBOOT=n
++CONFIG_FASTBOOT=n
++CONFIG_USB_FUNCTION_FASTBOOT=n
++
++CONFIG_CMD_MTDPARTS=y
++
++CONFIG_USB_GADGET_DOWNLOAD=y
++
++CONFIG_CMD_DFU=y
++CONFIG_DFU=y
++CONFIG_DFU_OVER_USB=y
++CONFIG_DFU_TIMEOUT=y
++CONFIG_DFU_MMC=y
++CONFIG_DFU_SF=y
++CONFIG_DFU_MTD=y
+diff --git a/configs/widora_tiny200_v3_defconfig b/configs/widora_tiny200_v3_defconfig
+new file mode 100644
+index 00000000..7d0b6cdd
+--- /dev/null
++++ b/configs/widora_tiny200_v3_defconfig
+@@ -0,0 +1,66 @@
++CONFIG_ARM=y
++CONFIG_ARCH_SUNXI=y
++CONFIG_MACH_SUNIV=y
++CONFIG_DEFAULT_DEVICE_TREE="suniv-f1c100s-tiny200-v3"
++
++CONFIG_SYS_CLK_FREQ=408000000
++CONFIG_DRAM_CLK=168
++CONFIG_DRAM_ZQ=0
++
++CONFIG_CONS_INDEX=2
++
++CONFIG_SPL=y
++CONFIG_SPL_SPI_SUNXI=y
++CONFIG_MMC_SUNXI_SLOT_EXTRA=1
++
++CONFIG_SYS_TEXT_BASE=0x81700000
++
++CONFIG_BOOTDELAY=0
++
++CONFIG_VIDEO_LCD_MODE="x:800,y:480,depth:18,pclk_khz:30000,le:16,ri:209,up:22,lo:22,hs:30,vs:1,sync:0,vmode:0"
++CONFIG_VIDEO_LCD_BL_PWM="PE6"
++CONFIG_VIDEO_LCD_BL_PWM_ACTIVE_LOW=n
++
++CONFIG_NET=n
++
++CONFIG_SPI=y
++CONFIG_DM_SPI=y
++CONFIG_SPI_SUNXI=y
++
++CONFIG_MTD=y
++CONFIG_DM_MTD=y
++CONFIG_CMD_MTD=y
++CONFIG_MTD_SPI_NAND=y
++
++CONFIG_SPI_FLASH=y
++CONFIG_DM_SPI_FLASH=y
++CONFIG_SPI_FLASH_BAR=y
++CONFIG_SPI_FLASH_WINBOND=y
++
++CONFIG_PHY=y
++CONFIG_PHY_SUN4I_USB=y
++
++CONFIG_USB_MUSB_SUNXI=y
++CONFIG_USB_MUSB_GADGET=y
++CONFIG_USB_MUSB_PIO_ONLY=y
++CONFIG_USB_MUSB_DISABLE_BULK_COMBINE_SPLIT=y
++CONFIG_USB_GADGET_VBUS_DRAW=250
++
++CONFIG_USB_STORAGE=y
++CONFIG_CMD_USB_MASS_STORAGE=y
++
++CONFIG_CMD_FASTBOOT=n
++CONFIG_FASTBOOT=n
++CONFIG_USB_FUNCTION_FASTBOOT=n
++
++CONFIG_CMD_MTDPARTS=y
++
++CONFIG_USB_GADGET_DOWNLOAD=y
++
++CONFIG_CMD_DFU=y
++CONFIG_DFU=y
++CONFIG_DFU_OVER_USB=y
++CONFIG_DFU_TIMEOUT=y
++CONFIG_DFU_MMC=y
++CONFIG_DFU_SF=y
++CONFIG_DFU_MTD=y
+diff --git a/drivers/clk/sunxi/Kconfig b/drivers/clk/sunxi/Kconfig
+index 5ff101b9..32771c2d 100644
+--- a/drivers/clk/sunxi/Kconfig
++++ b/drivers/clk/sunxi/Kconfig
+@@ -86,4 +86,11 @@ config CLK_SUN50I_A64
+ 	  This enables common clock driver support for platforms based
+ 	  on Allwinner A64 SoC.
+ 
++config CLK_SUNIV
++	bool "Clock driver for Allwinner SUNIV"
++	default MACH_SUNIV
++	help
++	  This enables common clock driver support for platforms based
++	  on Allwinner F1C100s SoC.
++
+ endif # CLK_SUNXI
+diff --git a/drivers/clk/sunxi/Makefile b/drivers/clk/sunxi/Makefile
+index 36fb2aeb..d8dbfb93 100644
+--- a/drivers/clk/sunxi/Makefile
++++ b/drivers/clk/sunxi/Makefile
+@@ -17,3 +17,4 @@ obj-$(CONFIG_CLK_SUN9I_A80) += clk_a80.o
+ obj-$(CONFIG_CLK_SUN8I_H3) += clk_h3.o
+ obj-$(CONFIG_CLK_SUN50I_H6) += clk_h6.o
+ obj-$(CONFIG_CLK_SUN50I_A64) += clk_a64.o
++obj-$(CONFIG_CLK_SUNIV) += clk_suniv.o
+diff --git a/drivers/clk/sunxi/clk_suniv.c b/drivers/clk/sunxi/clk_suniv.c
+new file mode 100644
+index 00000000..2a2b1c34
+--- /dev/null
++++ b/drivers/clk/sunxi/clk_suniv.c
+@@ -0,0 +1,80 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR MIT)
++
++#include <common.h>
++#include <clk-uclass.h>
++#include <dm.h>
++#include <errno.h>
++#include <asm/arch/ccu.h>
++#include <dt-bindings/clock/suniv-ccu.h>
++#include <dt-bindings/reset/suniv-ccu.h>
++#include <linux/bitops.h>
++
++static struct ccu_clk_gate suniv_gates[] = {
++	[CLK_BUS_MMC0]		= GATE(0x060, BIT(8)),
++	[CLK_BUS_MMC1]		= GATE(0x060, BIT(9)),
++
++	[CLK_BUS_SPI0]		= GATE(0x060, BIT(20)),
++	[CLK_BUS_SPI1]		= GATE(0x060, BIT(21)),
++	[CLK_BUS_OTG]		= GATE(0x060, BIT(24)),
++
++	[CLK_USB_PHY0]		= GATE(0x0cc, BIT(1)),
++};
++
++static struct ccu_reset suniv_resets[] = {
++	[RST_USB_PHY0]		=  RESET(0x0cc, BIT(0)),
++
++	[RST_BUS_DMA]		=  RESET(0x2c0, BIT(6)),
++	[RST_BUS_MMC0]		=  RESET(0x2c0, BIT(8)),
++	[RST_BUS_MMC1]		=  RESET(0x2c0, BIT(9)),
++	[RST_BUS_DRAM]		=  RESET(0x2c0, BIT(14)),
++	[RST_BUS_SPI0]		=  RESET(0x2c0, BIT(20)),
++	[RST_BUS_SPI1]		=  RESET(0x2c0, BIT(21)),
++	[RST_BUS_OTG]		=  RESET(0x2c0, BIT(24)),
++
++	[RST_BUS_VE]		=  RESET(0x2c4, BIT(0)),
++	[RST_BUS_LCD]		=  RESET(0x2c4, BIT(4)),
++	[RST_BUS_DEINTERLACE]	=  RESET(0x2c4, BIT(5)),
++	[RST_BUS_CSI]		=  RESET(0x2c4, BIT(8)),
++	[RST_BUS_TVD]		=  RESET(0x2c4, BIT(9)),
++	[RST_BUS_TVE]		=  RESET(0x2c4, BIT(10)),
++	[RST_BUS_DE_BE]		=  RESET(0x2c4, BIT(12)),
++	[RST_BUS_DE_FE]		=  RESET(0x2c4, BIT(14)),
++
++	[RST_BUS_CODEC]		=  RESET(0x2d0, BIT(0)),
++	[RST_BUS_SPDIF]		=  RESET(0x2d0, BIT(1)),
++	[RST_BUS_IR]		=  RESET(0x2d0, BIT(2)),
++	[RST_BUS_RSB]		=  RESET(0x2d0, BIT(3)),
++	[RST_BUS_I2S0]		=  RESET(0x2d0, BIT(12)),
++	[RST_BUS_I2C0]		=  RESET(0x2d0, BIT(16)),
++	[RST_BUS_I2C1]		=  RESET(0x2d0, BIT(17)),
++	[RST_BUS_I2C2]		=  RESET(0x2d0, BIT(18)),
++	[RST_BUS_UART0]		=  RESET(0x2d0, BIT(20)),
++	[RST_BUS_UART1]		=  RESET(0x2d0, BIT(21)),
++	[RST_BUS_UART2]		=  RESET(0x2d0, BIT(22)),
++};
++
++static const struct ccu_desc suniv_ccu_desc = {
++	.gates = suniv_gates,
++	.resets = suniv_resets,
++};
++
++static int suniv_clk_bind(struct udevice *dev)
++{
++	return sunxi_reset_bind(dev, ARRAY_SIZE(suniv_resets));
++}
++
++static const struct udevice_id suniv_ccu_ids[] = {
++	{ .compatible = "allwinner,suniv-ccu",
++	  .data = (ulong)&suniv_ccu_desc },
++	{ }
++};
++
++U_BOOT_DRIVER(clk_suniv) = {
++	.name		= "suniv_ccu",
++	.id		= UCLASS_CLK,
++	.of_match	= suniv_ccu_ids,
++	.priv_auto_alloc_size	= sizeof(struct ccu_priv),
++	.ops		= &sunxi_clk_ops,
++	.probe		= sunxi_clk_probe,
++	.bind		= suniv_clk_bind,
++};
+diff --git a/drivers/gpio/sunxi_gpio.c b/drivers/gpio/sunxi_gpio.c
+index 9c3a4428..68418aa5 100644
+--- a/drivers/gpio/sunxi_gpio.c
++++ b/drivers/gpio/sunxi_gpio.c
+@@ -362,6 +362,7 @@ static const struct udevice_id sunxi_gpio_ids[] = {
+ 	ID("allwinner,sun9i-a80-r-pinctrl",	l_3),
+ 	ID("allwinner,sun50i-a64-r-pinctrl",	l_1),
+ 	ID("allwinner,sun50i-h6-r-pinctrl",	l_2),
++	ID("allwinner,suniv-pinctrl",	a_all),
+ 	{ }
+ };
+ 
+diff --git a/drivers/mmc/Kconfig b/drivers/mmc/Kconfig
+index 8f56572c..97ecaff8 100644
+--- a/drivers/mmc/Kconfig
++++ b/drivers/mmc/Kconfig
+@@ -665,7 +665,7 @@ config ZYNQ_HISPD_BROKEN
+ 
+ config MMC_SUNXI
+ 	bool "Allwinner sunxi SD/MMC Host Controller support"
+-	depends on ARCH_SUNXI && !UART0_PORT_F
++	depends on ARCH_SUNXI
+ 	default y
+ 	help
+ 	  This selects support for the SD/MMC Host Controller on
+diff --git a/drivers/mtd/nand/spi/core.c b/drivers/mtd/nand/spi/core.c
+index 93371fdd..6d66451f 100644
+--- a/drivers/mtd/nand/spi/core.c
++++ b/drivers/mtd/nand/spi/core.c
+@@ -663,6 +663,8 @@ static bool spinand_isbad(struct nand_device *nand, const struct nand_pos *pos)
+ 		.mode = MTD_OPS_RAW,
+ 	};
+ 	int ret;
++	struct mtd_oob_region region;
++	int i;
+ 
+ 	memset(spinand->oobbuf, 0, 2);
+ 	ret = spinand_select_target(spinand, pos->target);
+@@ -673,8 +675,12 @@ static bool spinand_isbad(struct nand_device *nand, const struct nand_pos *pos)
+ 	if (ret)
+ 		return ret;
+ 
+-	if (spinand->oobbuf[0] != 0xff || spinand->oobbuf[1] != 0xff)
+-		return true;
++	spinand->eccinfo.ooblayout->rfree(spinand->base.mtd, 0, &region);
++
++	for(i = 0 ; i < req.ooblen && i < region.offset; i++){
++		if (spinand->oobbuf[i] != 0xff)
++			return true;
++	}
+ 
+ 	return false;
+ }
+@@ -709,6 +715,7 @@ static int spinand_markbad(struct nand_device *nand, const struct nand_pos *pos)
+ 		.oobbuf.out = spinand->oobbuf,
+ 	};
+ 	int ret;
++	struct mtd_oob_region region;
+ 
+ 	/* Erase block before marking it bad. */
+ 	ret = spinand_select_target(spinand, pos->target);
+@@ -724,6 +731,10 @@ static int spinand_markbad(struct nand_device *nand, const struct nand_pos *pos)
+ 		return ret;
+ 
+ 	memset(spinand->oobbuf, 0, 2);
++
++	spinand->eccinfo.ooblayout->rfree(spinand->base.mtd, 0, &region);
++	req.ooblen = region.offset < req.ooblen ? region.offset : req.ooblen;
++
+ 	return spinand_write_page(spinand, &req);
+ }
+ 
+diff --git a/drivers/mtd/nand/spi/gigadevice.c b/drivers/mtd/nand/spi/gigadevice.c
+index 0b228dcb..5eae6624 100644
+--- a/drivers/mtd/nand/spi/gigadevice.c
++++ b/drivers/mtd/nand/spi/gigadevice.c
+@@ -107,7 +107,74 @@ static const struct mtd_ooblayout_ops gd5fxgq4xexxg_ooblayout = {
+ 	.rfree = gd5fxgq4xexxg_ooblayout_free,
+ };
+ 
++static int gd5fxgq4xa_ooblayout_ecc(struct mtd_info *mtd, int section,
++				  struct mtd_oob_region *region)
++{
++	if (section > 3)
++		return -ERANGE;
++
++	region->offset = (16 * section) + 8;
++	region->length = 8;
++
++	return 0;
++}
++
++static int gd5fxgq4xa_ooblayout_free(struct mtd_info *mtd, int section,
++				   struct mtd_oob_region *region)
++{
++	if (section > 3)
++		return -ERANGE;
++
++	if (section) {
++		region->offset = 16 * section;
++		region->length = 8;
++	} else {
++		/* section 0 has one byte reserved for bad block mark */
++		region->offset = 1;
++		region->length = 7;
++	}
++	return 0;
++}
++
++static int gd5fxgq4xa_ecc_get_status(struct spinand_device *spinand,
++					 u8 status)
++{
++	switch (status & STATUS_ECC_MASK) {
++	case STATUS_ECC_NO_BITFLIPS:
++		return 0;
++
++	case GD5FXGQ4XA_STATUS_ECC_1_7_BITFLIPS:
++		/* 1-7 bits are flipped. return the maximum. */
++		return 7;
++
++	case GD5FXGQ4XA_STATUS_ECC_8_BITFLIPS:
++		return 8;
++
++	case STATUS_ECC_UNCOR_ERROR:
++		return -EBADMSG;
++
++	default:
++		break;
++	}
++
++	return -EINVAL;
++}
++
++static const struct mtd_ooblayout_ops gd5fxgq4xa_ooblayout = {
++	.ecc = gd5fxgq4xa_ooblayout_ecc,
++	.rfree = gd5fxgq4xa_ooblayout_free,
++};
++
+ static const struct spinand_info gigadevice_spinand_table[] = {
++	SPINAND_INFO("GD5F1GQ4UAxxG", 0xf1,
++		     NAND_MEMORG(1, 2048, 64, 64, 1024, 1, 1, 1),
++		     NAND_ECCREQ(8, 512),
++		     SPINAND_INFO_OP_VARIANTS(&read_cache_variants,
++					      &write_cache_variants,
++					      &update_cache_variants),
++		     0,
++		     SPINAND_ECCINFO(&gd5fxgq4xa_ooblayout,
++				     gd5fxgq4xa_ecc_get_status)),
+ 	SPINAND_INFO("GD5F1GQ4UExxG", 0xd1,
+ 		     NAND_MEMORG(1, 2048, 128, 64, 1024, 1, 1, 1),
+ 		     NAND_ECCREQ(8, 512),
+diff --git a/drivers/phy/allwinner/phy-sun4i-usb.c b/drivers/phy/allwinner/phy-sun4i-usb.c
+index f0506450..0f9d73fd 100644
+--- a/drivers/phy/allwinner/phy-sun4i-usb.c
++++ b/drivers/phy/allwinner/phy-sun4i-usb.c
+@@ -82,6 +82,7 @@ enum sun4i_usb_phy_type {
+ 	sun8i_v3s_phy,
+ 	sun50i_a64_phy,
+ 	sun50i_h6_phy,
++	suniv_phy,
+ };
+ 
+ struct sun4i_usb_phy_cfg {
+@@ -356,7 +357,7 @@ static int sun4i_usb_phy_xlate(struct phy *phy,
+ {
+ 	struct sun4i_usb_phy_data *data = dev_get_priv(phy->dev);
+ 
+-	if (args->args_count >= data->cfg->num_phys)
++	if (args->args_count > data->cfg->num_phys)
+ 		return -EINVAL;
+ 
+ 	if (data->cfg->missing_phys & BIT(args->args[0]))
+@@ -620,6 +621,14 @@ static const struct sun4i_usb_phy_cfg sun50i_h6_cfg = {
+ 	.missing_phys = BIT(1) | BIT(2),
+ };
+ 
++static const struct sun4i_usb_phy_cfg suniv_cfg = {
++	.num_phys = 1,
++	.type = suniv_phy,
++	.disc_thresh = 3,
++	.phyctl_offset = REG_PHYCTL_A10,
++	.dedicated_clocks = true,
++};
++
+ static const struct udevice_id sun4i_usb_phy_ids[] = {
+ 	{ .compatible = "allwinner,sun4i-a10-usb-phy", .data = (ulong)&sun4i_a10_cfg },
+ 	{ .compatible = "allwinner,sun5i-a13-usb-phy", .data = (ulong)&sun5i_a13_cfg },
+@@ -633,6 +642,7 @@ static const struct udevice_id sun4i_usb_phy_ids[] = {
+ 	{ .compatible = "allwinner,sun8i-v3s-usb-phy", .data = (ulong)&sun8i_v3s_cfg },
+ 	{ .compatible = "allwinner,sun50i-a64-usb-phy", .data = (ulong)&sun50i_a64_cfg},
+ 	{ .compatible = "allwinner,sun50i-h6-usb-phy", .data = (ulong)&sun50i_h6_cfg},
++	{ .compatible = "allwinner,suniv-usb-phy", .data = (ulong)&suniv_cfg },
+ 	{ }
+ };
+ 
+diff --git a/drivers/spi/spi-sunxi.c b/drivers/spi/spi-sunxi.c
+index d2dccd67..d7de4539 100644
+--- a/drivers/spi/spi-sunxi.c
++++ b/drivers/spi/spi-sunxi.c
+@@ -120,6 +120,7 @@ struct sun4i_spi_variant {
+ 	u32 fifo_depth;
+ 	bool has_soft_reset;
+ 	bool has_burst_ctl;
++	bool always_on;
+ };
+ 
+ struct sun4i_spi_platdata {
+@@ -250,6 +251,8 @@ static int sun4i_spi_parse_pins(struct udevice *dev)
+ 
+ 			if (IS_ENABLED(CONFIG_MACH_SUN50I))
+ 				sunxi_gpio_set_cfgpin(pin, SUN50I_GPC_SPI0);
++			else if (IS_ENABLED(CONFIG_MACH_SUNIV))
++				sunxi_gpio_set_cfgpin(pin, SUNIV_GPC_SPI0);
+ 			else
+ 				sunxi_gpio_set_cfgpin(pin, SUNXI_GPC_SPI0);
+ 			sunxi_gpio_set_drv(pin, drive);
+@@ -264,7 +267,7 @@ static inline int sun4i_spi_set_clock(struct udevice *dev, bool enable)
+ 	struct sun4i_spi_priv *priv = dev_get_priv(dev);
+ 	int ret;
+ 
+-	if (!enable) {
++	if (!enable && !priv->variant->always_on) {
+ 		clk_disable(&priv->clk_ahb);
+ 		clk_disable(&priv->clk_mod);
+ 		if (reset_valid(&priv->reset))
+@@ -511,6 +514,9 @@ static int sun4i_spi_probe(struct udevice *bus)
+ 	priv->base = plat->base;
+ 	priv->freq = plat->max_hz;
+ 
++	if(priv->variant->always_on)
++		sun4i_spi_set_clock(bus, true);
++
+ 	return 0;
+ }
+ 
+@@ -609,6 +615,15 @@ static const struct sun4i_spi_variant sun8i_h3_spi_variant = {
+ 	.has_burst_ctl		= true,
+ };
+ 
++static const struct sun4i_spi_variant suniv_spi_variant = {
++	.regs = sun6i_spi_regs,
++	.bits = sun6i_spi_bits,
++	.fifo_depth = 64,
++	.has_soft_reset = true,
++	.has_burst_ctl = true,
++	.always_on = true,
++};
++
+ static const struct udevice_id sun4i_spi_ids[] = {
+ 	{
+ 	  .compatible = "allwinner,sun4i-a10-spi",
+@@ -622,6 +637,10 @@ static const struct udevice_id sun4i_spi_ids[] = {
+ 	  .compatible = "allwinner,sun8i-h3-spi",
+ 	  .data = (ulong)&sun8i_h3_spi_variant,
+ 	},
++	{
++	  .compatible = "allwinner,suniv-spi",
++	  .data = (ulong)&suniv_spi_variant,
++	},
+ 	{ /* sentinel */ }
+ };
+ 
+diff --git a/drivers/usb/musb-new/musb_core.c b/drivers/usb/musb-new/musb_core.c
+index 961de997..add6b6c3 100644
+--- a/drivers/usb/musb-new/musb_core.c
++++ b/drivers/usb/musb-new/musb_core.c
+@@ -1877,6 +1877,7 @@ allocate_instance(struct device *dev,
+ 	}
+ 
+ 	musb->controller = dev;
++	musb->dyn_fifo = config->dyn_fifo;
+ 
+ 	return musb;
+ }
+diff --git a/include/configs/suniv.h b/include/configs/suniv.h
+new file mode 100644
+index 00000000..8dd02b1f
+--- /dev/null
++++ b/include/configs/suniv.h
+@@ -0,0 +1,17 @@
++/*
++ * Configuration settings for new Allwinner F-series (suniv) CPU
++ *
++ * SPDX-License-Identifier:	GPL-2.0+
++ */
++
++#ifndef __CONFIG_H
++#define __CONFIG_H
++
++/*
++ * Include common sunxi configuration where most the settings are
++ */
++#include <configs/sunxi-common.h>
++
++#define CONFIG_SYS_DFU_DATA_BUF_SIZE (512*1024)
++
++#endif /* __CONFIG_H */
+diff --git a/include/configs/sunxi-common.h b/include/configs/sunxi-common.h
+index 5b0bec05..b419a136 100644
+--- a/include/configs/sunxi-common.h
++++ b/include/configs/sunxi-common.h
+@@ -38,7 +38,12 @@
+ /* Serial & console */
+ #define CONFIG_SYS_NS16550_SERIAL
+ /* ns16550 reg in the low bits of cpu reg */
++#ifndef CONFIG_MACH_SUNIV
+ #define CONFIG_SYS_NS16550_CLK		24000000
++#else
++/* suniv doesn't have apb2 and uart is connected to apb1 */
++#define CONFIG_SYS_NS16550_CLK		100000000
++#endif
+ #ifndef CONFIG_DM_SERIAL
+ # define CONFIG_SYS_NS16550_REG_SIZE	-4
+ # define CONFIG_SYS_NS16550_COM1		SUNXI_UART0_BASE
+@@ -67,6 +72,15 @@
+  * we get warnings if the Kconfig value mismatches. */
+ #define CONFIG_SPL_STACK_R_ADDR		0x2fe00000
+ #define CONFIG_SPL_BSS_START_ADDR	0x2ff80000
++#elif defined(CONFIG_MACH_SUNIV)
++#define SDRAM_OFFSET(x) 0x8##x
++#define CONFIG_SYS_SDRAM_BASE		0x80000000
++#define CONFIG_SYS_LOAD_ADDR		0x81000000 /* default load address */
++/* Note SPL_STACK_R_ADDR is set through Kconfig, we include it here 
++ * since it needs to fit in with the other values. By also #defining it
++ * we get warnings if the Kconfig value mismatches. */
++#define CONFIG_SPL_STACK_R_ADDR		0x81e00000
++#define CONFIG_SPL_BSS_START_ADDR	0x81f80000
+ #else
+ #define SDRAM_OFFSET(x) 0x4##x
+ #define CONFIG_SYS_SDRAM_BASE		0x40000000
+@@ -144,12 +158,15 @@
+ #define CONFIG_SYS_MMC_MAX_DEVICE	4
+ #endif
+ 
+-#ifndef CONFIG_MACH_SUN8I_V3S
+-/* 64MB of malloc() pool */
+-#define CONFIG_SYS_MALLOC_LEN		(CONFIG_ENV_SIZE + (64 << 20))
+-#else
++#if defined(CONFIG_MACH_SUN8I_V3S)
+ /* 2MB of malloc() pool */
+ #define CONFIG_SYS_MALLOC_LEN		(CONFIG_ENV_SIZE + (2 << 20))
++#elif defined(CONFIG_MACH_SUNIV)
++/* 1MB of malloc() pool */
++#define CONFIG_SYS_MALLOC_LEN		(CONFIG_ENV_SIZE + (1 << 20))
++#else
++/* 64MB of malloc() pool */
++#define CONFIG_SYS_MALLOC_LEN		(CONFIG_ENV_SIZE + (64 << 20))
+ #endif
+ 
+ /*
+@@ -242,7 +259,7 @@ extern int soft_i2c_gpio_scl;
+ #else
+ #define OF_STDOUT_PATH		"/soc@01c00000/serial@01c28000:115200"
+ #endif
+-#elif CONFIG_CONS_INDEX == 2 && defined(CONFIG_MACH_SUN5I)
++#elif CONFIG_CONS_INDEX == 2 && (defined(CONFIG_MACH_SUN5I) || defined(CONFIG_MACH_SUNIV))
+ #define OF_STDOUT_PATH		"/soc@01c00000/serial@01c28400:115200"
+ #elif CONFIG_CONS_INDEX == 3 && defined(CONFIG_MACH_SUN8I)
+ #define OF_STDOUT_PATH		"/soc@01c00000/serial@01c28800:115200"
+@@ -297,19 +314,7 @@ extern int soft_i2c_gpio_scl;
+ #define RAMDISK_ADDR_R	__stringify(SDRAM_OFFSET(FE00000))
+ 
+ #else
+-/*
+- * 160M RAM (256M minimum minus 64MB heap + 32MB for u-boot, stack, fb, etc.
+- * 32M uncompressed kernel, 16M compressed kernel, 1M fdt,
+- * 1M script, 1M pxe and the ramdisk at the end.
+- */
+-#ifndef CONFIG_MACH_SUN8I_V3S
+-#define BOOTM_SIZE     __stringify(0xa000000)
+-#define KERNEL_ADDR_R  __stringify(SDRAM_OFFSET(2000000))
+-#define FDT_ADDR_R     __stringify(SDRAM_OFFSET(3000000))
+-#define SCRIPT_ADDR_R  __stringify(SDRAM_OFFSET(3100000))
+-#define PXEFILE_ADDR_R __stringify(SDRAM_OFFSET(3200000))
+-#define RAMDISK_ADDR_R __stringify(SDRAM_OFFSET(3300000))
+-#else
++#if defined(CONFIG_MACH_SUN8I_V3S)
+ /*
+  * 64M RAM minus 2MB heap + 16MB for u-boot, stack, fb, etc.
+  * 16M uncompressed kernel, 8M compressed kernel, 1M fdt,
+@@ -321,6 +326,30 @@ extern int soft_i2c_gpio_scl;
+ #define SCRIPT_ADDR_R  __stringify(SDRAM_OFFSET(1900000))
+ #define PXEFILE_ADDR_R __stringify(SDRAM_OFFSET(1A00000))
+ #define RAMDISK_ADDR_R __stringify(SDRAM_OFFSET(1B00000))
++#elif defined(CONFIG_MACH_SUNIV)
++/*
++ * 32M RAM minus 1MB heap + 8MB for u-boot, stack, fb, etc.
++ * 8M uncompressed kernel, 4M compressed kernel, 512K fdt,
++ * 512K script, 512K pxe and the ramdisk at the end.
++ */
++#define BOOTM_SIZE     __stringify(0x1700000)
++#define KERNEL_ADDR_R  __stringify(SDRAM_OFFSET(0500000))
++#define FDT_ADDR_R     __stringify(SDRAM_OFFSET(0C00000))
++#define SCRIPT_ADDR_R  __stringify(SDRAM_OFFSET(0C50000))
++#define PXEFILE_ADDR_R __stringify(SDRAM_OFFSET(0D00000))
++#define RAMDISK_ADDR_R __stringify(SDRAM_OFFSET(0D50000))
++#else
++/*
++ * 160M RAM (256M minimum minus 64MB heap + 32MB for u-boot, stack, fb, etc.
++ * 32M uncompressed kernel, 16M compressed kernel, 1M fdt,
++ * 1M script, 1M pxe and the ramdisk at the end.
++ */
++#define BOOTM_SIZE     __stringify(0xa000000)
++#define KERNEL_ADDR_R  __stringify(SDRAM_OFFSET(2000000))
++#define FDT_ADDR_R     __stringify(SDRAM_OFFSET(3000000))
++#define SCRIPT_ADDR_R  __stringify(SDRAM_OFFSET(3100000))
++#define PXEFILE_ADDR_R __stringify(SDRAM_OFFSET(3200000))
++#define RAMDISK_ADDR_R __stringify(SDRAM_OFFSET(3300000))
+ #endif
+ #endif
+ 
+diff --git a/include/dt-bindings/clock/suniv-ccu.h b/include/dt-bindings/clock/suniv-ccu.h
+new file mode 100644
+index 00000000..9c22d70b
+--- /dev/null
++++ b/include/dt-bindings/clock/suniv-ccu.h
+@@ -0,0 +1,69 @@
++/*
++ * Copyright (c) 2018 Icenowy Zheng <icenowy@aosc.xyz>
++ *
++ * SPDX-License-Identifier: (GPL-2.0+ OR MIT)
++ */
++
++#ifndef _DT_BINDINGS_CLK_SUNIV_H_
++#define _DT_BINDINGS_CLK_SUNIV_H_
++
++#define CLK_CPU			11
++
++#define CLK_BUS_MMC0		14
++#define CLK_BUS_MMC1		15
++#define CLK_BUS_DRAM		16
++#define CLK_BUS_SPI0		17
++#define CLK_BUS_SPI1		18
++#define CLK_BUS_OTG		19
++#define CLK_BUS_VE		20
++#define CLK_BUS_LCD		21
++#define CLK_BUS_DEINTERLACE	22
++#define CLK_BUS_CSI		23
++#define CLK_BUS_TVD		24
++#define CLK_BUS_TVE		25
++#define CLK_BUS_DE_BE		26
++#define CLK_BUS_DE_FE		27
++#define CLK_BUS_CODEC		28
++#define CLK_BUS_SPDIF		29
++#define CLK_BUS_IR		30
++#define CLK_BUS_RSB		31
++#define CLK_BUS_I2S0		32
++#define CLK_BUS_I2C0		33
++#define CLK_BUS_I2C1		34
++#define CLK_BUS_I2C2		35
++#define CLK_BUS_PIO		36
++#define CLK_BUS_UART0		37
++#define CLK_BUS_UART1		38
++#define CLK_BUS_UART2		39
++
++#define CLK_MMC0		40
++#define CLK_MMC0_SAMPLE		41
++#define CLK_MMC0_OUTPUT		42
++#define CLK_MMC1		43
++#define CLK_MMC1_SAMPLE		44
++#define CLK_MMC1_OUTPUT		45
++#define CLK_I2S			46
++#define CLK_SPDIF		47
++
++#define CLK_USB_PHY0		48
++
++#define CLK_DRAM_VE		49
++#define CLK_DRAM_CSI		50
++#define CLK_DRAM_DEINTERLACE	51
++#define CLK_DRAM_TVD		52
++#define CLK_DRAM_DE_FE		53
++#define CLK_DRAM_DE_BE		54
++
++#define CLK_DE_BE		55
++#define CLK_DE_FE		56
++#define CLK_TCON		57
++#define CLK_DEINTERLACE		58
++#define CLK_TVE2_CLK		59
++#define CLK_TVE1_CLK		60
++#define CLK_TVD			61
++#define CLK_CSI			62
++#define CLK_VE			63
++#define CLK_CODEC		64
++#define CLK_AVS			65
++
++#endif
+diff --git a/include/dt-bindings/reset/suniv-ccu.h b/include/dt-bindings/reset/suniv-ccu.h
+new file mode 100644
+index 00000000..a40772c5
+--- /dev/null
++++ b/include/dt-bindings/reset/suniv-ccu.h
+@@ -0,0 +1,38 @@
++/*
++ * Copyright (C) 2018 Icenowy Zheng <icenowy@aosc.xyz>
++ *
++ * SPDX-License-Identifier: (GPL-2.0+ OR MIT)
++ */
++
++#ifndef _DT_BINDINGS_RST_SUNIV_H_
++#define _DT_BINDINGS_RST_SUNIV_H_
++
++#define RST_USB_PHY0		0
++#define RST_BUS_DMA		1
++#define RST_BUS_MMC0		2
++#define RST_BUS_MMC1		3
++#define RST_BUS_DRAM		4
++#define RST_BUS_SPI0		5
++#define RST_BUS_SPI1		6
++#define RST_BUS_OTG		7
++#define RST_BUS_VE		8
++#define RST_BUS_LCD		9
++#define RST_BUS_DEINTERLACE	10
++#define RST_BUS_CSI		11
++#define RST_BUS_TVD		12
++#define RST_BUS_TVE		13
++#define RST_BUS_DE_BE		14
++#define RST_BUS_DE_FE		15
++#define RST_BUS_CODEC		16
++#define RST_BUS_SPDIF		17
++#define RST_BUS_IR		18
++#define RST_BUS_RSB		19
++#define RST_BUS_I2S0		20
++#define RST_BUS_I2C0		21
++#define RST_BUS_I2C1		22
++#define RST_BUS_I2C2		23
++#define RST_BUS_UART0		24
++#define RST_BUS_UART1		25
++#define RST_BUS_UART2		26
++
++#endif /* _DT_BINDINGS_RST_SUNIV_H_ */
+-- 
+2.28.0
+

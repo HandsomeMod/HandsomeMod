@@ -1,0 +1,55 @@
+From 3430ddb05d5f45cb367aecbf7a147ca1027d3df0 Mon Sep 17 00:00:00 2001
+From: Aodzip <aodzip@gmail.com>
+Date: Mon, 21 Sep 2020 00:56:14 +0800
+Subject: [PATCH 7/8] Fix spi-nand BBM size
+
+---
+ drivers/mtd/nand/spi/core.c | 15 +++++++++++++--
+ 1 file changed, 13 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/mtd/nand/spi/core.c b/drivers/mtd/nand/spi/core.c
+index 0d21c68bf..ef4a87626 100644
+--- a/drivers/mtd/nand/spi/core.c
++++ b/drivers/mtd/nand/spi/core.c
+@@ -576,11 +576,18 @@ static bool spinand_isbad(struct nand_device *nand, const struct nand_pos *pos)
+ 		.oobbuf.in = marker,
+ 		.mode = MTD_OPS_RAW,
+ 	};
++	struct mtd_oob_region region;
++	int i;
+ 
+ 	spinand_select_target(spinand, pos->target);
+ 	spinand_read_page(spinand, &req, false);
+-	if (marker[0] != 0xff || marker[1] != 0xff)
+-		return true;
++
++	spinand->eccinfo.ooblayout->free(&spinand->base.mtd, 0, &region);
++
++	for(i = 0 ; i < req.ooblen && i < region.offset; i++){
++		if (spinand->oobbuf[i] != 0xff)
++			return true;
++	}
+ 
+ 	return false;
+ }
+@@ -612,6 +619,7 @@ static int spinand_markbad(struct nand_device *nand, const struct nand_pos *pos)
+ 		.mode = MTD_OPS_RAW,
+ 	};
+ 	int ret;
++	struct mtd_oob_region region;
+ 
+ 	ret = spinand_select_target(spinand, pos->target);
+ 	if (ret)
+@@ -621,6 +629,9 @@ static int spinand_markbad(struct nand_device *nand, const struct nand_pos *pos)
+ 	if (ret)
+ 		return ret;
+ 
++	spinand->eccinfo.ooblayout->free(&spinand->base.mtd, 0, &region);
++	req.ooblen = region.offset < req.ooblen ? region.offset : req.ooblen;
++
+ 	return spinand_write_page(spinand, &req);
+ }
+ 
+-- 
+2.17.1
+

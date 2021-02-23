@@ -1,0 +1,128 @@
+From 8bb6895b8dab113d1d875b97dc71ef4c97d4723f Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Wed, 13 Jan 2021 17:04:17 +0800
+Subject: [PATCH] add rgb666 support for cubieboard2
+
+---
+ arch/arm/dts/sun7i-a20-cubieboard2.dts | 54 ++++++++++++++++++++++++++
+ arch/arm/dts/sun7i-a20.dtsi            | 14 +++++++
+ configs/Cubieboard2_defconfig          |  5 +++
+ 3 files changed, 73 insertions(+)
+
+diff --git a/arch/arm/dts/sun7i-a20-cubieboard2.dts b/arch/arm/dts/sun7i-a20-cubieboard2.dts
+index 200685b0..0eddf887 100644
+--- a/arch/arm/dts/sun7i-a20-cubieboard2.dts
++++ b/arch/arm/dts/sun7i-a20-cubieboard2.dts
+@@ -72,6 +72,37 @@
+ 		};
+ 	};
+ 
++	backlight_display: backlight_display {
++		compatible = "pwm-backlight";
++		pwms = <&pwm 0 10000000 0>;
++		power-supply = <&reg_vcc5v0>;
++
++		brightness-levels = <0 64 93 122 151 180 209 240>;
++		default-brightness-level = <7>;
++	};
++
++	panel: panel {
++		compatible = "netron-dy,e231732", "simple-panel";
++		backlight = <&backlight_display>;
++		power-supply = <&reg_vcc5v0>;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&lcd_enable_pin &lcd_rgb666_pins>;
++		enable-gpios = <&pio 1 10 GPIO_ACTIVE_HIGH>; /* PB10 */
++
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		port {
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			panel_input: endpoint {
++				remote-endpoint = <&tcon0_out_lcd>;
++			};
++		};
++	};
++
+ 	leds {
+ 		compatible = "gpio-leds";
+ 
+@@ -134,6 +165,12 @@
+ 	};
+ };
+ 
++&pwm {
++	pinctrl-names = "default";
++	pinctrl-0 = <&pwm0_pin>;
++	status = "okay";
++};
++
+ &i2c0 {
+ 	status = "okay";
+ 
+@@ -243,3 +280,20 @@
+ 	usb2_vbus-supply = <&reg_usb2_vbus>;
+ 	status = "okay";
+ };
++
++&be0 {
++	status = "okay";
++};
++
++&tcon0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&lcd_rgb666_pins>;
++	status = "okay";
++};
++
++&tcon0_out {
++	tcon0_out_lcd: endpoint@0 {
++		reg = <0>;
++		remote-endpoint = <&panel_input>;
++	};
++};
+diff --git a/arch/arm/dts/sun7i-a20.dtsi b/arch/arm/dts/sun7i-a20.dtsi
+index 641a8fa6..3a3966dd 100644
+--- a/arch/arm/dts/sun7i-a20.dtsi
++++ b/arch/arm/dts/sun7i-a20.dtsi
+@@ -987,6 +987,20 @@
+ 				pins = "PI20", "PI21";
+ 				function = "uart7";
+ 			};
++
++	                lcd_enable_pin: lcd_enable_pin@0 {
++		                pins = "PB10";
++				function = "gpio_out";
++			};
++
++			lcd_rgb666_pins: lcd-rgb666@0 {
++				pins = "PD2", "PD3", "PD4", "PD5", "PD6", "PD7",
++				       "PD10", "PD11", "PD12", "PD13", "PD14", "PD15",
++				       "PD18", "PD19", "PD20", "PD21", "PD22", "PD23",
++				       "PD24", "PD25", "PD26", "PD27";
++				function = "lcd0";
++			};
++
+ 		};
+ 
+ 		timer@1c20c00 {
+diff --git a/configs/Cubieboard2_defconfig b/configs/Cubieboard2_defconfig
+index aa7a9d48..727f14f9 100644
+--- a/configs/Cubieboard2_defconfig
++++ b/configs/Cubieboard2_defconfig
+@@ -17,3 +17,8 @@ CONFIG_SUN7I_GMAC=y
+ CONFIG_SCSI=y
+ CONFIG_USB_EHCI_HCD=y
+ CONFIG_USB_OHCI_HCD=y
++CONFIG_AXP_GPIO=y
++CONFIG_VIDEO_LCD_MODE="x:1024,y:600,depth:18,pclk_khz:51000,le:159,ri:160,up:22,lo:12,hs:1,vs:1,sync:3,vmode:0"
++CONFIG_VIDEO_LCD_POWER="AXP0-0"
++CONFIG_VIDEO_LCD_BL_EN="AXP0-1"
++CONFIG_VIDEO_LCD_BL_PWM="PB2"
+-- 
+2.30.0
+

@@ -1,0 +1,39 @@
+---
+ drivers/phy/allwinner/phy-sun4i-usb.c | 8 ++++----
+ 1 file changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/phy/allwinner/phy-sun4i-usb.c b/drivers/phy/allwinner/phy-sun4i-usb.c
+index 0214c07a0..e6fc3ae82 100644
+--- a/drivers/phy/allwinner/phy-sun4i-usb.c
++++ b/drivers/phy/allwinner/phy-sun4i-usb.c
+@@ -815,11 +815,11 @@ static int sun4i_usb_phy_probe(struct platform_device *pdev)
+ 
+ 	data->id_det_irq = gpiod_to_irq(data->id_det_gpio);
+ 	if (data->id_det_irq > 0) {
+-		ret = devm_request_irq(dev, data->id_det_irq,
++		ret = devm_request_any_context_irq(dev, data->id_det_irq,
+ 				sun4i_usb_phy0_id_vbus_det_irq,
+ 				IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+ 				"usb0-id-det", data);
+-		if (ret) {
++		if (ret < 0) {
+ 			dev_err(dev, "Err requesting id-det-irq: %d\n", ret);
+ 			return ret;
+ 		}
+@@ -827,11 +827,11 @@ static int sun4i_usb_phy_probe(struct platform_device *pdev)
+ 
+ 	data->vbus_det_irq = gpiod_to_irq(data->vbus_det_gpio);
+ 	if (data->vbus_det_irq > 0) {
+-		ret = devm_request_irq(dev, data->vbus_det_irq,
++		ret = devm_request_any_context_irq(dev, data->vbus_det_irq,
+ 				sun4i_usb_phy0_id_vbus_det_irq,
+ 				IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+ 				"usb0-vbus-det", data);
+-		if (ret) {
++		if (ret < 0) {
+ 			dev_err(dev, "Err requesting vbus-det-irq: %d\n", ret);
+ 			data->vbus_det_irq = -1;
+ 			sun4i_usb_phy_remove(pdev); /* Stop detect work */
+-- 
+2.17.1
+

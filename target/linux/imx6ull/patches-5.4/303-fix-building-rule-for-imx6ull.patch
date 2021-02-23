@@ -1,0 +1,128 @@
+From 346c43aacfad3c4b4ee29aa5fc6a7018b2a690d1 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Fri, 15 Jan 2021 10:26:24 +0800
+Subject: [PATCH] fix building rule for imx6ull
+
+---
+ .../boot/dts/imx6ull-alientek-mini-emmc.dts   | 64 +------------------
+ 1 file changed, 2 insertions(+), 62 deletions(-)
+
+diff --git a/arch/arm/boot/dts/imx6ull-alientek-mini-emmc.dts b/arch/arm/boot/dts/imx6ull-alientek-mini-emmc.dts
+index fb91090a6..d3416b178 100644
+--- a/arch/arm/boot/dts/imx6ull-alientek-mini-emmc.dts
++++ b/arch/arm/boot/dts/imx6ull-alientek-mini-emmc.dts
+@@ -23,19 +23,6 @@
+ 	memory {
+ 		reg = <0x80000000 0x20000000>;
+ 	};
+-
+-	reserved-memory {
+-		#address-cells = <1>;
+-		#size-cells = <1>;
+-		ranges;
+-
+-		linux,cma {
+-			compatible = "shared-dma-pool";
+-			reusable;
+-			size = <0x8000000>;
+-			linux,cma-default;
+-		};
+-	};
+ 	
+ 	panel: panel {
+ 		compatible = "netron-dy,e231732", "simple-panel";
+@@ -48,7 +35,7 @@
+ 		};
+ 	};
+ 	
+-	backlight {
++	backlight: backlight {
+ 		compatible = "pwm-backlight";
+ 		pwms = <&pwm1 0 5000000>;
+ 		brightness-levels = <0 4 8 16 32 64 128 255>;
+@@ -116,15 +103,6 @@
+ 			regulator-always-on;
+ 		};
+ 
+-		reg_can_3v3: regulator@0 {
+-			compatible = "regulator-fixed";
+-			reg = <0>;
+-			regulator-name = "can-3v3";
+-			regulator-min-microvolt = <3300000>;
+-			regulator-max-microvolt = <3300000>;
+-			gpios = <&gpio_spi 3 GPIO_ACTIVE_LOW>;
+-		};
+-
+ 		reg_gpio_dvfs: regulator-gpio {
+ 			compatible = "regulator-gpio";
+ 			pinctrl-names = "default";
+@@ -197,19 +175,6 @@
+ 	};
+ };
+ 
+-&flexcan1 {
+-	pinctrl-names = "default";
+-	pinctrl-0 = <&pinctrl_flexcan1>;
+-	xceiver-supply = <&reg_can_3v3>;
+-	status = "okay";
+-};
+-
+-&flexcan2 {
+-	pinctrl-names = "default";
+-	pinctrl-0 = <&pinctrl_flexcan2>;
+-	xceiver-supply = <&reg_can_3v3>;
+-	status = "disabled";
+-};
+ 
+ &gpc {
+ 	fsl,cpu_pupscr_sw2iso = <0x1>;
+@@ -224,20 +189,7 @@
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_i2c1>;
+ 	status = "okay";
+-	
+-	mag3110@0e {
+-		compatible = "fsl,mag3110";
+-		reg = <0x0e>;
+-		position = <2>;
+-	};
+ 
+-	fxls8471@1e {
+-		compatible = "fsl,fxls8471";
+-		reg = <0x1e>;
+-		position = <0>;
+-		interrupt-parent = <&gpio5>;
+-		interrupts = <0 8>;
+-	};
+ };
+ 
+ &i2c2 {
+@@ -327,19 +279,6 @@
+ 			>;
+ 		};
+ 		
+-		pinctrl_flexcan1: flexcan1grp{
+-			fsl,pins = <
+-				MX6UL_PAD_UART3_RTS_B__FLEXCAN1_RX	0x1b020
+-				MX6UL_PAD_UART3_CTS_B__FLEXCAN1_TX	0x1b020
+-			>;
+-		};
+-
+-		pinctrl_flexcan2: flexcan2grp{
+-			fsl,pins = <
+-				MX6UL_PAD_UART2_RTS_B__FLEXCAN2_RX	0x1b020
+-				MX6UL_PAD_UART2_CTS_B__FLEXCAN2_TX	0x1b020
+-			>;
+-		};
+ 		pinctrl_i2c1: i2c1grp {
+ 			fsl,pins = <
+ 				MX6UL_PAD_UART4_TX_DATA__I2C1_SCL 0x4001b8b0
+@@ -745,4 +684,5 @@
+ 	pinctrl-names = "default";
+ 	pinctrl-0 = <&pinctrl_wdog>;
+ 	fsl,wdog_b;
++	status = "okay";
+ };
+-- 
+2.30.0
+

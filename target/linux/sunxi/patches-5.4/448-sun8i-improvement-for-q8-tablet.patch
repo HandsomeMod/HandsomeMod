@@ -1,0 +1,88 @@
+diff --git a/arch/arm/boot/dts/sun8i-a33-q8-tablet.dts b/arch/arm/boot/dts/sun8i-a33-q8-tablet.dts
+index 9c5750c25..e678dfe9d 100644
+--- a/arch/arm/boot/dts/sun8i-a33-q8-tablet.dts
++++ b/arch/arm/boot/dts/sun8i-a33-q8-tablet.dts
+@@ -47,11 +47,82 @@
+ / {
+ 	model = "Q8 A33 Tablet";
+ 	compatible = "allwinner,q8-a33", "allwinner,sun8i-a33";
++
++	panel {
++                compatible = "netron-dy,e231732";
++                pinctrl-names = "default";
++                pinctrl-0 = <&lcd_en_q8>;
++                backlight = <&backlight>;
++                enable-gpios = <&pio 7 7 GPIO_ACTIVE_HIGH>; /* PH7 */
++                power-supply = <&reg_dc1sw>;
++                status = "okay";
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		port {
++			reg = <0>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			panel_input: endpoint {
++				reg = <0>;
++				remote-endpoint = <&tcon0_out_panel>;
++			};
++		};
++	};
++
++};
++
++&de {
++	status = "okay";
++};
++
++&ehci0 {
++	status = "okay";
++};
++
++&tcon0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&lcd_rgb666_pins>;
++	status = "okay";
+ };
+ 
+ &tcon0_out {
+-	tcon0_out_lcd: endpoint@0 {
++	tcon0_out_panel: endpoint@0 {
+ 		reg = <0>;
+ 		remote-endpoint = <&panel_input>;
+ 	};
+ };
++
++&pio {
++        lcd_en_q8: lcd_en@0 {
++		pins = "PH7";
++		function = "gpio_out";
++		drive-strength = <10>;
++		bias-no-pull;
++        };
++};
++
++
++&touchscreen {
++        reg = <0x40>;
++        compatible = "silead,gsl1680";
++        touchscreen-size-x = <1024>;
++        touchscreen-size-y = <600>;
++	vddio-supply = <&reg_ldo_io1>;
++        status = "okay";
++};
++
++
++&codec {
++	allwinner,pa-gpios = <&pio 7 9 GPIO_ACTIVE_HIGH>; /* PH9 */
++	allwinner,audio-routing =
++		"Headphone", "HP",
++		"Headphone", "HPCOM",
++		"Speaker", "HP",
++		"MIC1", "Mic",
++		"MIC2", "Headset Mic",
++		"Mic",  "MBIAS",
++		"Headset Mic", "HBIAS";
++	status = "okay";
++};

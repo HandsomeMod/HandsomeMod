@@ -1,0 +1,128 @@
+From 660af88b9488b4f4073ad60d2b6a69b415c2ac47 Mon Sep 17 00:00:00 2001
+From: Aodzip <aodzip@gmail.com>
+Date: Thu, 10 Sep 2020 10:59:18 +0800
+Subject: [PATCH 2/6] Fix CCU definition
+
+---
+ drivers/clk/sunxi-ng/ccu-suniv-f1c100s.c      | 24 +++++++-----
+ include/dt-bindings/clock/suniv-ccu-f1c100s.h | 37 ++++++++++---------
+ 2 files changed, 34 insertions(+), 27 deletions(-)
+
+diff --git a/drivers/clk/sunxi-ng/ccu-suniv-f1c100s.c b/drivers/clk/sunxi-ng/ccu-suniv-f1c100s.c
+index 7ecc3a5a5..2602a99a4 100644
+--- a/drivers/clk/sunxi-ng/ccu-suniv-f1c100s.c
++++ b/drivers/clk/sunxi-ng/ccu-suniv-f1c100s.c
+@@ -238,7 +238,14 @@ static SUNXI_CCU_MUX_WITH_GATE(i2s_clk, "i2s", i2s_spdif_parents,
+ static SUNXI_CCU_MUX_WITH_GATE(spdif_clk, "spdif", i2s_spdif_parents,
+ 			       0x0b4, 16, 2, BIT(31), 0);
+ 
+-/* The BSP header file has a CIR_CFG, but no mod clock uses this definition */
++static const char * const cir_clk_parents[] = { "osc32k", "osc24M" };
++static SUNXI_CCU_MP_WITH_MUX_GATE(cir_clk, "ir",
++				  cir_clk_parents, 0xb8,
++				  0, 4,		/* M */
++				  16, 2,	/* P */
++				  24, 2,	/* mux */
++				  BIT(31),	/* gate */
++				  0);
+ 
+ static SUNXI_CCU_GATE(usb_phy0_clk,	"usb-phy0",	"osc24M",
+ 		      0x0cc, BIT(1), 0);
+@@ -287,7 +294,7 @@ static SUNXI_CCU_M_WITH_MUX_TABLE_GATE(tve_clk2_clk, "tve-clk2",
+ 				       tve_clk2_parents, tve_clk2_table,
+ 				       0x120, 0, 4, 24, 3, BIT(31), 0);
+ static SUNXI_CCU_M_WITH_GATE(tve_clk1_clk, "tve-clk1", "tve-clk2",
+-			     0x120, 8, 1, BIT(15), 0);
++			     0x120, 8, 1, BIT(15), CLK_SET_RATE_PARENT);
+ 
+ static const char * const tvd_parents[] = { "pll-video", "osc24M",
+ 					    "pll-video-2x" };
+@@ -297,15 +304,12 @@ static SUNXI_CCU_M_WITH_MUX_GATE(tvd_clk, "tvd", tvd_parents,
+ static const char * const csi_parents[] = { "pll-video", "osc24M" };
+ static const u8 csi_table[] = { 0, 5, };
+ static SUNXI_CCU_M_WITH_MUX_TABLE_GATE(csi_clk, "csi", csi_parents, csi_table,
+-				       0x120, 0, 4, 8, 3, BIT(15), 0);
++				       0x134, 0, 4, 8, 3, BIT(15), 0);
+ 
+-/*
+- * TODO: BSP says the parent is pll-audio, however common sense and experience
+- * told us it should be pll-ve. pll-ve is totally not used in BSP code.
+- */
+-static SUNXI_CCU_GATE(ve_clk, "ve", "pll-audio", 0x13c, BIT(31), 0);
+ 
+-static SUNXI_CCU_GATE(codec_clk, "codec", "pll-audio", 0x140, BIT(31), 0);
++static SUNXI_CCU_GATE(ve_clk, "ve", "pll-ve", 0x13c, BIT(31), 0);
++
++static SUNXI_CCU_GATE(codec_clk, "codec", "pll-audio", 0x140, BIT(31), CLK_SET_RATE_PARENT);
+ 
+ static SUNXI_CCU_GATE(avs_clk, "avs", "osc24M", 0x144, BIT(31), 0);
+ 
+@@ -354,6 +358,7 @@ static struct ccu_common *suniv_ccu_clks[] = {
+ 	&mmc1_output_clk.common,
+ 	&i2s_clk.common,
+ 	&spdif_clk.common,
++	&cir_clk.common,
+ 	&usb_phy0_clk.common,
+ 	&dram_ve_clk.common,
+ 	&dram_csi_clk.common,
+@@ -445,6 +450,7 @@ static struct clk_hw_onecell_data suniv_hw_clks = {
+ 		[CLK_MMC1_OUTPUT]	= &mmc1_output_clk.common.hw,
+ 		[CLK_I2S]		= &i2s_clk.common.hw,
+ 		[CLK_SPDIF]		= &spdif_clk.common.hw,
++		[CLK_CIR]		= &cir_clk.common.hw,
+ 		[CLK_USB_PHY0]		= &usb_phy0_clk.common.hw,
+ 		[CLK_DRAM_VE]		= &dram_ve_clk.common.hw,
+ 		[CLK_DRAM_CSI]		= &dram_csi_clk.common.hw,
+diff --git a/include/dt-bindings/clock/suniv-ccu-f1c100s.h b/include/dt-bindings/clock/suniv-ccu-f1c100s.h
+index f5ac155c9..6247d401f 100644
+--- a/include/dt-bindings/clock/suniv-ccu-f1c100s.h
++++ b/include/dt-bindings/clock/suniv-ccu-f1c100s.h
+@@ -45,26 +45,27 @@
+ #define CLK_MMC1_OUTPUT		46
+ #define CLK_I2S			47
+ #define CLK_SPDIF		48
++#define CLK_CIR			49
+ 
+-#define CLK_USB_PHY0		49
++#define CLK_USB_PHY0		50
+ 
+-#define CLK_DRAM_VE		50
+-#define CLK_DRAM_CSI		51
+-#define CLK_DRAM_DEINTERLACE	52
+-#define CLK_DRAM_TVD		53
+-#define CLK_DRAM_DE_FE		54
+-#define CLK_DRAM_DE_BE		55
++#define CLK_DRAM_VE		51
++#define CLK_DRAM_CSI		52
++#define CLK_DRAM_DEINTERLACE	53
++#define CLK_DRAM_TVD		54
++#define CLK_DRAM_DE_FE		55
++#define CLK_DRAM_DE_BE		56
+ 
+-#define CLK_DE_BE		56
+-#define CLK_DE_FE		57
+-#define CLK_TCON		58
+-#define CLK_DEINTERLACE		59
+-#define CLK_TVE2_CLK		60
+-#define CLK_TVE1_CLK		61
+-#define CLK_TVD			62
+-#define CLK_CSI			63
+-#define CLK_VE			64
+-#define CLK_CODEC		65
+-#define CLK_AVS			66
++#define CLK_DE_BE		57
++#define CLK_DE_FE		58
++#define CLK_TCON		59
++#define CLK_DEINTERLACE		60
++#define CLK_TVE2_CLK		61
++#define CLK_TVE1_CLK		62
++#define CLK_TVD			63
++#define CLK_CSI			64
++#define CLK_VE			65
++#define CLK_CODEC		66
++#define CLK_AVS			67
+ 
+ #endif
+-- 
+2.17.1
+

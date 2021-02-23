@@ -1,0 +1,119 @@
+From 61390a10b473d696bceccefa16eb7a8637a18549 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Mon, 8 Feb 2021 14:30:07 +0800
+Subject: [PATCH] add cedar support for a20 and h3
+
+---
+ arch/arm/boot/dts/sun7i-a20-cubieboard2.dts |  7 +++++++
+ arch/arm/boot/dts/sun7i-a20.dtsi            | 16 +++++++++++++++-
+ arch/arm/boot/dts/sun8i-h3-nanopi-duo2.dts  |  8 ++++++++
+ arch/arm/boot/dts/sun8i-h3.dtsi             | 16 +++++++++++++++-
+ 4 files changed, 45 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/boot/dts/sun7i-a20-cubieboard2.dts b/arch/arm/boot/dts/sun7i-a20-cubieboard2.dts
+index fb34187af..571a3133c 100644
+--- a/arch/arm/boot/dts/sun7i-a20-cubieboard2.dts
++++ b/arch/arm/boot/dts/sun7i-a20-cubieboard2.dts
+@@ -307,3 +307,10 @@
+ 	};
+ };
+ 
++&ion {
++     status = "okay";
++};
++
++&video-codec {
++     status = "okay";
++};
+diff --git a/arch/arm/boot/dts/sun7i-a20.dtsi b/arch/arm/boot/dts/sun7i-a20.dtsi
+index c3c37f5af..f08488c69 100644
+--- a/arch/arm/boot/dts/sun7i-a20.dtsi
++++ b/arch/arm/boot/dts/sun7i-a20.dtsi
+@@ -504,7 +504,7 @@
+ 		};
+ 
+ 		video-codec@1c0e000 {
+-			compatible = "allwinner,sun7i-a20-video-engine";
++			compatible = "allwinner,sun7i-a20-video-engine","allwinner,sun8i-h3-cedar";
+ 			reg = <0x01c0e000 0x1000>;
+ 			clocks = <&ccu CLK_AHB_VE>, <&ccu CLK_VE>,
+ 				 <&ccu CLK_DRAM_VE>;
+@@ -512,7 +512,21 @@
+ 			resets = <&ccu RST_VE>;
+ 			interrupts = <GIC_SPI 53 IRQ_TYPE_LEVEL_HIGH>;
+ 			allwinner,sram = <&ve_sram 1>;
++			status = "disabled";
+ 		};
++		
++		ion: ion {
++		              compatible = "allwinner,sunxi-ion";
++        			 status = "disabled";
++        			heap_cma@0{
++          			 compatible = "allwinner,cma";
++          			 heap-name  = "cma";
++          			 heap-id    = <0x4>;
++          			 heap-base  = <0x0>;
++          			 heap-size  = <0x0>;
++          			 heap-type  = "ion_cma";
++         			};
++       		};
+ 
+ 		mmc0: mmc@1c0f000 {
+ 			compatible = "allwinner,sun7i-a20-mmc";
+diff --git a/arch/arm/boot/dts/sun8i-h3-nanopi-duo2.dts b/arch/arm/boot/dts/sun8i-h3-nanopi-duo2.dts
+index e731fc56d..8ada1a372 100644
+--- a/arch/arm/boot/dts/sun8i-h3-nanopi-duo2.dts
++++ b/arch/arm/boot/dts/sun8i-h3-nanopi-duo2.dts
+@@ -87,6 +87,14 @@
+ 	status = "okay";
+ };
+ 
++&ion {
++     status = "okay";
++};
++
++&video-codec {
++     status = "okay";
++};
++
+ &usb_otg {
+ 	dr_mode = "peripheral";
+ 	status = "okay";
+diff --git a/arch/arm/boot/dts/sun8i-h3.dtsi b/arch/arm/boot/dts/sun8i-h3.dtsi
+index 6056f206c..f2eea863b 100644
+--- a/arch/arm/boot/dts/sun8i-h3.dtsi
++++ b/arch/arm/boot/dts/sun8i-h3.dtsi
+@@ -152,7 +152,7 @@
+ 		};
+ 
+ 		video-codec@1c0e000 {
+-			compatible = "allwinner,sun8i-h3-video-engine";
++			compatible = "allwinner,sun8i-h3-video-engine","allwinner,sun8i-h3-cedar";
+ 			reg = <0x01c0e000 0x1000>;
+ 			clocks = <&ccu CLK_BUS_VE>, <&ccu CLK_VE>,
+ 				 <&ccu CLK_DRAM_VE>;
+@@ -160,7 +160,21 @@
+ 			resets = <&ccu RST_BUS_VE>;
+ 			interrupts = <GIC_SPI 58 IRQ_TYPE_LEVEL_HIGH>;
+ 			allwinner,sram = <&ve_sram 1>;
++			status = "disabled";
+ 		};
++		
++		ion: ion {
++		              compatible = "allwinner,sunxi-ion";
++        			 status = "disabled";
++        			heap_cma@0{
++          			 compatible = "allwinner,cma";
++          			 heap-name  = "cma";
++          			 heap-id    = <0x4>;
++          			 heap-base  = <0x0>;
++          			 heap-size  = <0x0>;
++          			 heap-type  = "ion_cma";
++         			};
++       		};
+ 
+ 		mali: gpu@1c40000 {
+ 			compatible = "allwinner,sun8i-h3-mali", "arm,mali-400";
+-- 
+2.30.0
+

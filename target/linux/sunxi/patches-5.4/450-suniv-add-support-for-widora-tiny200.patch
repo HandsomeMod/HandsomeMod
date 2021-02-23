@@ -1,0 +1,514 @@
+From 9ddc0ff920d2af206ca3b7332b4a2a913f4075d9 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sat, 3 Oct 2020 11:29:46 +0800
+Subject: [PATCH] add support for widora tiny200
+
+---
+ arch/arm/boot/dts/Makefile                    |   2 +
+ arch/arm/boot/dts/suniv-widora-tiny200-v2.dts | 178 +++++++++++
+ arch/arm/boot/dts/suniv-widora-tiny200-v3.dts | 295 ++++++++++++++++++
+ 3 files changed, 475 insertions(+)
+ create mode 100644 arch/arm/boot/dts/suniv-widora-tiny200-v2.dts
+ create mode 100644 arch/arm/boot/dts/suniv-widora-tiny200-v3.dts
+
+diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile
+index b21b3a646..b7dd000e7 100644
+--- a/arch/arm/boot/dts/Makefile
++++ b/arch/arm/boot/dts/Makefile
+@@ -1133,6 +1133,8 @@ dtb-$(CONFIG_MACH_SUN9I) += \
+ 	sun9i-a80-cubieboard4.dtb
+ dtb-$(CONFIG_MACH_SUNIV) += \
+ 	suniv-f1c100s-licheepi-nano.dtb
++	suniv-widora-tiny200-v2.dtb
++	suniv-widora-tiny200-v3.dtb
+ dtb-$(CONFIG_ARCH_TANGO) += \
+ 	tango4-vantage-1172.dtb
+ dtb-$(CONFIG_ARCH_TEGRA_2x_SOC) += \
+diff --git a/arch/arm/boot/dts/suniv-widora-tiny200-v2.dts b/arch/arm/boot/dts/suniv-widora-tiny200-v2.dts
+new file mode 100644
+index 000000000..5f87a7fb2
+--- /dev/null
++++ b/arch/arm/boot/dts/suniv-widora-tiny200-v2.dts
+@@ -0,0 +1,178 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR X11)
++
++/dts-v1/;
++#include "suniv-f1c100s.dtsi"
++
++/ {
++	model = "Widora MangoPi R2";
++	compatible = "allwinner,suniv-f1c200s",
++			 "allwinner,suniv-f1c100s";
++
++	aliases {
++		serial0 = &uart0;
++	};
++
++	chosen {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		ranges;
++
++		stdout-path = "serial0:115200n8";
++	};
++
++	panel: panel {
++		compatible = "bananapi,s070wv20-ct16", "simple-panel";
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		port@0 {
++			reg = <0>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			panel_input: endpoint@0 {
++				reg = <0>;
++				remote-endpoint = <&tcon0_out_lcd>;
++			};
++		};
++	};
++};
++
++&spi0 {
++	status = "okay";
++
++	spi-nor@0 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		compatible = "winbond,w25q128", "jedec,spi-nor";
++		reg = <0>;
++		spi-max-frequency = <50000000>;
++
++	spi-nand@0 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		compatible = "spi-nand";
++		reg = <0>;
++		spi-max-frequency = <50000000>;
++		status = "disabled";
++
++		partitions {
++			compatible = "fixed-partitions";
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			partition@0 {
++				label = "u-boot";
++				reg = <0x000000 0x80000>;
++				read-only;
++			};
++
++			partition@1 {
++				label = "dtb";
++				reg = <0x80000 0x20000>;
++				read-only;
++			};
++
++			partition@2 {
++				label = "kernel";
++				reg = <0x100000 0x700000>;
++				read-only;
++			};
++
++			partition@3 {
++				label = "rom";
++				reg = <0x800000 0x4000000>;
++				read-only;
++			};
++
++			partition@4 {
++				label = "overlay";
++				reg = <0x4800000 0x3000000>;
++			};
++		};
++	};
++};
++
++&uart0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart0_pe_pins>;
++	status = "okay";
++};
++
++&uart1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart1_pa_pins>;
++	//status = "okay";
++};
++
++&mmc0 {
++	status = "okay";
++	broken-cd;
++};
++
++&otg_sram {
++	status = "okay";
++};
++
++&usb_otg {
++	dr_mode = "peripheral"; /* host peripheral */
++	status = "okay";
++};
++
++&usbphy {
++	status = "okay";
++};
++
++&cedar_ve {
++	status = "okay";
++};
++
++&ion {
++	status = "okay";
++};
++
++&de {
++	status = "okay";
++};
++
++&fe0 {
++	status = "okay";
++};
++
++&be0 {
++	status = "okay";
++};
++
++&tve0 {
++	status = "okay";
++};
++
++&tcon0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&lcd_rgb565_pins>;
++	status = "okay";
++};
++
++&tcon0_out {
++	tcon0_out_lcd: endpoint@0 {
++		reg = <0>;
++		remote-endpoint = <&panel_input>;
++	};
++};
++
++&codec {
++	allwinner,audio-routing =
++		"Headphone", "HP",
++		"Headphone", "HPCOM",
++		"LINEIN", "Line In",
++		"FMINL", "Left FM In",
++		"FMINR", "Right FM In",
++		"MIC", "Mic";
++	status = "okay";
++};
++
++&i2c0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c0_pd_pins>;
++	status = "okay";
++};
+diff --git a/arch/arm/boot/dts/suniv-widora-tiny200-v3.dts b/arch/arm/boot/dts/suniv-widora-tiny200-v3.dts
+new file mode 100644
+index 000000000..ac6e5beae
+--- /dev/null
++++ b/arch/arm/boot/dts/suniv-widora-tiny200-v3.dts
+@@ -0,0 +1,295 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR X11)
++
++/dts-v1/;
++#include "suniv-f1c100s.dtsi"
++
++/ {
++	model = "Widora MangoPi R3";
++	compatible = "allwinner,suniv-f1c200s",
++			 "allwinner,suniv-f1c100s";
++
++	aliases {
++		serial0 = &uart1;
++	};
++
++	chosen {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		ranges;
++
++		stdout-path = "serial0:115200n8";
++	};
++
++	panel: panel {
++		compatible = "bananapi,s070wv20-ct16", "simple-panel";
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		port@0 {
++			reg = <0>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			panel_input: endpoint@0 {
++				reg = <0>;
++				remote-endpoint = <&tcon0_out_lcd>;
++			};
++		};
++	};
++};
++
++&spi0 {
++	status = "okay";
++
++	spi-nor@0 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		compatible = "winbond,w25q128", "jedec,spi-nor";
++		reg = <0>;
++		spi-max-frequency = <50000000>;
++
++		partitions {
++			compatible = "fixed-partitions";
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			partition@0 {
++				label = "u-boot";
++				reg = <0x000000 0x70000>;
++				read-only;
++			};
++
++			partition@1 {
++				label = "dtb";
++				reg = <0x70000 0x10000>;
++				read-only;
++			};
++
++			partition@2 {
++				label = "kernel";
++				reg = <0x80000 0x580000>;
++				read-only;
++			};
++
++			partition@3 {
++				label = "rom";
++				reg = <0x600000 0x700000>;
++				read-only;
++			};
++
++			partition@4 {
++				label = "overlay";
++				reg = <0xd00000 0x300000>;
++			};
++		};
++	};
++
++	spi-nand@0 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		compatible = "spi-nand";
++		reg = <0>;
++		spi-max-frequency = <50000000>;
++		status = "disabled";
++
++		partitions {
++			compatible = "fixed-partitions";
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			partition@0 {
++				label = "u-boot";
++				reg = <0x000000 0x80000>;
++				read-only;
++			};
++
++			partition@1 {
++				label = "dtb";
++				reg = <0x80000 0x20000>;
++				read-only;
++			};
++
++			partition@2 {
++				label = "kernel";
++				reg = <0x100000 0x700000>;
++				read-only;
++			};
++
++			partition@3 {
++				label = "rom";
++				reg = <0x800000 0x4000000>;
++				read-only;
++			};
++
++			partition@4 {
++				label = "overlay";
++				reg = <0x4800000 0x3000000>;
++			};
++		};
++	};
++};
++
++&uart0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart0_pe_pins>;
++	// status = "okay";
++};
++
++&uart1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart1_pa_pins>;
++	status = "okay";
++};
++
++&mmc0 {
++	status = "okay";
++	broken-cd;
++};
++
++&otg_sram {
++	status = "okay";
++};
++
++&usb_otg {
++	dr_mode = "peripheral"; /* host peripheral */
++	status = "okay";
++};
++
++&usbphy {
++	status = "okay";
++};
++
++&cedar_ve {
++	status = "okay";
++};
++
++&ion {
++	status = "okay";
++};
++
++&de {
++	status = "okay";
++};
++
++&fe0 {
++	status = "okay";
++};
++
++&be0 {
++	status = "okay";
++};
++
++&tve0 {
++	status = "okay";
++};
++
++&tcon0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&lcd_rgb565_pins>;
++	status = "okay";
++};
++
++&tcon0_out {
++	tcon0_out_lcd: endpoint@0 {
++		reg = <0>;
++		remote-endpoint = <&panel_input>;
++	};
++};
++
++&codec {
++	allwinner,audio-routing =
++		"Headphone", "HP",
++		"Headphone", "HPCOM",
++		"LINEIN", "Line In",
++		"FMINL", "Left FM In",
++		"FMINR", "Right FM In",
++		"MIC", "Mic";
++	status = "okay";
++};
++
++&i2c0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c0_pd_pins>;
++	status = "okay";
++
++	rtp@48 {
++		compatible = "ti,tsc2007";
++		reg = <0x48>;
++		interrupt-parent = <&pio>;
++		interrupts = <4 12 IRQ_TYPE_EDGE_FALLING>;
++		gpios = <&pio 4 12 GPIO_ACTIVE_LOW>;
++		pendown-gpio = <&pio 4 12 GPIO_ACTIVE_LOW>;
++		ti,x-plate-ohms = <660>;
++		wakeup-source;
++		status = "disabled";
++	};
++
++	ctp@5d {
++		compatible = "goodix,gt911";
++		reg = <0x5d>;
++		interrupt-parent = <&pio>;
++		interrupts = <4 12 IRQ_TYPE_EDGE_FALLING>; // PE12
++		irq-gpios = <&pio 4 12 GPIO_ACTIVE_HIGH>; // PE12
++		reset-gpios = <&pio 0 0 GPIO_ACTIVE_HIGH>; // PA0
++	};
++
++	ov2640: camera@30 {
++		compatible = "ovti,ov2640";
++		reg = <0x30>;
++		pinctrl-0 = <&clk_out_pins>;
++		pinctrl-names = "default";
++		clocks = <&clk_out>;
++		clock-names = "xvclk";
++		assigned-clocks = <&clk_out>;
++		assigned-clock-rates = <24000000>;
++
++		port {
++			ov2640_ep: endpoint {
++				remote-endpoint = <&csi0_ep>;
++				bus-width = <8>;
++				hsync-active = <0>;
++				vsync-active = <0>;
++				pclk-sample = <1>;
++			};
++		};
++	};
++
++	ov5640: camera@3c {
++		compatible = "ovti,ov5640";
++		reg = <0x3c>;
++		pinctrl-0 = <&clk_out_pins>;
++		pinctrl-names = "default";
++		clocks = <&clk_out>;
++		clock-names = "xclk";
++		assigned-clocks = <&clk_out>;
++		assigned-clock-rates = <24000000>;
++		status = "disabled";
++
++		port {
++			ov5640_ep: endpoint {
++				remote-endpoint = <&csi0_ep>;
++				bus-width = <8>;
++				hsync-active = <0>;
++				vsync-active = <0>;
++				pclk-sample = <1>;
++			};
++		};
++	};
++};
++
++&csi0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&csi0_pins>;
++	packed-format;
++	status = "okay";
++
++	port {
++		csi0_ep: endpoint {
++			remote-endpoint = <&ov2640_ep>;
++			bus-width = <8>;
++			hsync-active = <0>;
++			vsync-active = <0>;
++			pclk-sample = <1>;
++		};
++	};
++};
+-- 
+2.28.0
+
