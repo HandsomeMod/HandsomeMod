@@ -416,7 +416,7 @@ $(eval $(call KernelPackage,usb-serial))
 
 define AddDepends/usb-serial
   SUBMENU:=$(USB_MENU)
-  DEPENDS+=kmod-usb-serial $(1)
+  DEPENDS+=+kmod-usb-serial $(1)
 endef
 
 
