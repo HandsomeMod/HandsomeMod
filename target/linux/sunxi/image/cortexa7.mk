@@ -34,7 +34,7 @@ define Device/friendlyarm_nanopi-duo2
   DEVICE_MODEL := NanoPi Duo 2
   DEVICE_PACKAGES:=kmod-rtc-sunxi \
 	kmod-leds-gpio kmod-ledtrig-heartbeat \
-	kmod-brcmfmac brcmfmac-firmware-43430a0-sdio wpad-basic
+	kmod-brcmfmac brcmfmac-firmware-43430-sdio wpad-basic
   SOC := sun8i-h3
 endef
 

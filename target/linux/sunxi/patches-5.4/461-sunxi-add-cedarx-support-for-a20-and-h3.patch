@@ -22,9 +22,9 @@ index fb34187af..571a3133c 100644
 +     status = "okay";
 +};
 +
-+&video-codec {
-+     status = "okay";
-+};
++
++
++
 diff --git a/arch/arm/boot/dts/sun7i-a20.dtsi b/arch/arm/boot/dts/sun7i-a20.dtsi
 index c3c37f5af..f08488c69 100644
 --- a/arch/arm/boot/dts/sun7i-a20.dtsi
@@ -34,7 +34,7 @@ index c3c37f5af..f08488c69 100644
  
  		video-codec@1c0e000 {
 -			compatible = "allwinner,sun7i-a20-video-engine";
-+			compatible = "allwinner,sun7i-a20-video-engine","allwinner,sun8i-h3-cedar";
++			compatible = "allwinner,sun7i-a20-video-engine","allwinner,sun7i-a20-cedar";
  			reg = <0x01c0e000 0x1000>;
  			clocks = <&ccu CLK_AHB_VE>, <&ccu CLK_VE>,
  				 <&ccu CLK_DRAM_VE>;
@@ -42,7 +42,7 @@ index c3c37f5af..f08488c69 100644
  			resets = <&ccu RST_VE>;
  			interrupts = <GIC_SPI 53 IRQ_TYPE_LEVEL_HIGH>;
  			allwinner,sram = <&ve_sram 1>;
-+			status = "disabled";
++
  		};
 +		
 +		ion: ion {
@@ -72,9 +72,9 @@ index e731fc56d..8ada1a372 100644
 +     status = "okay";
 +};
 +
-+&video-codec {
-+     status = "okay";
-+};
++
++
++
 +
  &usb_otg {
  	dr_mode = "peripheral";
@@ -96,7 +96,7 @@ index 6056f206c..f2eea863b 100644
  			resets = <&ccu RST_BUS_VE>;
  			interrupts = <GIC_SPI 58 IRQ_TYPE_LEVEL_HIGH>;
  			allwinner,sram = <&ve_sram 1>;
-+			status = "disabled";
++
  		};
 +		
 +		ion: ion {

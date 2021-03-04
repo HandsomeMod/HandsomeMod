@@ -5290,7 +5290,7 @@ index 000000000..629ea87ef
 +/*
 + * drivers\media\cedar_ve
 + * (C) Copyright 2010-2016
-+ * Reuuimlla Technology Co., Ltd. <www.allwinnertech.com>
++ * Allwinner Technology Co., Ltd. <www.allwinnertech.com>
 + * fangning<fangning@allwinnertech.com>
 + *
 + * some simple description for this code
@@ -6875,7 +6875,7 @@ index 000000000..629ea87ef
 +};
 +
 +static struct cedar_variant sun8i_h3_quirk = {
-+	.capabilities = 0,
++	.capabilities = CEDARV_ISP_OLD,
 +	.mod_rate = 402000000,
 +};
 +
@@ -6919,7 +6919,7 @@ index 000000000..629ea87ef
 +module_init(sunxi_cedar_init);
 +module_exit(sunxi_cedar_exit);
 +
-+MODULE_AUTHOR("Soft-Reuuimlla");
++MODULE_AUTHOR("Soft-Allwinner");
 +MODULE_DESCRIPTION("User mode CEDAR device interface");
 +MODULE_LICENSE("GPL");
 +MODULE_VERSION(DRV_VERSION);

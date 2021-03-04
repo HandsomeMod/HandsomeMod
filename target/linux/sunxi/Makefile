@@ -7,7 +7,7 @@ include $(TOPDIR)/rules.mk
 
 ARCH:=arm
 BOARD:=sunxi
-BOARDNAME:=Allwinner A1x/A20/A3x/H3/H5/R40/F1Cx00s/V3s
+BOARDNAME:=Allwinner Socs
 FEATURES:=fpu usb ext4 display rtc squashfs usbgadget gpio
 SUBTARGETS:=cortexa8 cortexa7 cortexa53 arm9
 MAINTAINER:=HandsomeYingyan<handosmeyingyan@gmali.com>
