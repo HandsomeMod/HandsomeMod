@@ -185,7 +185,7 @@ define KernelPackage/sun4i-drm
 	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun4i_tv.ko \
  	$(LINUX_DIR)/drivers/gpu/drm/panel/panel-simple.ko \
  	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun8i_tcon_top.ko
-    AUTOLOAD:=$(call AutoLoad,50,sun4i-backend sun4i-frontend sun4i-tcon sun4i-drm sun4i_tv sun8i_tcon_top)
+    AUTOLOAD:=$(call AutoProbe,sun4i-backend sun4i-frontend sun4i-tcon sun4i-drm sun4i_tv sun8i_tcon_top)
 endef
 
 define KernelPackage/sun4i-drm/description
@@ -206,7 +206,7 @@ define KernelPackage/sun8i-drm
 	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun6i_mipi_dsi.ko \
 	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun6i_drc.ko \
 	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun8i-mixer.ko
-    AUTOLOAD:=$(call AutoLoad,51,sun6i_mipi_dsi sun6i_drc sun8i-mixer)
+    AUTOLOAD:=$(call AutoProbe,sun6i_mipi_dsi sun6i_drc sun8i-mixer)
 endef
 
 define KernelPackage/sun8i-drm/description
@@ -236,7 +236,7 @@ define KernelPackage/sun6i-csi
   TITLE:=Allwinner sun6i family Camera Sensor Interface driver
   KCONFIG:= CONFIG_VIDEO_SUN6I_CSI
   FILES:=$(LINUX_DIR)/drivers/media/platform/sunxi/sun6i-csi/sun6i-csi.ko
-  AUTOLOAD:=$(call AutoLoad,54,sun6i-csi)
+  AUTOLOAD:=$(call AutoProbe,sun6i-csi)
   DEPENDS:=@TARGET_sunxi_cortexa7 @LINUX_5_4 +kmod-video-csi-core +kmod-video-videobuf2
 endef
 
@@ -251,7 +251,7 @@ define KernelPackage/sun4i-csi
   TITLE:=Allwinner sun4i family Camera Sensor Interface driver
   KCONFIG:= CONFIG_VIDEO_SUN4I_CSI
   FILES:=$(LINUX_DIR)/drivers/media/platform/sunxi/sun4i-csi/sun4i-csi.ko
-  AUTOLOAD:=$(call AutoLoad,55,sun4i-csi)
+  AUTOLOAD:=$(call AutoProbe,sun4i-csi)
   DEPENDS:=@TARGET_sunxi @LINUX_5_4 +kmod-video-csi-core +kmod-video-videobuf2
 endef
 
