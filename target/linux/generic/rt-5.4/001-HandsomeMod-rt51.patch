@@ -19389,10 +19389,10 @@ index 5569ef6bc183..e40edf35f613 100644
 +EXPORT_SYMBOL(console_atomic_unlock);
 diff --git a/kernel/printk/printk_safe.c b/kernel/printk/printk_safe.c
 deleted file mode 100644
-index d9a659a686f3..000000000000
+index 6cfc5a00c..000000000
 --- a/kernel/printk/printk_safe.c
 +++ /dev/null
-@@ -1,406 +0,0 @@
+@@ -1,414 +0,0 @@
 -// SPDX-License-Identifier: GPL-2.0-or-later
 -/*
 - * printk_safe.c - Safe printk for printk-deadlock-prone contexts
@@ -19437,6 +19437,8 @@ index d9a659a686f3..000000000000
 -
 -static DEFINE_PER_CPU(struct printk_safe_seq_buf, safe_print_seq);
 -static DEFINE_PER_CPU(int, printk_context);
+-
+-static DEFINE_RAW_SPINLOCK(safe_read_lock);
 -
 -#ifdef CONFIG_PRINTK_NMI
 -static DEFINE_PER_CPU(struct printk_safe_seq_buf, nmi_print_seq);
@@ -19573,8 +19575,6 @@ index d9a659a686f3..000000000000
 - */
 -static void __printk_safe_flush(struct irq_work *work)
 -{
--	static raw_spinlock_t read_lock =
--		__RAW_SPIN_LOCK_INITIALIZER(read_lock);
 -	struct printk_safe_seq_buf *s =
 -		container_of(work, struct printk_safe_seq_buf, work);
 -	unsigned long flags;
@@ -19588,7 +19588,7 @@ index d9a659a686f3..000000000000
 -	 * different CPUs. This is especially important when printing
 -	 * a backtrace.
 -	 */
--	raw_spin_lock_irqsave(&read_lock, flags);
+-	raw_spin_lock_irqsave(&safe_read_lock, flags);
 -
 -	i = 0;
 -more:
@@ -19625,7 +19625,7 @@ index d9a659a686f3..000000000000
 -
 -out:
 -	report_message_lost(s);
--	raw_spin_unlock_irqrestore(&read_lock, flags);
+-	raw_spin_unlock_irqrestore(&safe_read_lock, flags);
 -}
 -
 -/**
@@ -19669,6 +19669,14 @@ index d9a659a686f3..000000000000
 -
 -		debug_locks_off();
 -		raw_spin_lock_init(&logbuf_lock);
+-	}
+-
+-	if (raw_spin_is_locked(&safe_read_lock)) {
+-		if (num_online_cpus() > 1)
+-			return;
+-
+-		debug_locks_off();
+-		raw_spin_lock_init(&safe_read_lock);
 -	}
 -
 -	printk_safe_flush();
