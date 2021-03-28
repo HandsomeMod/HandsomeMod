@@ -480,27 +480,6 @@ index 00000000..db5cd0b8
 +		voltage = <800000>;
 +	};
 +};
-diff --git a/arch/arm/dts/sun8i-v3s-licheepi-zero.dts b/arch/arm/dts/sun8i-v3s-licheepi-zero.dts
-index 000c037f..b5840dec 100644
---- a/arch/arm/dts/sun8i-v3s-licheepi-zero.dts
-+++ b/arch/arm/dts/sun8i-v3s-licheepi-zero.dts
-@@ -122,7 +122,7 @@
- };
- 
- &uart0 {
--	pinctrl-0 = <&uart0_pins_a>;
-+	pinctrl-0 = <&uart0_pb_pins>;
- 	pinctrl-names = "default";
- 	status = "okay";
- };
-@@ -133,6 +133,6 @@
- };
- 
- &usbphy {
--	usb0_id_det-gpio = <&pio 5 6 GPIO_ACTIVE_HIGH>;
-+	usb0_id_det-gpios = <&pio 5 6 GPIO_ACTIVE_HIGH>;
- 	status = "okay";
- };
 diff --git a/arch/arm/dts/sun8i-v3s.dtsi b/arch/arm/dts/sun8i-v3s.dtsi
 index dc62512e..dbf53cc8 100644
 --- a/arch/arm/dts/sun8i-v3s.dtsi
