@@ -296,13 +296,13 @@ index 6ae8645ad..ca4672ed2 100644
 +	/delete-property/ phy-mode;
 +};
 +
-+
-+
-+
-+
-+
-+
-+
++//&mdio_mux {
++//	external_mdio: mdio@2 {
++//		reg = <2>;
++//		#address-cells = <1>;
++//		#size-cells = <0>;
++//	};
++//};
 +
  &pio {
  	compatible = "allwinner,sun8i-v3-pinctrl";
