@@ -255,7 +255,7 @@ define Device/sinlinx_sinlinx-sinv3s
   SOC := sun8i-v3s
 endef
 
-TARGET_DEVICES += sipeed_sinlinx-sinv3s
+TARGET_DEVICES += sinlinx_sinlinx-sinv3s
 
 define Device/sinlinx_sinlinx-sina33
   DEVICE_VENDOR := SinLinx
