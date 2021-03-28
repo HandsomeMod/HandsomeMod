@@ -708,7 +708,7 @@ index dc62512e..dbf53cc8 100644
  			interrupts = <GIC_SPI 40 IRQ_TYPE_LEVEL_HIGH>,
  				     <GIC_SPI 41 IRQ_TYPE_LEVEL_HIGH>;
 +			clocks = <&osc32k>;
-++			clock-output-names = "osc32k", "osc32k-out";
++			clock-output-names = "osc32k", "osc32k-out";
  		};
  
 -		pio: pinctrl@01c20800 {
