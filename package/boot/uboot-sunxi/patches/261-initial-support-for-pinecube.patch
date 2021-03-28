@@ -608,7 +608,7 @@ index dc62512e..dbf53cc8 100644
  			reset-names = "ahb";
  			interrupts = <GIC_SPI 60 IRQ_TYPE_LEVEL_HIGH>;
 +			pinctrl-names = "default";
-+			pinctrl-0 = <&mmc0_pins>;
++			pinctrl-0 = <&mmc0_pins_a>;
  			status = "disabled";
  			#address-cells = <1>;
  			#size-cells = <0>;
@@ -799,8 +799,8 @@ index dc62512e..dbf53cc8 100644
  			reg-io-width = <4>;
  			clocks = <&ccu CLK_BUS_UART2>;
  			resets = <&ccu RST_BUS_UART2>;
-+			pinctrl-0 = <&uart2_pins>;
-+			pinctrl-names = "default";
++//			pinctrl-0 = <&uart2_pins>;
++//		pinctrl-names = "default";
  			status = "disabled";
  		};
  
