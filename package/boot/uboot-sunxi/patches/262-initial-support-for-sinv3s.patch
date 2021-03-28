@@ -1,28 +1,55 @@
-From e2ce8e7138297b32fe026691a5dc388822b3ce7c Mon Sep 17 00:00:00 2001
+From 7bcbf34128e3bd7c45de7cf79d8bdf1fb99e53da Mon Sep 17 00:00:00 2001
 From: handsomeyingyan <handsomeyingyan@github.com>
-Date: Sun, 28 Mar 2021 12:10:33 +0800
+Date: Sun, 28 Mar 2021 22:02:20 +0800
 Subject: [PATCH 2/2] initial support for sinv3s
 
 ---
- arch/arm/dts/Makefile                     |  1 +
+ arch/arm/dts/Makefile                     |  3 +-
+ arch/arm/dts/sun8i-s3-pinecube.dts        |  6 +-
  arch/arm/dts/sun8i-v3s-sinlinx-sinv3s.dts | 97 +++++++++++++++++++++++
- configs/Sinlinx_SinV3s_defconfig          | 21 +++++
- 3 files changed, 119 insertions(+)
+ configs/Sinlinx_SinV3s_defconfig          | 14 ++++
+ 4 files changed, 117 insertions(+), 3 deletions(-)
  create mode 100644 arch/arm/dts/sun8i-v3s-sinlinx-sinv3s.dts
  create mode 100644 configs/Sinlinx_SinV3s_defconfig
 
 diff --git a/arch/arm/dts/Makefile b/arch/arm/dts/Makefile
-index ef43ad67..23fcf91f 100644
+index ef43ad67..5b828d1c 100644
 --- a/arch/arm/dts/Makefile
 +++ b/arch/arm/dts/Makefile
-@@ -568,6 +568,7 @@ dtb-$(CONFIG_MACH_SUN8I_R40) += \
+@@ -568,7 +568,8 @@ dtb-$(CONFIG_MACH_SUN8I_R40) += \
  	sun8i-v40-bananapi-m2-berry.dtb
  dtb-$(CONFIG_MACH_SUN8I_V3S) += \
  	sun8i-v3s-licheepi-zero.dtb \
-+	sun8i-v3s-sinlinx-sinv3s.dtb \
- 	sun8i-s3-pinecube.dtb
+-	sun8i-s3-pinecube.dtb
++	sun8i-s3-pinecube.dtb \
++	sun8i-v3s-sinlinx-sinv3s.dtb
  dtb-$(CONFIG_MACH_SUN50I_H5) += \
  	sun50i-h5-bananapi-m2-plus.dtb \
+ 	sun50i-h5-emlid-neutis-n5-devboard.dtb \
+diff --git a/arch/arm/dts/sun8i-s3-pinecube.dts b/arch/arm/dts/sun8i-s3-pinecube.dts
+index f83f16a8..8e70ea28 100644
+--- a/arch/arm/dts/sun8i-s3-pinecube.dts
++++ b/arch/arm/dts/sun8i-s3-pinecube.dts
+@@ -14,7 +14,7 @@
+ 
+ 	aliases {
+ 		ethernet0 = &emac;
+-		serial0 = &uart2;
++		serial0 = &uart0;
+ 		spi0 = &spi0;
+ 	};
+ 
+@@ -222,7 +222,9 @@
+ 	};
+ };
+ 
+-&uart2 {
++&uart0 {
++	pinctrl-0 = <&uart0_pins_a>;
++	pinctrl-names = "default";
+ 	status = "okay";
+ };
+ 
 diff --git a/arch/arm/dts/sun8i-v3s-sinlinx-sinv3s.dts b/arch/arm/dts/sun8i-v3s-sinlinx-sinv3s.dts
 new file mode 100644
 index 00000000..82dc6abf
@@ -128,10 +155,10 @@ index 00000000..82dc6abf
 +
 diff --git a/configs/Sinlinx_SinV3s_defconfig b/configs/Sinlinx_SinV3s_defconfig
 new file mode 100644
-index 00000000..02fe097b
+index 00000000..abf70b5d
 --- /dev/null
 +++ b/configs/Sinlinx_SinV3s_defconfig
-@@ -0,0 +1,21 @@
+@@ -0,0 +1,14 @@
 +CONFIG_ARM=y
 +CONFIG_ARCH_SUNXI=y
 +CONFIG_SPL=y
@@ -146,13 +173,6 @@ index 00000000..02fe097b
 +CONFIG_DM_PWM=y
 +CONFIG_PWM_SUNXI=y
 +CONFIG_SUN8I_EMAC=y
-+CONFIG_CMD_DFU=y
-+CONFIG_DFU_RAM=y
-+CONFIG_FASTBOOT_CMD_OEM_FORMAT=y
-+CONFIG_USB_EHCI_HCD=y
-+CONFIG_USB_OHCI_HCD=y
-+CONFIG_USB_MUSB_GADGET=y
-+CONFIG_USB_FUNCTION_MASS_STORAGE=y
 -- 
 2.31.0
 
