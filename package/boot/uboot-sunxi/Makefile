@@ -325,7 +325,7 @@ endef
 define U-Boot/Sinlinx_SinV3s
   BUILD_SUBTARGET:=cortexa7
   NAME:=U-Boot for Sinlinx SinV3s (V3s)
-  BUILD_DEVICES:=sipeed_sinlinx-sinv3s
+  BUILD_DEVICES:=sinlinx_sinlinx-sinv3s
 endef
 
 define U-Boot/pinecube
