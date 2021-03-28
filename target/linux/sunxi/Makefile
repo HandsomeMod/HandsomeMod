@@ -18,7 +18,7 @@ KERNELNAME:=zImage dtbs
 
 # A10: Cortex-A8
 # A13: Cortex-A8
-# V3s: Cortex-A7
+# V3s/S3: Cortex-A7
 # A20: dual Cortex-A7
 # A31: quad Cortex-A7
 # A80: octa Cortex-A15/A7

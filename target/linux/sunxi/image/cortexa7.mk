@@ -247,3 +247,30 @@ define Device/sipeed_licheepi-zero-dock
 endef
 
 TARGET_DEVICES += sipeed_licheepi-zero-dock
+
+define Device/sinlinx_sinlinx-sinv3s
+  DEVICE_VENDOR := SinLinx
+  DEVICE_MODEL := SinV3s
+  DEVICE_PACKAGES:=kmod-rtc-sunxi
+  SOC := sun8i-v3s
+endef
+
+TARGET_DEVICES += sipeed_sinlinx-sinv3s
+
+define Device/sinlinx_sinlinx-sina33
+  DEVICE_VENDOR := SinLinx
+  DEVICE_MODEL := SinA33
+  DEVICE_PACKAGES:=kmod-rtc-sunxi
+  SOC := sun8i-a33
+endef
+
+TARGET_DEVICES += sinlinx_sinlinx-sina33
+
+define Device/pine64_pinecube
+  DEVICE_VENDOR := Pine64
+  DEVICE_MODEL := Pinecube IPCam
+  DEVICE_PACKAGES:=kmod-rtc-sunxi 
+  SOC := sun8i-s3
+endef
+
+TARGET_DEVICES += pine64_pinecube
