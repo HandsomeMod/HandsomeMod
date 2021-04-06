@@ -316,24 +316,6 @@ define U-Boot/LicheePi_Zero
   BUILD_DEVICES:=sipeed_licheepi-zero-dock
 endef
 
-define U-Boot/Sinlinx_SinA33
-  BUILD_SUBTARGET:=cortexa7
-  NAME:=U-Boot for Sinlinx SinA33(A33)
-  BUILD_DEVICES:=sinlinx_sinlinx-sina33
-endef
-
-define U-Boot/Sinlinx_SinV3s
-  BUILD_SUBTARGET:=cortexa7
-  NAME:=U-Boot for Sinlinx SinV3s (V3s)
-  BUILD_DEVICES:=sinlinx_sinlinx-sinv3s
-endef
-
-define U-Boot/pinecube
-  BUILD_SUBTARGET:=cortexa7
-  NAME:=U-Boot for Pinecube (S3)
-  BUILD_DEVICES:=pine64_pinecube
-endef
-
 define U-Boot/LicheePi_Nano
   BUILD_SUBTARGET:=arm9
   NAME:=U-Boot for Sipeed Lichee Pi Nano (F1C100s)
@@ -402,9 +384,6 @@ UBOOT_TARGETS := \
 	libretech_all_h3_cc_h5 \
 	q8_a33_tablet_1024x600 \
 	LicheePi_Zero \
-	Sinlinx_SinA33 \
-	Sinlinx_SinV3s \
-	pinecube \
 	LicheePi_Nano \
 	widora_tiny200_v2 \
 	widora_tiny200_v3
