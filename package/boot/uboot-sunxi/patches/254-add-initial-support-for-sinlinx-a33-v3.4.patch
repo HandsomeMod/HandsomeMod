@@ -1,0 +1,391 @@
+From 78251ecd4e82ebff6f0a5c36ee140d6ee55b0578 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Thu, 8 Apr 2021 09:43:39 +0800
+Subject: [PATCH] add initial support for sinlinx a33 v3.4
+
+---
+ arch/arm/dts/Makefile                        |   1 +
+ arch/arm/dts/sun8i-a33-sinlinx-sina33-v3.dts | 314 +++++++++++++++++++
+ configs/Sinlinx_SinA33_V3_defconfig          |  37 +++
+ 3 files changed, 352 insertions(+)
+ create mode 100644 arch/arm/dts/sun8i-a33-sinlinx-sina33-v3.dts
+ create mode 100644 configs/Sinlinx_SinA33_V3_defconfig
+
+diff --git a/arch/arm/dts/Makefile b/arch/arm/dts/Makefile
+index c061f49a..6c265f6a 100644
+--- a/arch/arm/dts/Makefile
++++ b/arch/arm/dts/Makefile
+@@ -527,6 +527,7 @@ dtb-$(CONFIG_MACH_SUN8I_A33) += \
+ 	sun8i-a33-olinuxino.dtb \
+ 	sun8i-a33-q8-tablet.dtb \
+ 	sun8i-a33-sinlinx-sina33.dtb \
++	sun8i-a33-sinlinx-sina33-v3.dtb \
+ 	sun8i-r16-bananapi-m2m.dtb \
+ 	sun8i-r16-nintendo-nes-classic-edition.dtb \
+ 	sun8i-r16-parrot.dtb
+diff --git a/arch/arm/dts/sun8i-a33-sinlinx-sina33-v3.dts b/arch/arm/dts/sun8i-a33-sinlinx-sina33-v3.dts
+new file mode 100644
+index 00000000..73ad6529
+--- /dev/null
++++ b/arch/arm/dts/sun8i-a33-sinlinx-sina33-v3.dts
+@@ -0,0 +1,314 @@
++/*
++ * Copyright 2021 HandsomeYingyan <handsomeyingyan@gmail.com>
++ *
++ * This file is dual-licensed: you can use it either under the terms
++ * of the GPL or the X11 license, at your option. Note that this dual
++ * licensing only applies to this file, and not this project as a
++ * whole.
++ *
++ */
++
++/dts-v1/;
++#include "sun8i-a33.dtsi"
++#include "sunxi-common-regulators.dtsi"
++
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++
++/ {
++	model = "Sinlinx SinA33 V3.4";
++	compatible = "sinlinx,sina33-v3", "allwinner,sun8i-a33";
++
++	aliases {
++		serial0 = &uart0;
++	};
++
++	chosen {
++		stdout-path = "serial0:115200n8";
++	};
++
++	panel {
++		compatible = "netron-dy,e231732";
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		port@0 {
++			reg = <0>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++
++			panel_input: endpoint@0 {
++				reg = <0>;
++				remote-endpoint = <&tcon0_out_panel>;
++			};
++		};
++	};
++	
++	reg_vcc5v0: vcc5v0 {
++		compatible = "regulator-fixed";
++		regulator-name = "vcc5v0";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++	};
++	
++	wifi_pwrseq: wifi_pwrseq {
++		compatible = "mmc-pwrseq-simple";
++		reset-gpios = <&r_pio 0 6 GPIO_ACTIVE_LOW>; /* PL06 */
++	};
++};
++
++&codec {
++	status = "okay";
++};
++
++&cpu0 {
++	cpu-supply = <&reg_dcdc3>;
++};
++
++&cpu0_opp_table {
++	opp-1104000000 {
++		opp-hz = /bits/ 64 <1104000000>;
++		opp-microvolt = <1320000>;
++		clock-latency-ns = <244144>; /* 8 32k periods */
++	};
++
++	opp-1200000000 {
++		opp-hz = /bits/ 64 <1200000000>;
++		opp-microvolt = <1320000>;
++		clock-latency-ns = <244144>; /* 8 32k periods */
++	};
++};
++
++&de {
++	status = "okay";
++};
++
++&dai {
++	status = "okay";
++};
++
++&ehci0 {
++	status = "okay";
++};
++
++&lradc {
++	vref-supply = <&reg_dcdc1>;
++	status = "okay";
++
++	button@200 {
++		label = "Volume Up";
++		linux,code = <KEY_VOLUMEUP>;
++		channel = <0>;
++		voltage = <191011>;
++	};
++
++	button@400 {
++		label = "Volume Down";
++		linux,code = <KEY_VOLUMEDOWN>;
++		channel = <0>;
++		voltage = <391304>;
++	};
++
++	button@600 {
++		label = "Home";
++		linux,code = <KEY_HOME>;
++		channel = <0>;
++		voltage = <600000>;
++	};
++};
++
++&mmc0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&mmc0_pins_a>, <&mmc0_cd_pin_sina33>;
++	vmmc-supply = <&reg_dcdc1>;
++	bus-width = <4>;
++	cd-gpios = <&pio 1 4 GPIO_ACTIVE_LOW>; /* PB4 */
++	status = "okay";
++};
++
++/* MMC1 has an ap6210*/
++&mmc1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&mmc1_pins_a>;
++	vmmc-supply = <&reg_aldo1>;
++	mmc-pwrseq = <&wifi_pwrseq>;
++	bus-width = <4>;
++	non-removable;
++	status = "okay";
++};
++
++&mmc2 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&mmc2_8bit_pins>;
++	vmmc-supply = <&reg_dcdc1>;
++	bus-width = <8>;
++	non-removable;
++	cap-mmc-hw-reset;
++	status = "okay";
++};
++
++&mmc2_8bit_pins {
++	/* Increase drive strength for DDR modes */
++	drive-strength = <40>;
++	/* eMMC is missing pull-ups */
++	bias-pull-up;
++};
++
++&ohci0 {
++	status = "okay";
++};
++
++&pio {
++	mmc0_cd_pin_sina33: mmc0_cd_pin@0 {
++		pins = "PB4";
++		function = "gpio_in";
++		bias-pull-up;
++	};
++};
++
++&r_rsb {
++	status = "okay";
++
++	axp22x: pmic@3a3 {
++		compatible = "x-powers,axp223";
++		reg = <0x3a3>;
++		interrupt-parent = <&nmi_intc>;
++		interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
++		eldoin-supply = <&reg_dcdc1>;
++	};
++};
++
++#include "axp223.dtsi"
++
++&ac_power_supply {
++	status = "okay";
++};
++
++&battery_power_supply {
++	status = "okay";
++};
++
++&reg_aldo1 {
++	regulator-always-on;
++	regulator-min-microvolt = <3000000>;
++	regulator-max-microvolt = <3000000>;
++	regulator-name = "vcc-io";
++};
++
++&reg_aldo2 {
++	regulator-always-on;
++	regulator-min-microvolt = <2350000>;
++	regulator-max-microvolt = <2650000>;
++	regulator-name = "vdd-dll";
++};
++
++&reg_aldo3 {
++	regulator-always-on;
++	regulator-min-microvolt = <2700000>;
++	regulator-max-microvolt = <3300000>;
++	regulator-name = "vcc-pll-avcc";
++};
++
++&reg_dc5ldo {
++	regulator-always-on;
++	regulator-min-microvolt = <900000>;
++	regulator-max-microvolt = <1400000>;
++	regulator-name = "vdd-cpus";
++};
++
++&reg_dcdc1 {
++	regulator-always-on;
++	regulator-min-microvolt = <3000000>;
++	regulator-max-microvolt = <3000000>;
++	regulator-name = "vcc-3v0";
++};
++
++&reg_dcdc2 {
++	regulator-always-on;
++	regulator-min-microvolt = <900000>;
++	regulator-max-microvolt = <1400000>;
++	regulator-name = "vdd-sys";
++};
++
++&reg_dcdc3 {
++	regulator-always-on;
++	regulator-min-microvolt = <900000>;
++	regulator-max-microvolt = <1400000>;
++	regulator-name = "vdd-cpu";
++};
++
++&reg_dcdc5 {
++	regulator-always-on;
++	regulator-min-microvolt = <1500000>;
++	regulator-max-microvolt = <1500000>;
++	regulator-name = "vcc-dram";
++};
++
++&reg_dldo1 {
++	regulator-always-on;
++	regulator-min-microvolt = <3000000>;
++	regulator-max-microvolt = <3000000>;
++	regulator-name = "vcc-lcd";
++};
++
++&reg_dldo2 {
++	regulator-always-on;
++	regulator-min-microvolt = <3300000>;
++	regulator-max-microvolt = <3300000>;
++	regulator-name = "vcc-wifi";
++};
++
++&reg_drivevbus {
++	regulator-name = "usb0-vbus";
++	status = "okay";
++};
++
++&reg_rtc_ldo {
++	regulator-name = "vcc-rtc";
++};
++
++&sound {
++	status = "okay";
++};
++
++&tcon0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&lcd_rgb666_pins>;
++	status = "okay";
++};
++
++&tcon0_out {
++	tcon0_out_panel: endpoint@0 {
++		reg = <0>;
++		remote-endpoint = <&panel_input>;
++	};
++};
++
++&uart0 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart0_pins_b>;
++	status = "okay";
++};
++
++&uart1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&uart1_pins_a>, <&uart1_pins_cts_rts_a>;
++	status = "okay";
++};
++
++&usb_otg {
++	dr_mode = "otg";
++	status = "okay";
++};
++
++&usb_power_supply {
++	status = "okay";
++};
++
++&usbphy {
++	usb0_id_det-gpios = <&pio 7 8 GPIO_ACTIVE_HIGH>; /* PH8 */
++	usb0_vbus_power-supply = <&usb_power_supply>;
++	usb0_vbus-supply = <&reg_drivevbus>;
++	usb1_vbus-supply = <&reg_vcc5v0>;
++	status = "okay";
++};
+diff --git a/configs/Sinlinx_SinA33_V3_defconfig b/configs/Sinlinx_SinA33_V3_defconfig
+new file mode 100644
+index 00000000..9e9b6db8
+--- /dev/null
++++ b/configs/Sinlinx_SinA33_V3_defconfig
+@@ -0,0 +1,37 @@
++CONFIG_ARM=y
++CONFIG_ARCH_SUNXI=y
++CONFIG_SPL=y
++CONFIG_MACH_SUN8I_A33=y
++CONFIG_BOOTDELAY=0
++CONFIG_DRAM_CLK=552
++CONFIG_DRAM_ZQ=15291
++CONFIG_MMC0_CD_PIN="PB4"
++CONFIG_MMC_SUNXI_SLOT_EXTRA=2
++CONFIG_USB0_ID_DET="PH8"
++CONFIG_VIDEO_LCD_MODE="x:1024,y:600,depth:18,pclk_khz:66000,le:90,ri:160,up:3,lo:127,hs:70,vs:20,sync:3,vmode:0"
++CONFIG_VIDEO_LCD_DCLK_PHASE=0
++CONFIG_VIDEO_LCD_POWER="PH7"
++CONFIG_VIDEO_LCD_BL_EN="PH0"
++# CONFIG_SYS_MALLOC_CLEAR_ON_INIT is not set
++CONFIG_NET=n
++CONFIG_PHY=y
++CONFIG_PHY_SUN4I_USB=y
++CONFIG_CMD_DFU=y
++CONFIG_DFU_RAM=y
++CONFIG_DFU_OVER_USB=y
++CONFIG_DFU_MMC=y
++CONFIG_DFU_SF=n
++CONFIG_DFU_MTD=y
++CONFIG_DFU_TIMEOUT=y
++CONFIG_DEFAULT_DEVICE_TREE="sun8i-a33-sinlinx-sina33-v3"
++CONFIG_CMD_FASTBOOT=n
++CONFIG_FASTBOOT=n
++CONFIG_USB_FUNCTION_FASTBOOT=n
++CONFIG_USB_EHCI_HCD=y
++CONFIG_USB_OHCI_HCD=y
++CONFIG_USB_MUSB_GADGET=y
++CONFIG_USB_GADGET_DOWNLOAD=y
++CONFIG_USB_FUNCTION_MASS_STORAGE=y
++CONFIG_CMD_USB_MASS_STORAGE=y
++CONFIG_AXP_GPIO=y
++CONFIG_AXP_DLDO1_VOLT=3300
+-- 
+2.31.1
+

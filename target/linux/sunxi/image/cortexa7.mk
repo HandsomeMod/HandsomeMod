@@ -247,3 +247,21 @@ define Device/sipeed_licheepi-zero-dock
 endef
 
 TARGET_DEVICES += sipeed_licheepi-zero-dock
+
+define Device/sinlinx_sinlinx-sina33
+  DEVICE_VENDOR := SinLinx
+  DEVICE_MODEL := SinA33
+  DEVICE_PACKAGES:=kmod-rtc-sunxi
+  SOC := sun8i-a33
+endef
+
+TARGET_DEVICES += sinlinx_sinlinx-sina33
+
+define Device/sinlinx_sinlinx-sina33-v3
+  DEVICE_VENDOR := SinLinx
+  DEVICE_MODEL := SinA33 V3.4
+  DEVICE_PACKAGES:=kmod-rtc-sunxi
+  SOC := sun8i-a33
+endef
+
+TARGET_DEVICES += sinlinx_sinlinx-sina33-v3

@@ -337,6 +337,18 @@ define U-Boot/widora_tiny200_v3
   UENV:=licheepi-nano
 endef
 
+define U-Boot/Sinlinx_SinA33
+  BUILD_SUBTARGET:=cortexa7
+  NAME:=U-Boot for Sinlinx SinA33(A33)
+  BUILD_DEVICES:=sinlinx_sinlinx-sina33
+endef
+
+define U-Boot/Sinlinx_SinA33_V3
+  BUILD_SUBTARGET:=cortexa7
+  NAME:=U-Boot for Sinlinx SinA33 V3.4 (A33)
+  BUILD_DEVICES:=sinlinx_sinlinx-sina33-v3
+endef
+
 UBOOT_TARGETS := \
 	a64-olinuxino \
 	a64-olinuxino-emmc \
@@ -386,7 +398,9 @@ UBOOT_TARGETS := \
 	LicheePi_Zero \
 	LicheePi_Nano \
 	widora_tiny200_v2 \
-	widora_tiny200_v3
+	widora_tiny200_v3 \
+	Sinlinx_SinA33 \
+	Sinlinx_SinA33_V3
 
 UBOOT_CONFIGURE_VARS += USE_PRIVATE_LIBGCC=yes
 
