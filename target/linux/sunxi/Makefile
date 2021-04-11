@@ -12,8 +12,8 @@ FEATURES:=fpu usb ext4 display rtc squashfs usbgadget gpio
 SUBTARGETS:=cortexa8 cortexa7 cortexa53 arm9
 MAINTAINER:=HandsomeYingyan<handosmeyingyan@gmali.com>
 
-KERNEL_PATCHVER:=5.4
-KERNEL_TESTING_PATCHVER:=5.4
+KERNEL_PATCHVER:=5.10
+KERNEL_TESTING_PATCHVER:=5.10
 KERNELNAME:=zImage dtbs
 
 # A10: Cortex-A8
