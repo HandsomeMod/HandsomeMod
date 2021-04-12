@@ -655,7 +655,7 @@ $(eval $(call KernelPackage,video-gspca-konica))
 define KernelPackage/video-csi-core
   MENU:=1
   TITLE:=MIPI/CSI Based Camera core support framework
-  DEPENDS:=+kmod-video-core
+  DEPENDS:=+kmod-video-core +kmod-video-gspca-core
   KCONFIG:= \
 	CONFIG_VIDEO_V4L2=y \
   	CONFIG_VIDEO_V4L2_SUBDEV_API=y \

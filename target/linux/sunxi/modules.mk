@@ -185,7 +185,7 @@ define KernelPackage/sun4i-drm
 	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun4i_tv.ko \
  	$(LINUX_DIR)/drivers/gpu/drm/panel/panel-simple.ko \
  	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun8i_tcon_top.ko
-    AUTOLOAD:=$(call AutoProbe,sun4i-backend sun4i-frontend sun4i-tcon sun4i-drm sun4i_tv sun8i_tcon_top)
+    AUTOLOAD:=$(call AutoProbe,sun4i-backend sun4i-frontend sun4i-tcon sun4i-drm sun4i_tv sun8i_tcon_top panel-simple)
 endef
 
 define KernelPackage/sun4i-drm/description
