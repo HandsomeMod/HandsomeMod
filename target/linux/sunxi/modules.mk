@@ -158,9 +158,13 @@ $(eval $(call KernelPackage,sun4i-spdif))
 define KernelPackage/sun4i-drm
     SUBMENU:=$(DISPLAY_MENU)
     TITLE:=DRM Support for Allwinner A10 Display Engine
-    DEPENDS:=@TARGET_sunxi +kmod-drm +kmod-drm-kms-helper +kmod-lib-crc-ccitt
+    DEPENDS:=@TARGET_sunxi +kmod-backlight +kmod-drm +kmod-drm-kms-helper +kmod-lib-crc-ccitt
     KCONFIG:= \
 	CONFIG_ARCH_SUNXI=y \
+        	CONFIG_CMA=y \
+        	CONFIG_DMA_CMA=y \
+	CONFIG_DRM_FBDEV_EMULATION=y \
+	CONFIG_DRM_FBDEV_OVERALLOC=100 \
 	CONFIG_DRM_SUN4I \
 	CONFIG_DRM_SUN4I_HDMI \
 	CONFIG_DRM_SUN4I_HDMI_CEC=n \
@@ -168,8 +172,11 @@ define KernelPackage/sun4i-drm
 	CONFIG_DRM_SUN8I_DW_HDMI \
 	CONFIG_DRM_SUN6I_DSI \
 	CONFIG_DRM_SUN8I_MIXER \
-	CONFIG_DRM_PANEL_SIMPLE \
+	CONFIG_DRM_PANEL_SIMPLE=y \
 	CONFIG_DRM_PANEL=y \
+	CONFIG_DRM_GEM_CMA_HELPER=y \
+	CONFIG_DRM_KMS_CMA_HELPER=y \
+	CONFIG_RESET_CONTROLLER=y \
 	CONFIG_DRM_PANEL_SAMSUNG_LD9040=n \
 	CONFIG_DRM_PANEL_SAMSUNG_S6E8AA0=n \
 	CONFIG_DRM_PANEL_LG_LG4573=n \
@@ -177,15 +184,19 @@ define KernelPackage/sun4i-drm
 	CONFIG_DRM_PANEL_LVDS=n \
 	CONFIG_DRM_PANEL_S6E8AA0=n \
 	CONFIG_DRM_PANEL_SITRONIX_ST7789V=n
+
     FILES:= \
 	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun4i-drm.ko \
 	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun4i-backend.ko \
  	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun4i-frontend.ko \
 	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun4i-tcon.ko \
 	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun4i_tv.ko \
- 	$(LINUX_DIR)/drivers/gpu/drm/panel/panel-simple.ko \
- 	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun8i_tcon_top.ko
-    AUTOLOAD:=$(call AutoProbe,sun4i-backend sun4i-frontend sun4i-tcon sun4i-drm sun4i_tv sun8i_tcon_top panel-simple)
+	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun6i_mipi_dsi.ko \
+	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun6i_drc.ko \
+	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun8i-mixer.ko \
+ 	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun8i_tcon_top.ko \
+ 	$(LINUX_DIR)/drivers/gpu/drm/panel/panel-simple.ko
+    AUTOLOAD:=$(call AutoLoad,08,sun4i-drm sun4i-backend sun4i-frontend sun4i-tcon sun4i_tv sun6i_mipi_dsi sun6i_drc sun8i-mixer sun8i_tcon_top panel-simple)
 endef
 
 define KernelPackage/sun4i-drm/description
@@ -193,28 +204,6 @@ define KernelPackage/sun4i-drm/description
 endef
 
 $(eval $(call KernelPackage,sun4i-drm))
-
-define KernelPackage/sun8i-drm
-    SUBMENU:=$(DISPLAY_MENU)
-    TITLE:=DRM Support for Allwinner Display Engine 2.0
-    DEPENDS:=@TARGET_sunxi +kmod-sun4i-drm
-    KCONFIG:= \
-	CONFIG_DRM_SUN8I_DW_HDMI \
-	CONFIG_DRM_SUN6I_DSI \
-	CONFIG_DRM_SUN8I_MIXER
-    FILES:= \
-	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun6i_mipi_dsi.ko \
-	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun6i_drc.ko \
-	$(LINUX_DIR)/drivers/gpu/drm/sun4i/sun8i-mixer.ko
-    AUTOLOAD:=$(call AutoProbe,sun6i_mipi_dsi sun6i_drc sun8i-mixer)
-endef
-
-define KernelPackage/sun8i-drm/description
-  DRM Support for Allwinner Display Engine 2.0
-endef
-
-$(eval $(call KernelPackage,sun8i-drm))
-
 
 define KernelPackage/sunxi-musb
   SUBMENU:=$(USB_MENU)
