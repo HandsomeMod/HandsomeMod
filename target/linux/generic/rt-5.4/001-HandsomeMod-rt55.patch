@@ -2907,37 +2907,24 @@ index 384ccb00f9e1..2f8df8ef8644 100644
  		ctr_crypt_final(&walk, ctx);
  		err = skcipher_walk_done(&walk, 0);
 diff --git a/arch/x86/crypto/chacha_glue.c b/arch/x86/crypto/chacha_glue.c
-index 388f95a4ec24..f8e9ee81c39d 100644
+index 4c4dc6439..7f848d912 100644
 --- a/arch/x86/crypto/chacha_glue.c
 +++ b/arch/x86/crypto/chacha_glue.c
-@@ -127,7 +127,6 @@ static int chacha_simd_stream_xor(struct skcipher_walk *walk,
- 				  const struct chacha_ctx *ctx, const u8 *iv)
- {
- 	u32 *state, state_buf[16 + 2] __aligned(8);
--	int next_yield = 4096; /* bytes until next FPU yield */
- 	int err = 0;
- 
- 	BUILD_BUG_ON(CHACHA_STATE_ALIGN != 16);
-@@ -140,20 +139,14 @@ static int chacha_simd_stream_xor(struct skcipher_walk *walk,
- 
- 		if (nbytes < walk->total) {
- 			nbytes = round_down(nbytes, walk->stride);
--			next_yield -= nbytes;
- 		}
- 
- 		chacha_dosimd(state, walk->dst.virt.addr, walk->src.virt.addr,
- 			      nbytes, ctx->nrounds);
- 
--		if (next_yield <= 0) {
--			/* temporarily allow preemption */
--			kernel_fpu_end();
+@@ -183,13 +183,15 @@ static int chacha_simd_stream_xor(struct skcipher_request *req,
+ 					     walk.src.virt.addr, nbytes,
+ 					     ctx->nrounds);
+ 		} else {
 -			kernel_fpu_begin();
--			next_yield = 4096;
--		}
--
+ 			chacha_dosimd(state, walk.dst.virt.addr,
+ 				      walk.src.virt.addr, nbytes,
+ 				      ctx->nrounds);
+-			kernel_fpu_end();
+ 		}
++
 +		kernel_fpu_end();
- 		err = skcipher_walk_done(walk, walk->nbytes - nbytes);
+ 		err = skcipher_walk_done(&walk, walk.nbytes - nbytes);
 +		kernel_fpu_begin();
++
  	}
  
  	return err;
@@ -23617,18 +23604,18 @@ index ee00c6c8a373..62acf00f9fc3 100644
  	  Say Y here if you want the kernel to run a short self-test during
  	  bootup. The self-test checks whether common types of locking bugs
 diff --git a/lib/Makefile b/lib/Makefile
-index c5892807e06f..f613804d2f84 100644
+index b95d801f3..b5981941f 100644
 --- a/lib/Makefile
 +++ b/lib/Makefile
-@@ -26,7 +26,7 @@ endif
+@@ -36,7 +36,7 @@ endif
  
  lib-y := ctype.o string.o vsprintf.o cmdline.o \
  	 rbtree.o radix-tree.o timerqueue.o xarray.o \
--	 idr.o extable.o \
-+	 idr.o extable.o printk_ringbuffer.o \
- 	 sha1.o chacha.o irq_regs.o argv_split.o \
+-	 idr.o extable.o sha1.o irq_regs.o argv_split.o \
++	 idr.o extable.o printk_ringbuffer.o sha1.o irq_regs.o argv_split.o \
  	 flex_proportions.o ratelimit.o show_mem.o \
  	 is_single_threaded.o plist.o decompress.o kobject_uevent.o \
+ 	 earlycpio.o seq_buf.o siphash.o dec_and_lock.o \
 diff --git a/lib/bust_spinlocks.c b/lib/bust_spinlocks.c
 index 8be59f84eaea..c6e083323d1b 100644
 --- a/lib/bust_spinlocks.c
