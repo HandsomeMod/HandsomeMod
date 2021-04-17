@@ -31,9 +31,8 @@ define KernelPackage/video-core
 	CONFIG_V4L_PCI_DRIVERS=y \
 	CONFIG_V4L_PLATFORM_DRIVERS=y \
 	CONFIG_V4L_ISA_PARPORT_DRIVERS=y
-  FILES:= \
-	$(LINUX_DIR)/drivers/media/$(V4L2_DIR)/videodev.ko
-  AUTOLOAD:=$(call AutoLoad,60, videodev v4l2-common)
+  FILES:= $(LINUX_DIR)/drivers/media/$(V4L2_DIR)/videodev.ko
+  AUTOLOAD:=$(call AutoLoad,60, videodev)
 endef
 
 define KernelPackage/video-core/description
@@ -69,7 +68,7 @@ define KernelPackage/video-videobuf2
 	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-memops.ko \
 	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-vmalloc.ko \
 	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-dma-contig.ko
-  AUTOLOAD:=$(call AutoLoad,65,videobuf2-core videobuf-v4l2 videobuf2-memops videobuf2-vmalloc videobuf2-dma-contig)
+  AUTOLOAD:=$(call AutoLoad,65,videobuf2-core videobuf2-v4l2 videobuf2-memops videobuf2-vmalloc videobuf2-dma-contig)
   $(call AddDepends/video)
 endef
 
@@ -655,12 +654,13 @@ $(eval $(call KernelPackage,video-gspca-konica))
 define KernelPackage/video-csi-core
   MENU:=1
   TITLE:=MIPI/CSI Based Camera core support framework
-  DEPENDS:=+kmod-video-core +kmod-video-gspca-core
+  DEPENDS:=+kmod-video-core +kmod-video-gspca-core +kmod-i2c-algo-bit
   KCONFIG:= \
 	CONFIG_VIDEO_V4L2=y \
   	CONFIG_VIDEO_V4L2_SUBDEV_API=y \
   	CONFIG_MEDIA_CONTROLLER=y \
   	CONFIG_MEDIA_CONTROLLER_REQUEST_API=y \
+  	CONFIG_VIDEO_V4L2_I2C=y \
   	CONFIG_VIDEO_TDA1997X=n \
   	CONFIG_VIDEO_ADV748X=n \
   	CONFIG_VIDEO_ADV7604=n \
