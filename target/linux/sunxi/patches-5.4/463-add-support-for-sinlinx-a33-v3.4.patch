@@ -1,14 +1,14 @@
-From 7fb7727d2d7d2717609f1b7831ee2c2b81109363 Mon Sep 17 00:00:00 2001
+From c6e8cd9d113a86c009767a4d88eca6cd1f9e64ca Mon Sep 17 00:00:00 2001
 From: handsomeyingyan <handsomeyingyan@github.com>
-Date: Thu, 8 Apr 2021 12:43:50 +0800
-Subject: [PATCH] add initial support for sinlinx a33 v3.4
+Date: Wed, 21 Apr 2021 21:09:11 +0800
+Subject: [PATCH] add support for sinlinx sina33 v3.4
 
 ---
  arch/arm/boot/dts/Makefile                    |   1 +
  arch/arm/boot/dts/sun8i-a23-a33.dtsi          |  26 +
- .../boot/dts/sun8i-a33-sinlinx-sina33-v3.dts  | 459 ++++++++++++++++++
+ .../boot/dts/sun8i-a33-sinlinx-sina33-v3.dts  | 514 ++++++++++++++++++
  arch/arm/boot/dts/sun8i-a33.dtsi              |  15 +-
- 4 files changed, 500 insertions(+), 1 deletion(-)
+ 4 files changed, 555 insertions(+), 1 deletion(-)
  create mode 100755 arch/arm/boot/dts/sun8i-a33-sinlinx-sina33-v3.dts
 
 diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile
@@ -24,7 +24,7 @@ index 0379baea4..d013d9f5e 100755
  	sun8i-a83t-bananapi-m3.dtb \
  	sun8i-a83t-cubietruck-plus.dtb \
 diff --git a/arch/arm/boot/dts/sun8i-a23-a33.dtsi b/arch/arm/boot/dts/sun8i-a23-a33.dtsi
-index f292f96ab..5851e8ccf 100755
+index f292f96ab..5ed2d35ac 100755
 --- a/arch/arm/boot/dts/sun8i-a23-a33.dtsi
 +++ b/arch/arm/boot/dts/sun8i-a23-a33.dtsi
 @@ -355,6 +355,13 @@
@@ -59,7 +59,7 @@ index f292f96ab..5851e8ccf 100755
  		};
 +		
 +		csi: camera@1cb0000 {
-+			compatible = "allwinner,sun8i-h3-csi";
++			compatible = "allwinner,sun6i-a31-csi","allwinner,sun8i-h3-csi";
 +			reg = <0x01cb0000 0x1000>;
 +			interrupts = <GIC_SPI 84 IRQ_TYPE_LEVEL_HIGH>;
 +			clocks = <&ccu CLK_BUS_CSI>,
@@ -76,10 +76,10 @@ index f292f96ab..5851e8ccf 100755
  			compatible = "allwinner,sun6i-a31-r-intc";
 diff --git a/arch/arm/boot/dts/sun8i-a33-sinlinx-sina33-v3.dts b/arch/arm/boot/dts/sun8i-a33-sinlinx-sina33-v3.dts
 new file mode 100755
-index 000000000..8d2067013
+index 000000000..9d196d57e
 --- /dev/null
 +++ b/arch/arm/boot/dts/sun8i-a33-sinlinx-sina33-v3.dts
-@@ -0,0 +1,459 @@
+@@ -0,0 +1,514 @@
 +/*
 + * Copyright 2021 HandsomeYingyan <handsomeyingyan@gmail.com>
 + *
@@ -118,14 +118,12 @@ index 000000000..8d2067013
 +		pwms = <&pwm 0 50000 PWM_POLARITY_INVERTED>;
 +		brightness-levels = <0 10 20 30 40 50 60 70 80 90 100>;
 +		default-brightness-level = <8>;
-+		enable-gpios = <&pio 7 7 GPIO_ACTIVE_HIGH>; /* PH7 */
-+	}; 
-+
++		enable-gpios = <&pio 7 0 GPIO_ACTIVE_HIGH>; /* PH0 */
++	};
++	
 +	panel {
 +		compatible = "netron-dy,e231732";
 +		backlight = <&backlight>;
-+		enable-gpios = <&pio 7 7 GPIO_ACTIVE_HIGH>; /* PH7 */
-+		power-supply = <&reg_dldo1>;
 +
 +		port {
 +			panel_input: endpoint {
@@ -140,13 +138,22 @@ index 000000000..8d2067013
 +		regulator-min-microvolt = <5000000>;
 +		regulator-max-microvolt = <5000000>;
 +	};
++	
++	wl_reg_on: regulator-wl-reg-on {
++		compatible = "regulator-fixed";
++		regulator-name = "wl-reg-on";
++		regulator-min-microvolt = <3000000>;
++		regulator-max-microvolt = <3000000>;
 +
-+	wifi_pwrseq: wifi_pwrseq {
-+		compatible = "mmc-pwrseq-simple";
-+		reset-gpios = <&r_pio 0 6 GPIO_ACTIVE_LOW>; /* PL06 */
-+		clocks = <&rtc 1>;
-+		clock-names = "ext_clock";
++		startup-delay-us = <100000>;
++
++		gpio = <&r_pio 0 6 GPIO_ACTIVE_HIGH>; /* PL06 */
++		enable-active-high;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&wifi_reg_on_sina33>;
 +	};
++	
 +	
 +       	cam_xclk: cam-xclk {
 +                	#clock-cells = <0>;
@@ -158,6 +165,12 @@ index 000000000..8d2067013
 +};
 +
 +&codec {
++	allwinner,audio-routing =
++		"Headphone", "HP",
++		"Headphone", "HPCOM",
++		"MIC1", "Headset Mic",
++		"Mic",  "MBIAS",
++		"Headset Mic", "HBIAS";
 +	status = "okay";
 +};
 +
@@ -191,25 +204,29 @@ index 000000000..8d2067013
 +	status = "okay";
 +};
 +
++&pwm {
++	status = "okay";
++};
++
 +&lradc {
 +	vref-supply = <&reg_dcdc1>;
 +	status = "okay";
 +
-+	button-200 {
++	button-1 {
 +		label = "Volume Up";
 +		linux,code = <KEY_VOLUMEUP>;
 +		channel = <0>;
-+		voltage = <191011>;
++		voltage = <180000>;
 +	};
 +
-+	button-400 {
++	button-2 {
 +		label = "Volume Down";
 +		linux,code = <KEY_VOLUMEDOWN>;
 +		channel = <0>;
-+		voltage = <391304>;
++		voltage = <390000>;
 +	};
 +
-+	button-600 {
++	button-3 {
 +		label = "Home";
 +		linux,code = <KEY_HOME>;
 +		channel = <0>;
@@ -226,29 +243,36 @@ index 000000000..8d2067013
 +
 +/* AP6210 */
 +&mmc1 {
++	vmmc-supply = <&reg_vcc3v3>;
++	vqmmc-supply = <&wl_reg_on>;
++
 +	pinctrl-names = "default";
-+	pinctrl-0 = <&mmc1_pg_pins>;
-+	vmmc-supply = <&reg_aldo1>;
-+	mmc-pwrseq = <&wifi_pwrseq>;
++    	pinctrl-0 = <&mmc1_pg_pins>;
 +	bus-width = <4>;
 +	non-removable;
 +	status = "okay";
-+
++	
 +	brcmf: wifi@1 {
-+		
 +		reg = <1>;
 +		compatible = "brcm,bcm4329-fmac";
 +		interrupt-parent = <&r_pio>;
 +		interrupts = <0 7 IRQ_TYPE_LEVEL_LOW>; /* PL07 */
++		pinctrl-names = "default";
++        		pinctrl-0 = <&wifi_irq_sina33>;
 +		interrupt-names = "host-wake";
 +	};
 +	
 +};
 +
++&mmc1_pg_pins {
++    /* AP6210 requires pull-up */
++    bias-pull-up;
++};
++
++
 +&mmc2 {
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&mmc2_8bit_pins>;
 +	vmmc-supply = <&reg_dcdc1>;
++	pinctrl-0 = <&mmc2_8bit_pins>;
 +	bus-width = <8>;
 +	non-removable;
 +	cap-mmc-hw-reset;
@@ -258,6 +282,8 @@ index 000000000..8d2067013
 +&mmc2_8bit_pins {
 +	/* Increase drive strength for DDR modes */
 +	drive-strength = <40>;
++	/* eMMC is missing pull-ups */
++    	bias-pull-up;
 +};
 +
 +&ohci0 {
@@ -363,12 +389,12 @@ index 000000000..8d2067013
 +             regulator-name = "cam-dovdd";
 +};
 +
-+&reg_eldo1 {
-+	regulator-always-on;
-+	regulator-min-microvolt = <3000000>;
-+	regulator-max-microvolt = <3000000>;
-+	regulator-name = "vcc-touchscreen";
-+};
++//&reg_eldo1 {
++	//regulator-always-on;
++//	regulator-min-microvolt = <3000000>;
++//	regulator-max-microvolt = <3000000>;
++//	regulator-name = "vcc-touchscreen";
++//};
 +
 +&reg_eldo2 {
 +	regulator-min-microvolt = <1800000>;
@@ -444,17 +470,53 @@ index 000000000..8d2067013
 +/*  Sinlinx A33 v3.4 has a ft5316 touchscreen*/
 +&i2c0 {
 +	status = "okay";
-+
-+	touchscreen: touchscreen@39 {
-+		compatible = "edt,edt-ft5306";
-+		reg = <0x39>;
-+        		vddio-supply = <&reg_eldo1>;
++	
++	touchscreen: touchscreen@38 {
++		compatible = "edt,edt-ft5x06","edt,edt-ft5306";
++		reg = <0x38>;
 +		interrupt-parent = <&pio>;
 +		interrupts = <1 5 IRQ_TYPE_EDGE_FALLING>; /* PB5 */
-+		power-gpios = <&pio 7 1 GPIO_ACTIVE_HIGH>; /* PH1 */
++		wake-gpios = <&pio 7 1 GPIO_ACTIVE_HIGH>; /* PH1 */
++		pinctrl-names = "default";
++        		pinctrl-0 = <&edt_ft5x06_pins_a &edt_ft5x06_pins_b>;
 +		touchscreen-size-x = <1024>;
 +        		touchscreen-size-y = <600>;
-+		status = "okay";
++        		touchscreen-inverted-x;
++        		touchscreen-inverted-y;
++	};
++};
++
++&pio {
++        edt_ft5x06_pins_a: ft5@0 { // ft5316 interrupt
++                pins               = "PB5";
++                function           = "irq";
++                drive-strength     = <20>;
++                bias-pull-up;
++        };
++
++        edt_ft5x06_pins_b: ft5@1 { // ft5316 reset-gpios
++                pins               = "PH1";
++                function           = "gpio_out";
++                drive-strength     = <20>;
++                bias-pull-up;
++                output-high;
++        };
++        
++};
++
++&r_pio { 
++	wifi_irq_sina33: wifi-irq-pins { //ap6210 irq
++		pins = "PL7";
++                	function  = "irq";
++                	drive-strength = <20>;
++                	bias-pull-up;
++	};
++	
++	wifi_reg_on_sina33: wifi-reg-on-pins { //ap6210 on
++		pins = "PL6";
++		function = "gpio_out";
++		bias-pull-up;
++		output-high;
 +	};
 +};
 +
@@ -482,9 +544,9 @@ index 000000000..8d2067013
 +&i2c2 {
 +   status = "okay";
 +
-+   ov5640: camera@3c {
++   ov5640: camera@78 {
 +        compatible = "ovti,ov5640";
-+        reg = <0x3c>;
++        reg = <0x78>;
 +        clocks = <&cam_xclk>;
 +        clock-names = "xclk";
 +
@@ -524,19 +586,12 @@ index 000000000..8d2067013
 +
 +&usbphy {
 +	usb0_id_det-gpios = <&pio 7 8 GPIO_ACTIVE_HIGH>; /* PH8 */
-+	usb0_vbus_power-supply = <&usb_power_supply>;
-+	usb0_vbus-supply = <&reg_drivevbus>;
++	usb0_vbus-supply = <&reg_vcc5v0>;
 +	usb1_vbus-supply = <&reg_vcc5v0>;
 +	status = "okay";
 +};
 +
 +&ion {
-+	status = "okay";
-+};
-+
-+&pwm {
-+	pinctrl-names = "default";
-+	pinctrl-0 = <&pwm0_pin>;
 +	status = "okay";
 +};
 diff --git a/arch/arm/boot/dts/sun8i-a33.dtsi b/arch/arm/boot/dts/sun8i-a33.dtsi
