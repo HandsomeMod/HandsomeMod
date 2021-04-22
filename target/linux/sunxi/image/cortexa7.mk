@@ -270,7 +270,7 @@ TARGET_DEVICES += sinlinx_sinlinx-sina33-v3
 define Device/pine64_pinecube
   DEVICE_VENDOR := Pine64
   DEVICE_MODEL := Pinecube IPCam
-  DEVICE_PACKAGES:=kmod-rtc-sunxi 
+  DEVICE_PACKAGES:=kmod-rtc-sunxi kmod-rtl8189es kmod-sun6i-csi kmod-video-csi-ov5640
   SOC := sun8i-s3
 endef
 
