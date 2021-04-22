@@ -266,3 +266,12 @@ define Device/sinlinx_sinlinx-sina33-v3
 endef
 
 TARGET_DEVICES += sinlinx_sinlinx-sina33-v3
+
+define Device/pine64_pinecube
+  DEVICE_VENDOR := Pine64
+  DEVICE_MODEL := Pinecube IPCam
+  DEVICE_PACKAGES:=kmod-rtc-sunxi 
+  SOC := sun8i-s3
+endef
+
+TARGET_DEVICES += pine64_pinecube

@@ -1,0 +1,517 @@
+From d3b54c6a6232d11728c13f689d41115c452670c8 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Thu, 22 Apr 2021 09:21:53 +0800
+Subject: [PATCH] add support for pine64 pinecube
+
+---
+ arch/arm/boot/dts/Makefile                    |   1 +
+ arch/arm/boot/dts/sun8i-s3-pinecube.dts       | 259 ++++++++++++++++++
+ arch/arm/boot/dts/sun8i-v3.dtsi               |  13 +
+ .../boot/dts/sun8i-v3s-licheepi-zero-dock.dts |   8 +
+ arch/arm/boot/dts/sun8i-v3s.dtsi              | 103 +++++--
+ 5 files changed, 366 insertions(+), 18 deletions(-)
+ create mode 100755 arch/arm/boot/dts/sun8i-s3-pinecube.dts
+
+diff --git a/arch/arm/boot/dts/Makefile b/arch/arm/boot/dts/Makefile
+index d013d9f5e..4c5414c13 100755
+--- a/arch/arm/boot/dts/Makefile
++++ b/arch/arm/boot/dts/Makefile
+@@ -1128,6 +1128,7 @@ dtb-$(CONFIG_MACH_SUN8I) += \
+ 	sun8i-r16-parrot.dtb \
+ 	sun8i-r40-bananapi-m2-ultra.dtb \
+ 	sun8i-s3-lichee-zero-plus.dtb \
++	sun8i-s3-pinecube.dtb \
+ 	sun8i-t3-cqa3t-bv3.dtb \
+ 	sun8i-v3s-licheepi-zero.dtb \
+ 	sun8i-v3s-licheepi-zero-dock.dtb \
+diff --git a/arch/arm/boot/dts/sun8i-s3-pinecube.dts b/arch/arm/boot/dts/sun8i-s3-pinecube.dts
+new file mode 100755
+index 000000000..df68e501c
+--- /dev/null
++++ b/arch/arm/boot/dts/sun8i-s3-pinecube.dts
+@@ -0,0 +1,259 @@
++// SPDX-License-Identifier: (GPL-2.0+ OR X11)
++/*
++ * Copyright 2019 Icenowy Zheng <icenowy@aosc.io>
++ */
++
++/dts-v1/;
++#include "sun8i-v3.dtsi"
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++
++/ {
++	model = "PineCube IP Camera";
++	compatible = "pine64,pinecube", "allwinner,sun8i-s3";
++
++	aliases {
++		serial0 = &uart2;
++	};
++
++	chosen {
++		stdout-path = "serial0:115200n8";
++	};
++
++	leds {
++		compatible = "gpio-leds";
++
++		led1 {
++			label = "pine64:ir:led1";
++			gpios = <&pio 1 10 GPIO_ACTIVE_HIGH>; /* PB10 */
++		};
++
++		led2 {
++			label = "pine64:ir:led2";
++			gpios = <&pio 1 12 GPIO_ACTIVE_HIGH>; /* PB12 */
++		};
++	};
++
++	reg_vcc5v0: vcc5v0 {
++		compatible = "regulator-fixed";
++		regulator-name = "vcc5v0";
++		regulator-min-microvolt = <5000000>;
++		regulator-max-microvolt = <5000000>;
++	};
++
++	reg_vcc_wifi: vcc-wifi {
++		compatible = "regulator-fixed";
++		regulator-name = "vcc-wifi";
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++		gpio = <&pio 1 2 GPIO_ACTIVE_LOW>; /* PB2 WIFI-EN */
++		vin-supply = <&reg_dcdc3>;
++		startup-delay-us = <200000>;
++	};
++
++	wifi_pwrseq: wifi_pwrseq {
++		compatible = "mmc-pwrseq-simple";
++		reset-gpios = <&pio 1 3 GPIO_ACTIVE_LOW>; /* PB3 WIFI-RST */
++		post-power-on-delay-ms = <200>;
++	};
++};
++
++&csi1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&csi1_8bit_pins>;
++	status = "okay";
++
++	port {
++		#address-cells = <1>;
++		#size-cells = <0>;
++
++		csi1_ep: endpoint {
++			remote-endpoint = <&ov5640_ep>;
++			bus-width = <8>;
++			hsync-active = <1>; /* Active high */
++			vsync-active = <0>; /* Active low */
++			data-active = <1>;  /* Active high */
++			pclk-sample = <1>;  /* Rising */
++		};
++	};
++};
++
++&ehci0 {
++	phys = <&usbphy 0>;
++	phy-names = "usb";
++	status = "okay";
++};
++
++&emac {
++	phy-handle = <&int_mii_phy>;
++	phy-mode = "mii";
++	status = "okay";
++};
++
++&i2c0 {
++	status = "okay";
++
++	axp209: pmic@34 {
++		compatible = "x-powers,axp203",
++			     "x-powers,axp209";
++		reg = <0x34>;
++		interrupt-parent = <&gic>;
++		interrupts = <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
++		interrupt-controller;
++		#interrupt-cells = <1>;
++	};
++};
++
++&i2c1 {
++	pinctrl-names = "default";
++	pinctrl-0 = <&i2c1_pe_pins>;
++	status = "okay";
++
++	ov5640: camera@3c {
++		compatible = "ovti,ov5640";
++		reg = <0x3c>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&csi1_mclk_pin>;
++		clocks = <&ccu CLK_CSI1_MCLK>;
++		clock-names = "xclk";
++
++		AVDD-supply = <&reg_ldo3>;
++		DOVDD-supply = <&reg_ldo3>;
++		DVDD-supply = <&reg_ldo4>;
++		reset-gpios = <&pio 4 23 GPIO_ACTIVE_LOW>; /* PE23 */
++		powerdown-gpios = <&pio 4 24 GPIO_ACTIVE_HIGH>; /* PE24 */
++
++		port {
++			ov5640_ep: endpoint {
++				remote-endpoint = <&csi1_ep>;
++				bus-width = <8>;
++				hsync-active = <1>; /* Active high */
++				vsync-active = <0>; /* Active low */
++				data-active = <1>;  /* Active high */
++				pclk-sample = <1>;  /* Rising */
++			};
++		};
++	};
++};
++
++&lradc {
++	vref-supply = <&reg_ldo2>;
++	status = "okay";
++
++	button-200 {
++		label = "Setup";
++		linux,code = <KEY_SETUP>;
++		channel = <0>;
++		voltage = <190000>;
++	};
++};
++
++&mmc0 {
++	vmmc-supply = <&reg_dcdc3>;
++	bus-width = <4>;
++	cd-gpios = <&pio 5 6 GPIO_ACTIVE_LOW>;
++	status = "okay";
++};
++
++&mmc1 {
++	vmmc-supply = <&reg_vcc_wifi>;
++	vqmmc-supply = <&reg_dcdc3>;
++	mmc-pwrseq = <&wifi_pwrseq>;
++	bus-width = <4>;
++	non-removable;
++	status = "okay";
++};
++
++&ohci0 {
++	phys = <&usbphy 0>;
++	phy-names = "usb";
++	status = "okay";
++};
++
++&pio {
++	vcc-pd-supply = <&reg_dcdc3>;
++	vcc-pe-supply = <&reg_ldo3>;
++};
++
++#include "axp209.dtsi"
++
++&ac_power_supply {
++	status = "okay";
++};
++
++&battery_power_supply {
++	status = "okay";
++};
++
++&reg_dcdc2 {
++	regulator-always-on;
++	regulator-min-microvolt = <1250000>;
++	regulator-max-microvolt = <1250000>;
++	regulator-name = "vdd-sys-cpu-ephy";
++};
++
++&reg_dcdc3 {
++	regulator-always-on;
++	regulator-min-microvolt = <3300000>;
++	regulator-max-microvolt = <3300000>;
++	regulator-name = "vcc-3v3";
++};
++
++&reg_ldo1 {
++	regulator-name = "vdd-rtc";
++};
++
++&reg_ldo2 {
++	regulator-always-on;
++	regulator-min-microvolt = <3000000>;
++	regulator-max-microvolt = <3000000>;
++	regulator-name = "avcc";
++};
++
++&reg_ldo3 {
++	regulator-min-microvolt = <2800000>;
++	regulator-max-microvolt = <2800000>;
++	regulator-name = "avdd-dovdd-2v8-csi";
++	regulator-soft-start;
++	regulator-ramp-delay = <1600>;
++};
++
++&reg_ldo4 {
++	regulator-min-microvolt = <1800000>;
++	regulator-max-microvolt = <1800000>;
++	regulator-name = "dvdd-1v8-csi";
++};
++
++&spi0 {
++	status = "okay";
++
++	flash@0 {
++		#address-cells = <1>;
++		#size-cells = <1>;
++		compatible = "xtx,xt25f128b", "jedec,spi-nor";
++		reg = <0>;
++		spi-max-frequency = <40000000>;
++	};
++};
++
++&uart2 {
++	status = "okay";
++};
++
++&usbphy {
++	usb0_vbus-supply = <&reg_vcc5v0>;
++	status = "okay";
++};
++
++&i2s0 {
++	status = "okay";
++};
++
++&codec {
++	allwinner,pa-gpio = <&pio 6 6 GPIO_ACTIVE_HIGH>; /*PG6*/
++	allwinner,audio-routing =
++		"Speaker", "LINEOUT",
++		"MIC1", "Mic",
++		"Mic",  "MBIAS";
++	status = "okay";
++};
+diff --git a/arch/arm/boot/dts/sun8i-v3.dtsi b/arch/arm/boot/dts/sun8i-v3.dtsi
+index 6ae8645ad..20b6583e6 100755
+--- a/arch/arm/boot/dts/sun8i-v3.dtsi
++++ b/arch/arm/boot/dts/sun8i-v3.dtsi
+@@ -12,3 +12,16 @@
+ &pio {
+ 	compatible = "allwinner,sun8i-v3-pinctrl";
+ };
++
++&emac {
++	/delete-property/ phy-handle;
++	/delete-property/ phy-mode;
++};
++
++&mdio_mux {
++	external_mdio: mdio@2 {
++		reg = <2>;
++		#address-cells = <1>;
++		#size-cells = <0>;
++	};
++};
+diff --git a/arch/arm/boot/dts/sun8i-v3s-licheepi-zero-dock.dts b/arch/arm/boot/dts/sun8i-v3s-licheepi-zero-dock.dts
+index 5c0d748d1..8d24ab8ac 100755
+--- a/arch/arm/boot/dts/sun8i-v3s-licheepi-zero-dock.dts
++++ b/arch/arm/boot/dts/sun8i-v3s-licheepi-zero-dock.dts
+@@ -160,6 +160,14 @@
+     };
+ };
+ 
++&ohci0 {
++	status = "okay";
++};
++
++&ehci0 {
++	status = "okay";
++};
++
+ &lradc {
+ 	vref-supply = <&reg_vcc3v0>;
+ 	status = "okay";
+diff --git a/arch/arm/boot/dts/sun8i-v3s.dtsi b/arch/arm/boot/dts/sun8i-v3s.dtsi
+index f8c455d7c..b49410ea4 100755
+--- a/arch/arm/boot/dts/sun8i-v3s.dtsi
++++ b/arch/arm/boot/dts/sun8i-v3s.dtsi
+@@ -141,6 +141,15 @@
+              };
+     	};
+      };
++     
++    nmi_intc: interrupt-controller@1c000d0 {
++            compatible = "allwinner,sun8i-v3s-nmi",
++	            "allwinner,sun9i-a80-nmi";
++            interrupt-controller;
++            #interrupt-cells = <2>;
++            reg = <0x01c000d0 0x0c>;
++            interrupts = <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
++     };
+ 
+        cedarx: video-codec@1c0e000 {
+          compatible = "allwinner,sun8i-v3-cedar",
+@@ -366,16 +375,42 @@
+             interrupt-controller;
+             #interrupt-cells = <3>;
+ 
++	/omit-if-no-ref/
++            csi1_8bit_pins: csi1-8bit-pins {
++	   pins = "PE0", "PE2", "PE3", "PE8", "PE9",
++	          "PE10", "PE11", "PE12", "PE13", "PE14",
++	          "PE15";
++	          function = "csi";
++	};
++
++	/omit-if-no-ref/
++	csi1_mclk_pin: csi1-mclk-pin {
++	    pins = "PE1";
++	    function = "csi";
++	};
++
+             i2c0_pins: i2c0-pins {
+                 pins = "PB6", "PB7";
+                 function = "i2c0";
+             };
++            
++            /omit-if-no-ref/
++           i2c1_pe_pins: i2c1-pe-pins {
++	   pins = "PE21", "PE22";
++	   function = "i2c1";
++           };
++
+ 
+             uart0_pb_pins: uart0-pb-pins {
+                 pins = "PB8", "PB9";
+                 function = "uart0";
+             };
+ 
++            uart2_pins: uart2-pins {
++	   pins = "PB0", "PB1";
++	   function = "uart2";
++             };
++
+             mmc0_pins: mmc0-pins {
+                 pins = "PF0", "PF1", "PF2", "PF3",
+                        "PF4", "PF5";
+@@ -411,16 +446,7 @@
+                        "PE10", "PE11", "PE12", "PE13", "PE14", "PE15",
+                        "PE16", "PE17", "PE18", "PE19", "PE23", "PE24";
+                 function = "lcd";
+-            };
+-
+-/*            emac_rgmii_pins: emac-rgmii-pins {
+-                pins = "PD0", "PD1", "PD2", "PD3", "PD4",
+-                       "PD5", "PD7", "PD8", "PD9", "PD10",
+-                       "PD12", "PD13", "PD15", "PD16", "PD17";
+-                function = "emac";
+-                drive-strength = <40>;
+-            };
+-*/            
++            };      
+         };
+ 
+         timer@1c20c00 {
+@@ -485,6 +511,18 @@
+ 		reg = <0x01c23000 0x4>;
+ 	};
+ 
++	i2s0: i2s@1c22000 {
++		#sound-dai-cells = <0>;
++		compatible = "allwinner,sun8i-h3-i2s";
++		reg = <0x01c22000 0x400>;
++		interrupts = <GIC_SPI 13 IRQ_TYPE_LEVEL_HIGH>;
++		clocks = <&ccu CLK_BUS_I2S0>, <&ccu CLK_I2S0>;
++		clock-names = "apb", "mod";
++		dmas = <&dma 3>, <&dma 3>;
++		resets = <&ccu RST_BUS_I2S0>; /* TODO: Areset/sun8i-v3s-ccu says this isn't available on V3s */
++		dma-names = "rx", "tx";
++		status = "disabled";
++	};
+ 
+         uart2: serial@1c28800 {
+             compatible = "snps,dw-apb-uart";
+@@ -494,6 +532,8 @@
+             reg-io-width = <4>;
+             clocks = <&ccu CLK_BUS_UART2>;
+             resets = <&ccu RST_BUS_UART2>;
++            pinctrl-0 = <&uart2_pins>;
++            pinctrl-names = "default";
+             status = "disabled";
+         };
+ 
+@@ -538,7 +578,7 @@
+         gic: interrupt-controller@1c81000 {
+             compatible = "arm,gic-400";
+             reg = <0x01c81000 0x1000>,
+-                  <0x01c82000 0x1000>,
++                  <0x01c82000 0x2000>,
+                   <0x01c84000 0x2000>,
+                   <0x01c86000 0x2000>;
+             interrupt-controller;
+@@ -556,6 +596,8 @@
+             reset-names = "stmmaceth";
+             clocks = <&ccu CLK_BUS_EMAC>;
+             clock-names = "stmmaceth";
++            phy-handle = <&int_mii_phy>;
++            phy-mode = "mii";
+             status = "disabled";
+ 
+             mdio: mdio {
+@@ -564,7 +606,7 @@
+                 compatible = "snps,dwmac-mdio";
+             };
+ 
+-            mdio-mux {
++            mdio_mux: mdio-mux {
+                 compatible = "allwinner,sun8i-h3-mdio-mux";
+                 #address-cells = <1>;
+                 #size-cells = <0>;
+@@ -584,15 +626,40 @@
+                         resets = <&ccu RST_BUS_EPHY>;
+                     };
+                 };
+-
+-                external_mdio: mdio@2 {
+-                    reg = <2>;
+-                    #address-cells = <1>;
+-                    #size-cells = <0>;
+-                };
+             };
+         };
+ 
++       ehci0: usb@1c1a000 {
++            compatible = "allwinner,sun8i-v3s-ehci", "generic-ehci";
++            reg = <0x01c1a000 0x100>;
++            interrupts = <GIC_SPI 72 IRQ_TYPE_LEVEL_HIGH>;
++            clocks = <&ccu CLK_BUS_EHCI0>, <&ccu CLK_BUS_OHCI0>;
++            resets = <&ccu RST_BUS_EHCI0>, <&ccu RST_BUS_OHCI0>;
++            status = "disabled";
++       };
++ 
++       ohci0: usb@1c1a400 {
++            compatible = "allwinner,sun8i-v3s-ohci", "generic-ohci";
++            reg = <0x01c1a400 0x100>;
++            interrupts = <GIC_SPI 73 IRQ_TYPE_LEVEL_HIGH>;
++            clocks = <&ccu CLK_BUS_EHCI0>, <&ccu CLK_BUS_OHCI0>,
++                     <&ccu CLK_USB_OHCI0>;
++            resets = <&ccu RST_BUS_EHCI0>, <&ccu RST_BUS_OHCI0>;
++            status = "disabled";
++      };
++
++        csi1: camera@1cb4000 {
++	compatible = "allwinner,sun8i-v3s-csi";
++	reg = <0x01cb4000 0x3000>;
++	interrupts = <GIC_SPI 84 IRQ_TYPE_LEVEL_HIGH>;
++	clocks = <&ccu CLK_BUS_CSI>,
++	         <&ccu CLK_CSI1_SCLK>,
++	         <&ccu CLK_DRAM_CSI>;
++	clock-names = "bus", "mod", "ram";
++	resets = <&ccu RST_BUS_CSI>;
++	status = "disabled";
++        };
++
+         pwm: pwm@1c21400 {
+             compatible = "allwinner,sun8i-h3-pwm";
+             reg = <0x01c21400 0x8>;
+-- 
+2.31.1
+

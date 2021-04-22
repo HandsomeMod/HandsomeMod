@@ -312,7 +312,7 @@ endef
 
 define U-Boot/LicheePi_Zero
   BUILD_SUBTARGET:=cortexa7
-  NAME:=U-Boot for LicheePi Zero(V3s)
+  NAME:=U-Boot for LicheePi Zero (V3s)
   BUILD_DEVICES:=sipeed_licheepi-zero-dock
 endef
 
@@ -339,7 +339,7 @@ endef
 
 define U-Boot/Sinlinx_SinA33
   BUILD_SUBTARGET:=cortexa7
-  NAME:=U-Boot for Sinlinx SinA33(A33)
+  NAME:=U-Boot for Sinlinx SinA33 (A33)
   BUILD_DEVICES:=sinlinx_sinlinx-sina33
 endef
 
@@ -347,6 +347,12 @@ define U-Boot/Sinlinx_SinA33_V3
   BUILD_SUBTARGET:=cortexa7
   NAME:=U-Boot for Sinlinx SinA33 V3.4 (A33)
   BUILD_DEVICES:=sinlinx_sinlinx-sina33-v3
+endef
+
+define U-Boot/pinecube
+  BUILD_SUBTARGET:=cortexa7
+  NAME:=U-Boot for Pinecube (S3)
+  BUILD_DEVICES:=pine64_pinecube
 endef
 
 UBOOT_TARGETS := \
@@ -400,7 +406,8 @@ UBOOT_TARGETS := \
 	widora_tiny200_v2 \
 	widora_tiny200_v3 \
 	Sinlinx_SinA33 \
-	Sinlinx_SinA33_V3
+	Sinlinx_SinA33_V3 \
+	pinecube
 
 UBOOT_CONFIGURE_VARS += USE_PRIVATE_LIBGCC=yes
 
