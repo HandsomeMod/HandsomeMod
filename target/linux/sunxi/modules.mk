@@ -265,7 +265,7 @@ define KernelPackage/sunxi-cedarx
          CONFIG_VIDEO_SUNXI_CEDAR_VE \
          CONFIG_CMA=y \
          CONFIG_DMA_CMA=y \
-         CONFIG_CMA_SIZE_MBYTES=21 \
+         CONFIG_CMA_SIZE_MBYTES=16 \
          CONFIG_CMA_SIZE_SEL_MBYTES=y \
          CONFIG_CMA_ALIGNMENT=8 \
          CONFIG_CMA_AREAS=7
@@ -291,7 +291,7 @@ define KernelPackage/sunxi-cedrus
          CONFIG_VIDEO_SH_VEU=n \
          CONFIG_CMA=y \
          CONFIG_DMA_CMA=y \
-         CONFIG_CMA_SIZE_MBYTES=21 \
+         CONFIG_CMA_SIZE_MBYTES=16 \
          CONFIG_CMA_SIZE_SEL_MBYTES=y \
          CONFIG_CMA_ALIGNMENT=8 \
          CONFIG_CMA_AREAS=7
