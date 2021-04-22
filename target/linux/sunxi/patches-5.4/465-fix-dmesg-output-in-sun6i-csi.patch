@@ -1,0 +1,82 @@
+From 8bc4f1be3a09495e85ee33425114616383d5404e Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Thu, 22 Apr 2021 10:14:04 +0800
+Subject: [PATCH] fix dmesg output in sun6i-csi
+
+---
+ drivers/media/platform/sunxi/sun6i-csi/sun6i_csi.c   | 10 +++++-----
+ drivers/media/platform/sunxi/sun6i-csi/sun6i_video.c |  4 ++--
+ 2 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/media/platform/sunxi/sun6i-csi/sun6i_csi.c b/drivers/media/platform/sunxi/sun6i-csi/sun6i_csi.c
+index 055eb0b8e..717980c4f 100755
+--- a/drivers/media/platform/sunxi/sun6i-csi/sun6i_csi.c
++++ b/drivers/media/platform/sunxi/sun6i-csi/sun6i_csi.c
+@@ -76,13 +76,13 @@ bool sun6i_csi_is_format_supported(struct sun6i_csi *csi,
+ 			case MEDIA_BUS_FMT_YVYU8_1X16:
+ 				return true;
+ 			default:
+-				dev_dbg(sdev->dev, "Unsupported mbus code: 0x%x\n",
++				dev_info(sdev->dev, "Unsupported mbus code: 0x%x\n",
+ 					mbus_code);
+ 				break;
+ 			}
+ 			break;
+ 		default:
+-			dev_dbg(sdev->dev, "Unsupported pixformat: 0x%x\n",
++			dev_info(sdev->dev, "Unsupported pixformat: 0x%x\n",
+ 				pixformat);
+ 			break;
+ 		}
+@@ -139,7 +139,7 @@ bool sun6i_csi_is_format_supported(struct sun6i_csi *csi,
+ 		case MEDIA_BUS_FMT_YVYU8_2X8:
+ 			return true;
+ 		default:
+-			dev_dbg(sdev->dev, "Unsupported mbus code: 0x%x\n",
++			dev_info(sdev->dev, "Unsupported mbus code: 0x%x\n",
+ 				mbus_code);
+ 			break;
+ 		}
+@@ -154,7 +154,7 @@ bool sun6i_csi_is_format_supported(struct sun6i_csi *csi,
+ 		return (mbus_code == MEDIA_BUS_FMT_JPEG_1X8);
+ 
+ 	default:
+-		dev_dbg(sdev->dev, "Unsupported pixformat: 0x%x\n", pixformat);
++		dev_info(sdev->dev, "Unsupported pixformat: 0x%x\n", pixformat);
+ 		break;
+ 	}
+ 
+@@ -647,7 +647,7 @@ static int sun6i_csi_link_entity(struct sun6i_csi *csi,
+ 	sink = &csi->video.vdev.entity;
+ 	sink_pad = &csi->video.pad;
+ 
+-	dev_dbg(csi->dev, "creating %s:%u -> %s:%u link\n",
++	dev_info(csi->dev, "creating %s:%u -> %s:%u link\n",
+ 		entity->name, src_pad_index, sink->name, sink_pad->index);
+ 	ret = media_create_pad_link(entity, src_pad_index, sink,
+ 				    sink_pad->index,
+diff --git a/drivers/media/platform/sunxi/sun6i-csi/sun6i_video.c b/drivers/media/platform/sunxi/sun6i-csi/sun6i_video.c
+index f0dfe6848..e54290993 100755
+--- a/drivers/media/platform/sunxi/sun6i-csi/sun6i_video.c
++++ b/drivers/media/platform/sunxi/sun6i-csi/sun6i_video.c
+@@ -264,7 +264,7 @@ void sun6i_video_frame_done(struct sun6i_video *video)
+ 	buf = list_first_entry(&video->dma_queue,
+ 			       struct sun6i_csi_buffer, list);
+ 	if (list_is_last(&buf->list, &video->dma_queue)) {
+-		dev_dbg(video->csi->dev, "Frame dropped!\n");
++		dev_info(video->csi->dev, "Frame dropped!\n");
+ 		goto unlock;
+ 	}
+ 
+@@ -277,7 +277,7 @@ void sun6i_video_frame_done(struct sun6i_video *video)
+ 	if (!next_buf->queued_to_csi) {
+ 		next_buf->queued_to_csi = true;
+ 		sun6i_csi_update_buf_addr(video->csi, next_buf->dma_addr);
+-		dev_dbg(video->csi->dev, "Frame dropped!\n");
++		dev_info(video->csi->dev, "Frame dropped!\n");
+ 		goto unlock;
+ 	}
+ 
+-- 
+2.31.1
+
