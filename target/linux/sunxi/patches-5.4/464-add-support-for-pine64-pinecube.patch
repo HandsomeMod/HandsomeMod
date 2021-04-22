@@ -338,10 +338,10 @@ index f8c455d7c..b49410ea4 100755
      	};
       };
 +     
-+//    nmi_intc: interrupt-controller@1c000d0 {
-+//            compatible = "allwinner,sun8i-v3s-nmi",
-+//	            "allwinner,sun9i-a80-nmi";
-+//            interrupt-controller;
++//   nmi_intc: interrupt-controller@1c000d0 {
++//           compatible = "allwinner,sun8i-v3s-nmi",
++//            "allwinner,sun9i-a80-nmi";
++//          interrupt-controller;
 +//            #interrupt-cells = <2>;
 +//            reg = <0x01c000d0 0x0c>;
 +//            interrupts = <GIC_SPI 32 IRQ_TYPE_LEVEL_HIGH>;
