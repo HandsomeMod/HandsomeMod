@@ -1,0 +1,90 @@
+From ad7d0392128944bc25c12c27596198f817be5c62 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Tue, 18 Jul 2017 16:41:48 +0800
+Subject: [PATCH 095/131] HID: Add some usb-ids ILITEK touch screen driver
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/hid/hid-ids.h        | 12 ++++++++++-
+ drivers/hid/hid-multitouch.c | 42 +++++++++++++++++++++++++++++++++++-
+ 2 files changed, 52 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/hid/hid-ids.h b/drivers/hid/hid-ids.h
+index 2aa810665a78..f8ed626372aa 100644
+--- a/drivers/hid/hid-ids.h
++++ b/drivers/hid/hid-ids.h
+@@ -601,7 +601,17 @@
+ #define USB_DEVICE_ID_IDEACOM_IDC6680	0x6680
+ 
+ #define USB_VENDOR_ID_ILITEK		0x222a
+-#define USB_DEVICE_ID_ILITEK_MULTITOUCH	0x0001
++#define USB_DEVICE_ID_ILITEK_MULTITOUCH01	0x0001
++#define USB_DEVICE_ID_ILITEK_MULTITOUCH02	0x0002
++#define USB_DEVICE_ID_ILITEK_MULTITOUCH06	0x0006
++#define USB_DEVICE_ID_ILITEK_MULTITOUCH10	0x0010
++#define USB_DEVICE_ID_ILITEK_MULTITOUCH15	0x0015
++#define USB_DEVICE_ID_ILITEK_MULTITOUCH1C	0x001C
++#define USB_DEVICE_ID_ILITEK_MULTITOUCH1F	0x001F
++#define USB_DEVICE_ID_ILITEK_MULTITOUCH24	0x0024
++#define USB_DEVICE_ID_ILITEK_MULTITOUCH41	0x0041
++#define USB_DEVICE_ID_ILITEK_MULTITOUCH88	0x0088
++#define USB_DEVICE_ID_ILITEK_MULTITOUCH94	0x0094
+ 
+ #define USB_VENDOR_ID_INTEL_0		0x8086
+ #define USB_VENDOR_ID_INTEL_1		0x8087
+diff --git a/drivers/hid/hid-multitouch.c b/drivers/hid/hid-multitouch.c
+index 128d8f4319b9..70b46bcc5b0b 100644
+--- a/drivers/hid/hid-multitouch.c
++++ b/drivers/hid/hid-multitouch.c
+@@ -2005,7 +2005,47 @@ static const struct hid_device_id mt_devices[] = {
+ 	/* Ilitek dual touch panel */
+ 	{  .driver_data = MT_CLS_NSMU,
+ 		MT_USB_DEVICE(USB_VENDOR_ID_ILITEK,
+-			USB_DEVICE_ID_ILITEK_MULTITOUCH) },
++			USB_DEVICE_ID_ILITEK_MULTITOUCH01) },
++
++	{  .driver_data = MT_CLS_NSMU,
++		MT_USB_DEVICE(USB_VENDOR_ID_ILITEK,
++			USB_DEVICE_ID_ILITEK_MULTITOUCH02) },
++
++	{  .driver_data = MT_CLS_NSMU,
++		MT_USB_DEVICE(USB_VENDOR_ID_ILITEK,
++			USB_DEVICE_ID_ILITEK_MULTITOUCH06) },
++
++	{  .driver_data = MT_CLS_NSMU,
++		MT_USB_DEVICE(USB_VENDOR_ID_ILITEK,
++			USB_DEVICE_ID_ILITEK_MULTITOUCH10) },
++
++	{  .driver_data = MT_CLS_NSMU,
++		MT_USB_DEVICE(USB_VENDOR_ID_ILITEK,
++			USB_DEVICE_ID_ILITEK_MULTITOUCH15) },
++
++	{  .driver_data = MT_CLS_NSMU,
++		MT_USB_DEVICE(USB_VENDOR_ID_ILITEK,
++			USB_DEVICE_ID_ILITEK_MULTITOUCH1C) },
++
++	{  .driver_data = MT_CLS_NSMU,
++		MT_USB_DEVICE(USB_VENDOR_ID_ILITEK,
++			USB_DEVICE_ID_ILITEK_MULTITOUCH1F) },
++
++	{  .driver_data = MT_CLS_NSMU,
++		MT_USB_DEVICE(USB_VENDOR_ID_ILITEK,
++			USB_DEVICE_ID_ILITEK_MULTITOUCH24) },
++
++	{  .driver_data = MT_CLS_NSMU,
++		MT_USB_DEVICE(USB_VENDOR_ID_ILITEK,
++			USB_DEVICE_ID_ILITEK_MULTITOUCH41) },
++
++	{  .driver_data = MT_CLS_NSMU,
++		MT_USB_DEVICE(USB_VENDOR_ID_ILITEK,
++			USB_DEVICE_ID_ILITEK_MULTITOUCH88) },
++
++	{  .driver_data = MT_CLS_NSMU,
++		MT_USB_DEVICE(USB_VENDOR_ID_ILITEK,
++			USB_DEVICE_ID_ILITEK_MULTITOUCH94) },
+ 
+ 	/* LG Melfas panel */
+ 	{ .driver_data = MT_CLS_LG,
+-- 
+2.31.1
+

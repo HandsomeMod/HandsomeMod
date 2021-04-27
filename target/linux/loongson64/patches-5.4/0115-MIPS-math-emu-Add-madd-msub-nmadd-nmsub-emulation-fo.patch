@@ -1,0 +1,342 @@
+From 82747f9c458ab413c14a78b2dc4bff53f7a70334 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Mon, 18 Dec 2017 10:41:43 +0800
+Subject: [PATCH 115/131] MIPS: math-emu: Add madd/msub/nmadd/nmsub emulation
+ for Loongson-3
+
+Add madd.s/madd.d/msub.s/msub.d/nmadd.s/nmadd.d/nmsub.s/nmsub.d
+emulation for Loongson-3. MIPS R2 suggest these instructions be
+unfused, but Loongson-3 suggest these instructions be fused, which
+is similar to maddf/msubf in MIPS R6.
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+Signed-off-by: Pei Huang <huangpei@loongson.cn>
+---
+ arch/mips/math-emu/cp1emu.c     | 32 ++++++++++++++++++++
+ arch/mips/math-emu/dp_maddf.c   | 53 ++++++++++++++++++++++-----------
+ arch/mips/math-emu/ieee754.h    | 16 ++++++++++
+ arch/mips/math-emu/ieee754int.h |  1 +
+ arch/mips/math-emu/sp_maddf.c   | 53 ++++++++++++++++++++++-----------
+ 5 files changed, 119 insertions(+), 36 deletions(-)
+
+diff --git a/arch/mips/math-emu/cp1emu.c b/arch/mips/math-emu/cp1emu.c
+index 710e1f804a54..10c29f9fd70e 100644
+--- a/arch/mips/math-emu/cp1emu.c
++++ b/arch/mips/math-emu/cp1emu.c
+@@ -1451,6 +1451,7 @@ static union ieee754sp fpemu_sp_rsqrt(union ieee754sp s)
+ 	return ieee754sp_div(ieee754sp_one(0), ieee754sp_sqrt(s));
+ }
+ 
++#ifndef CONFIG_CPU_LOONGSON3
+ DEF3OP(madd, sp, ieee754sp_mul, ieee754sp_add, );
+ DEF3OP(msub, sp, ieee754sp_mul, ieee754sp_sub, );
+ DEF3OP(nmadd, sp, ieee754sp_mul, ieee754sp_add, ieee754sp_neg);
+@@ -1459,6 +1460,7 @@ DEF3OP(madd, dp, ieee754dp_mul, ieee754dp_add, );
+ DEF3OP(msub, dp, ieee754dp_mul, ieee754dp_sub, );
+ DEF3OP(nmadd, dp, ieee754dp_mul, ieee754dp_add, ieee754dp_neg);
+ DEF3OP(nmsub, dp, ieee754dp_mul, ieee754dp_sub, ieee754dp_neg);
++#endif
+ 
+ static int fpux_emu(struct pt_regs *xcp, struct mips_fpu_struct *ctx,
+ 	mips_instruction ir, void __user **fault_addr)
+@@ -1513,6 +1515,20 @@ static int fpux_emu(struct pt_regs *xcp, struct mips_fpu_struct *ctx,
+ 			}
+ 			break;
+ 
++#ifdef CONFIG_CPU_LOONGSON3
++		case madd_s_op:
++			handler = ieee754sp_madd;
++			goto scoptop;
++		case msub_s_op:
++			handler = ieee754sp_msub;
++			goto scoptop;
++		case nmadd_s_op:
++			handler = ieee754sp_nmadd;
++			goto scoptop;
++		case nmsub_s_op:
++			handler = ieee754sp_nmsub;
++			goto scoptop;
++#else
+ 		case madd_s_op:
+ 			handler = fpemu_sp_madd;
+ 			goto scoptop;
+@@ -1525,6 +1541,7 @@ static int fpux_emu(struct pt_regs *xcp, struct mips_fpu_struct *ctx,
+ 		case nmsub_s_op:
+ 			handler = fpemu_sp_nmsub;
+ 			goto scoptop;
++#endif
+ 
+ 		      scoptop:
+ 			SPFROMREG(fr, MIPSInst_FR(ir));
+@@ -1609,6 +1626,20 @@ static int fpux_emu(struct pt_regs *xcp, struct mips_fpu_struct *ctx,
+ 			}
+ 			break;
+ 
++#ifdef CONFIG_CPU_LOONGSON3
++		case madd_d_op:
++			handler = ieee754dp_madd;
++			goto dcoptop;
++		case msub_d_op:
++			handler = ieee754dp_msub;
++			goto dcoptop;
++		case nmadd_d_op:
++			handler = ieee754dp_nmadd;
++			goto dcoptop;
++		case nmsub_d_op:
++			handler = ieee754dp_nmsub;
++			goto dcoptop;
++#else
+ 		case madd_d_op:
+ 			handler = fpemu_dp_madd;
+ 			goto dcoptop;
+@@ -1621,6 +1652,7 @@ static int fpux_emu(struct pt_regs *xcp, struct mips_fpu_struct *ctx,
+ 		case nmsub_d_op:
+ 			handler = fpemu_dp_nmsub;
+ 			goto dcoptop;
++#endif
+ 
+ 		      dcoptop:
+ 			DPFROMREG(fr, MIPSInst_FR(ir));
+diff --git a/arch/mips/math-emu/dp_maddf.c b/arch/mips/math-emu/dp_maddf.c
+index 3da0ce44cdef..e24ef374d828 100644
+--- a/arch/mips/math-emu/dp_maddf.c
++++ b/arch/mips/math-emu/dp_maddf.c
+@@ -68,6 +68,12 @@ static union ieee754dp _dp_maddf(union ieee754dp z, union ieee754dp x,
+ 
+ 	ieee754_clearcx();
+ 
++	rs = xs ^ ys;
++	if (flags & MADDF_NEGATE_PRODUCT)
++		rs ^= 1;
++	if (flags & MADDF_NEGATE_ADDITION)
++		zs ^= 1;
++
+ 	/*
+ 	 * Handle the cases when at least one of x, y or z is a NaN.
+ 	 * Order of precedence is sNaN, qNaN and z, x, y.
+@@ -104,9 +110,7 @@ static union ieee754dp _dp_maddf(union ieee754dp z, union ieee754dp x,
+ 	case CLPAIR(IEEE754_CLASS_INF, IEEE754_CLASS_NORM):
+ 	case CLPAIR(IEEE754_CLASS_INF, IEEE754_CLASS_DNORM):
+ 	case CLPAIR(IEEE754_CLASS_INF, IEEE754_CLASS_INF):
+-		if ((zc == IEEE754_CLASS_INF) &&
+-		    ((!(flags & MADDF_NEGATE_PRODUCT) && (zs != (xs ^ ys))) ||
+-		     ((flags & MADDF_NEGATE_PRODUCT) && (zs == (xs ^ ys))))) {
++		if ((zc == IEEE754_CLASS_INF) && (zs != rs)) {
+ 			/*
+ 			 * Cases of addition of infinities with opposite signs
+ 			 * or subtraction of infinities with same signs.
+@@ -116,15 +120,10 @@ static union ieee754dp _dp_maddf(union ieee754dp z, union ieee754dp x,
+ 		}
+ 		/*
+ 		 * z is here either not an infinity, or an infinity having the
+-		 * same sign as product (x*y) (in case of MADDF.D instruction)
+-		 * or product -(x*y) (in MSUBF.D case). The result must be an
+-		 * infinity, and its sign is determined only by the value of
+-		 * (flags & MADDF_NEGATE_PRODUCT) and the signs of x and y.
++		 * same sign as product (x*y). The result must be an infinity,
++		 * and its sign is determined only by the sign of product (x*y).
+ 		 */
+-		if (flags & MADDF_NEGATE_PRODUCT)
+-			return ieee754dp_inf(1 ^ (xs ^ ys));
+-		else
+-			return ieee754dp_inf(xs ^ ys);
++		return ieee754dp_inf(rs);
+ 
+ 	case CLPAIR(IEEE754_CLASS_ZERO, IEEE754_CLASS_ZERO):
+ 	case CLPAIR(IEEE754_CLASS_ZERO, IEEE754_CLASS_NORM):
+@@ -135,10 +134,7 @@ static union ieee754dp _dp_maddf(union ieee754dp z, union ieee754dp x,
+ 			return ieee754dp_inf(zs);
+ 		if (zc == IEEE754_CLASS_ZERO) {
+ 			/* Handle cases +0 + (-0) and similar ones. */
+-			if ((!(flags & MADDF_NEGATE_PRODUCT)
+-					&& (zs == (xs ^ ys))) ||
+-			    ((flags & MADDF_NEGATE_PRODUCT)
+-					&& (zs != (xs ^ ys))))
++			if (zs == rs)
+ 				/*
+ 				 * Cases of addition of zeros of equal signs
+ 				 * or subtraction of zeroes of opposite signs.
+@@ -187,9 +183,6 @@ static union ieee754dp _dp_maddf(union ieee754dp z, union ieee754dp x,
+ 	assert(ym & DP_HIDDEN_BIT);
+ 
+ 	re = xe + ye;
+-	rs = xs ^ ys;
+-	if (flags & MADDF_NEGATE_PRODUCT)
+-		rs ^= 1;
+ 
+ 	/* shunt to top of word */
+ 	xm <<= 64 - (DP_FBITS + 1);
+@@ -340,3 +333,27 @@ union ieee754dp ieee754dp_msubf(union ieee754dp z, union ieee754dp x,
+ {
+ 	return _dp_maddf(z, x, y, MADDF_NEGATE_PRODUCT);
+ }
++
++union ieee754dp ieee754dp_madd(union ieee754dp z, union ieee754dp x,
++				union ieee754dp y)
++{
++	return _dp_maddf(z, x, y, 0);
++}
++
++union ieee754dp ieee754dp_msub(union ieee754dp z, union ieee754dp x,
++				union ieee754dp y)
++{
++	return _dp_maddf(z, x, y, MADDF_NEGATE_ADDITION);
++}
++
++union ieee754dp ieee754dp_nmadd(union ieee754dp z, union ieee754dp x,
++				union ieee754dp y)
++{
++	return _dp_maddf(z, x, y, MADDF_NEGATE_PRODUCT|MADDF_NEGATE_ADDITION);
++}
++
++union ieee754dp ieee754dp_nmsub(union ieee754dp z, union ieee754dp x,
++				union ieee754dp y)
++{
++	return _dp_maddf(z, x, y, MADDF_NEGATE_PRODUCT);
++}
+diff --git a/arch/mips/math-emu/ieee754.h b/arch/mips/math-emu/ieee754.h
+index b9167bd4eb60..090caa740b1e 100644
+--- a/arch/mips/math-emu/ieee754.h
++++ b/arch/mips/math-emu/ieee754.h
+@@ -68,6 +68,14 @@ union ieee754sp ieee754sp_maddf(union ieee754sp z, union ieee754sp x,
+ 				union ieee754sp y);
+ union ieee754sp ieee754sp_msubf(union ieee754sp z, union ieee754sp x,
+ 				union ieee754sp y);
++union ieee754sp ieee754sp_madd(union ieee754sp z, union ieee754sp x,
++				union ieee754sp y);
++union ieee754sp ieee754sp_msub(union ieee754sp z, union ieee754sp x,
++				union ieee754sp y);
++union ieee754sp ieee754sp_nmadd(union ieee754sp z, union ieee754sp x,
++				union ieee754sp y);
++union ieee754sp ieee754sp_nmsub(union ieee754sp z, union ieee754sp x,
++				union ieee754sp y);
+ int ieee754sp_2008class(union ieee754sp x);
+ union ieee754sp ieee754sp_fmin(union ieee754sp x, union ieee754sp y);
+ union ieee754sp ieee754sp_fmina(union ieee754sp x, union ieee754sp y);
+@@ -103,6 +111,14 @@ union ieee754dp ieee754dp_maddf(union ieee754dp z, union ieee754dp x,
+ 				union ieee754dp y);
+ union ieee754dp ieee754dp_msubf(union ieee754dp z, union ieee754dp x,
+ 				union ieee754dp y);
++union ieee754dp ieee754dp_madd(union ieee754dp z, union ieee754dp x,
++				union ieee754dp y);
++union ieee754dp ieee754dp_msub(union ieee754dp z, union ieee754dp x,
++				union ieee754dp y);
++union ieee754dp ieee754dp_nmadd(union ieee754dp z, union ieee754dp x,
++				union ieee754dp y);
++union ieee754dp ieee754dp_nmsub(union ieee754dp z, union ieee754dp x,
++				union ieee754dp y);
+ int ieee754dp_2008class(union ieee754dp x);
+ union ieee754dp ieee754dp_fmin(union ieee754dp x, union ieee754dp y);
+ union ieee754dp ieee754dp_fmina(union ieee754dp x, union ieee754dp y);
+diff --git a/arch/mips/math-emu/ieee754int.h b/arch/mips/math-emu/ieee754int.h
+index 52b20119e315..2c3b13546ac8 100644
+--- a/arch/mips/math-emu/ieee754int.h
++++ b/arch/mips/math-emu/ieee754int.h
+@@ -16,6 +16,7 @@
+ 
+ enum maddf_flags {
+ 	MADDF_NEGATE_PRODUCT	= 1 << 0,
++	MADDF_NEGATE_ADDITION	= 1 << 1,
+ };
+ 
+ static inline void ieee754_clearcx(void)
+diff --git a/arch/mips/math-emu/sp_maddf.c b/arch/mips/math-emu/sp_maddf.c
+index d638354add6d..1b85b1a527ac 100644
+--- a/arch/mips/math-emu/sp_maddf.c
++++ b/arch/mips/math-emu/sp_maddf.c
+@@ -36,6 +36,12 @@ static union ieee754sp _sp_maddf(union ieee754sp z, union ieee754sp x,
+ 
+ 	ieee754_clearcx();
+ 
++	rs = xs ^ ys;
++	if (flags & MADDF_NEGATE_PRODUCT)
++		rs ^= 1;
++	if (flags & MADDF_NEGATE_ADDITION)
++		zs ^= 1;
++
+ 	/*
+ 	 * Handle the cases when at least one of x, y or z is a NaN.
+ 	 * Order of precedence is sNaN, qNaN and z, x, y.
+@@ -73,9 +79,7 @@ static union ieee754sp _sp_maddf(union ieee754sp z, union ieee754sp x,
+ 	case CLPAIR(IEEE754_CLASS_INF, IEEE754_CLASS_NORM):
+ 	case CLPAIR(IEEE754_CLASS_INF, IEEE754_CLASS_DNORM):
+ 	case CLPAIR(IEEE754_CLASS_INF, IEEE754_CLASS_INF):
+-		if ((zc == IEEE754_CLASS_INF) &&
+-		    ((!(flags & MADDF_NEGATE_PRODUCT) && (zs != (xs ^ ys))) ||
+-		     ((flags & MADDF_NEGATE_PRODUCT) && (zs == (xs ^ ys))))) {
++		if ((zc == IEEE754_CLASS_INF) && (zs != rs)) {
+ 			/*
+ 			 * Cases of addition of infinities with opposite signs
+ 			 * or subtraction of infinities with same signs.
+@@ -85,15 +89,10 @@ static union ieee754sp _sp_maddf(union ieee754sp z, union ieee754sp x,
+ 		}
+ 		/*
+ 		 * z is here either not an infinity, or an infinity having the
+-		 * same sign as product (x*y) (in case of MADDF.D instruction)
+-		 * or product -(x*y) (in MSUBF.D case). The result must be an
+-		 * infinity, and its sign is determined only by the value of
+-		 * (flags & MADDF_NEGATE_PRODUCT) and the signs of x and y.
++		 * same sign as product (x*y). The result must be an infinity,
++		 * and its sign is determined only by the sign of product (x*y).
+ 		 */
+-		if (flags & MADDF_NEGATE_PRODUCT)
+-			return ieee754sp_inf(1 ^ (xs ^ ys));
+-		else
+-			return ieee754sp_inf(xs ^ ys);
++		return ieee754sp_inf(rs);
+ 
+ 	case CLPAIR(IEEE754_CLASS_ZERO, IEEE754_CLASS_ZERO):
+ 	case CLPAIR(IEEE754_CLASS_ZERO, IEEE754_CLASS_NORM):
+@@ -104,10 +103,7 @@ static union ieee754sp _sp_maddf(union ieee754sp z, union ieee754sp x,
+ 			return ieee754sp_inf(zs);
+ 		if (zc == IEEE754_CLASS_ZERO) {
+ 			/* Handle cases +0 + (-0) and similar ones. */
+-			if ((!(flags & MADDF_NEGATE_PRODUCT)
+-					&& (zs == (xs ^ ys))) ||
+-			    ((flags & MADDF_NEGATE_PRODUCT)
+-					&& (zs != (xs ^ ys))))
++			if (zs == rs)
+ 				/*
+ 				 * Cases of addition of zeros of equal signs
+ 				 * or subtraction of zeroes of opposite signs.
+@@ -158,9 +154,6 @@ static union ieee754sp _sp_maddf(union ieee754sp z, union ieee754sp x,
+ 	assert(ym & SP_HIDDEN_BIT);
+ 
+ 	re = xe + ye;
+-	rs = xs ^ ys;
+-	if (flags & MADDF_NEGATE_PRODUCT)
+-		rs ^= 1;
+ 
+ 	/* Multiple 24 bit xm and ym to give 48 bit results */
+ 	rm64 = (uint64_t)xm * ym;
+@@ -260,3 +253,27 @@ union ieee754sp ieee754sp_msubf(union ieee754sp z, union ieee754sp x,
+ {
+ 	return _sp_maddf(z, x, y, MADDF_NEGATE_PRODUCT);
+ }
++
++union ieee754sp ieee754sp_madd(union ieee754sp z, union ieee754sp x,
++				union ieee754sp y)
++{
++	return _sp_maddf(z, x, y, 0);
++}
++
++union ieee754sp ieee754sp_msub(union ieee754sp z, union ieee754sp x,
++				union ieee754sp y)
++{
++	return _sp_maddf(z, x, y, MADDF_NEGATE_ADDITION);
++}
++
++union ieee754sp ieee754sp_nmadd(union ieee754sp z, union ieee754sp x,
++				union ieee754sp y)
++{
++	return _sp_maddf(z, x, y, MADDF_NEGATE_PRODUCT|MADDF_NEGATE_ADDITION);
++}
++
++union ieee754sp ieee754sp_nmsub(union ieee754sp z, union ieee754sp x,
++				union ieee754sp y)
++{
++	return _sp_maddf(z, x, y, MADDF_NEGATE_PRODUCT);
++}
+-- 
+2.31.1
+

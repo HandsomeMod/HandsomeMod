@@ -1,0 +1,162 @@
+From 6bb71cd1bfdb0d48a51c081e063990ad4463f05b Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Sat, 23 Dec 2017 14:02:02 +0800
+Subject: [PATCH 078/131] drm/radeon: just suspend the hw on pci shutdown
+
+This patch is borrowed from amdgpu. We can't just reuse pci_remove as
+there may be userspace still doing things.
+
+Cc: stable@vger.kernel.org
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/gpu/drm/radeon/radeon.h        |  9 ++++-----
+ drivers/gpu/drm/radeon/radeon_asic.c   |  4 ++--
+ drivers/gpu/drm/radeon/radeon_device.c | 10 +++++-----
+ drivers/gpu/drm/radeon/radeon_drv.c    | 22 ++++++++++++++--------
+ 4 files changed, 25 insertions(+), 20 deletions(-)
+
+diff --git a/drivers/gpu/drm/radeon/radeon.h b/drivers/gpu/drm/radeon/radeon.h
+index 13715d4e88f3..d9d3ebc78064 100644
+--- a/drivers/gpu/drm/radeon/radeon.h
++++ b/drivers/gpu/drm/radeon/radeon.h
+@@ -2200,11 +2200,10 @@ union radeon_asic_config {
+ };
+ 
+ /*
+- * asic initizalization from radeon_asic.c
++ * asic setup from radeon_asic.c
+  */
++int radeon_asic_setup(struct radeon_device *rdev);
+ void radeon_agp_disable(struct radeon_device *rdev);
+-int radeon_asic_init(struct radeon_device *rdev);
+-
+ 
+ /*
+  * IOCTL.
+@@ -2698,8 +2697,8 @@ static inline void radeon_ring_write(struct radeon_ring *ring, uint32_t v)
+ /*
+  * ASICs macro.
+  */
+-#define radeon_init(rdev) (rdev)->asic->init((rdev))
+-#define radeon_fini(rdev) (rdev)->asic->fini((rdev))
++#define radeon_asic_init(rdev) (rdev)->asic->init((rdev))
++#define radeon_asic_fini(rdev) (rdev)->asic->fini((rdev))
+ #define radeon_resume(rdev) (rdev)->asic->resume((rdev))
+ #define radeon_suspend(rdev) (rdev)->asic->suspend((rdev))
+ #define radeon_cs_parse(rdev, r, p) (rdev)->asic->ring[(r)]->cs_parse((p))
+diff --git a/drivers/gpu/drm/radeon/radeon_asic.c b/drivers/gpu/drm/radeon/radeon_asic.c
+index dc3c2227e06a..ce88511e652f 100644
+--- a/drivers/gpu/drm/radeon/radeon_asic.c
++++ b/drivers/gpu/drm/radeon/radeon_asic.c
+@@ -2306,7 +2306,7 @@ static struct radeon_asic kv_asic = {
+ };
+ 
+ /**
+- * radeon_asic_init - register asic specific callbacks
++ * radeon_asic_setup - register asic specific callbacks
+  *
+  * @rdev: radeon device pointer
+  *
+@@ -2315,7 +2315,7 @@ static struct radeon_asic kv_asic = {
+  * of crtcs and the register aperture accessors (all asics).
+  * Returns 0 for success.
+  */
+-int radeon_asic_init(struct radeon_device *rdev)
++int radeon_asic_setup(struct radeon_device *rdev)
+ {
+ 	radeon_register_accessor_init(rdev);
+ 
+diff --git a/drivers/gpu/drm/radeon/radeon_device.c b/drivers/gpu/drm/radeon/radeon_device.c
+index d40d312cbcf3..51f35ad964d1 100644
+--- a/drivers/gpu/drm/radeon/radeon_device.c
++++ b/drivers/gpu/drm/radeon/radeon_device.c
+@@ -1336,7 +1336,7 @@ int radeon_device_init(struct radeon_device *rdev,
+ 	rdev->vm_manager.max_pfn = radeon_vm_size << 18;
+ 
+ 	/* Set asic functions */
+-	r = radeon_asic_init(rdev);
++	r = radeon_asic_setup(rdev);
+ 	if (r)
+ 		return r;
+ 
+@@ -1443,7 +1443,7 @@ int radeon_device_init(struct radeon_device *rdev,
+ 	if (runtime)
+ 		vga_switcheroo_init_domain_pm_ops(rdev->dev, &rdev->vga_pm_domain);
+ 
+-	r = radeon_init(rdev);
++	r = radeon_asic_init(rdev);
+ 	if (r)
+ 		goto failed;
+ 
+@@ -1462,9 +1462,9 @@ int radeon_device_init(struct radeon_device *rdev,
+ 		 * with fallback to PCI or PCIE GART
+ 		 */
+ 		radeon_asic_reset(rdev);
+-		radeon_fini(rdev);
++		radeon_asic_fini(rdev);
+ 		radeon_agp_disable(rdev);
+-		r = radeon_init(rdev);
++		r = radeon_asic_init(rdev);
+ 		if (r)
+ 			goto failed;
+ 	}
+@@ -1531,7 +1531,7 @@ void radeon_device_fini(struct radeon_device *rdev)
+ 	rdev->shutdown = true;
+ 	/* evict vram memory */
+ 	radeon_bo_evict_vram(rdev);
+-	radeon_fini(rdev);
++	radeon_asic_fini(rdev);
+ 	if (!pci_is_thunderbolt_attached(rdev->pdev))
+ 		vga_switcheroo_unregister_client(rdev->pdev);
+ 	if (rdev->flags & RADEON_IS_PX)
+diff --git a/drivers/gpu/drm/radeon/radeon_drv.c b/drivers/gpu/drm/radeon/radeon_drv.c
+index ffc86d1dbbc4..78e238e3b3a3 100644
+--- a/drivers/gpu/drm/radeon/radeon_drv.c
++++ b/drivers/gpu/drm/radeon/radeon_drv.c
+@@ -50,6 +50,7 @@
+ #include <drm/drm_vblank.h>
+ #include <drm/radeon_drm.h>
+ 
++#include "radeon.h"
+ #include "radeon_drv.h"
+ 
+ /*
+@@ -413,15 +414,9 @@ radeon_pci_remove(struct pci_dev *pdev)
+ static void
+ radeon_pci_shutdown(struct pci_dev *pdev)
+ {
+-#ifdef CONFIG_PPC64
+ 	struct drm_device *ddev = pci_get_drvdata(pdev);
+-#endif
+-
+-	/* if we are running in a VM, make sure the device
+-	 * torn down properly on reboot/shutdown
+-	 */
+-	if (radeon_device_is_virtual())
+-		radeon_pci_remove(pdev);
++	struct drm_connector *connector;
++	struct radeon_device *rdev = ddev->dev_private;
+ 
+ #ifdef CONFIG_PPC64
+ 	/* Some adapters need to be suspended before a
+@@ -431,6 +426,17 @@ radeon_pci_shutdown(struct pci_dev *pdev)
+ 	 * some non-power boards.
+ 	 */
+ 	radeon_suspend_kms(ddev, true, true, false);
++#else
++	drm_modeset_lock_all(ddev);
++	list_for_each_entry(connector, &ddev->mode_config.connector_list, head)
++		drm_helper_connector_dpms(connector, DRM_MODE_DPMS_OFF);
++	drm_modeset_unlock_all(ddev);
++
++	radeon_suspend(rdev);
++
++	console_lock();
++	radeon_fbdev_set_suspend(rdev, 1);
++	console_unlock();
+ #endif
+ }
+ 
+-- 
+2.31.1
+

@@ -1,0 +1,26 @@
+From 7717e0bf15bd695276ca9def69f29709703c8129 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Fri, 3 Nov 2017 09:15:11 +0800
+Subject: [PATCH 083/131] sm750fb: change default screen resolution
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/staging/sm750fb/sm750.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/staging/sm750fb/sm750.c b/drivers/staging/sm750fb/sm750.c
+index 5b72aa81d94c..ca85b67defb3 100644
+--- a/drivers/staging/sm750fb/sm750.c
++++ b/drivers/staging/sm750fb/sm750.c
+@@ -34,7 +34,7 @@ static int g_hwcursor = 1;
+ static int g_noaccel;
+ static int g_nomtrr;
+ static const char *g_fbmode[] = {NULL, NULL};
+-static const char *g_def_fbmode = "1024x768-32@60";
++static const char *g_def_fbmode = "800x600-32@60";
+ static char *g_settings;
+ static int g_dualview;
+ static char *g_option;
+-- 
+2.31.1
+

@@ -1,0 +1,97 @@
+From 73b9e72235b483669bb1bf12fb70ec523b3c5f4b Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Fri, 15 Nov 2019 09:34:05 +0800
+Subject: [PATCH 098/131] MIPS: Loongson-3: Route UART0/UART1 interrupts to CPU
+
+Loongson-3A4000 and newer processors have separate UART0/UART1
+interrupt sources, so route them to CPU both.
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ arch/mips/include/asm/mach-loongson64/irq.h | 3 ++-
+ arch/mips/loongson64/loongson-3/ls2h-irq.c  | 7 ++++---
+ arch/mips/loongson64/loongson-3/ls7a-irq.c  | 7 ++++---
+ arch/mips/loongson64/loongson-3/rs780-irq.c | 9 +++++----
+ 4 files changed, 15 insertions(+), 11 deletions(-)
+
+diff --git a/arch/mips/include/asm/mach-loongson64/irq.h b/arch/mips/include/asm/mach-loongson64/irq.h
+index 6d9100ce78b2..ded2df802346 100644
+--- a/arch/mips/include/asm/mach-loongson64/irq.h
++++ b/arch/mips/include/asm/mach-loongson64/irq.h
+@@ -34,7 +34,8 @@
+ 	  LOONGSON3_REG32(LOONGSON3_REG_BASE, LOONGSON_INT_ROUTER_OFFSET + 0x2c)
+ #define LOONGSON_INT_ROUTER_ENTRY(n)	\
+ 	  LOONGSON3_REG8(LOONGSON3_REG_BASE, LOONGSON_INT_ROUTER_OFFSET + n)
+-#define LOONGSON_INT_ROUTER_LPC		LOONGSON_INT_ROUTER_ENTRY(0x0a)
++#define LOONGSON_INT_ROUTER_UART0	LOONGSON_INT_ROUTER_ENTRY(0x0a)
++#define LOONGSON_INT_ROUTER_UART1	LOONGSON_INT_ROUTER_ENTRY(0x0f)
+ #define LOONGSON_INT_ROUTER_HT1(n)	LOONGSON_INT_ROUTER_ENTRY(n + 0x18)
+ 
+ #define LOONGSON_INT_COREx_INTy(x, y)	(1<<(x) | 1<<(y+4))	/* route to int y of core x */
+diff --git a/arch/mips/loongson64/loongson-3/ls2h-irq.c b/arch/mips/loongson64/loongson-3/ls2h-irq.c
+index 463655528da4..ee73bea2b2a4 100644
+--- a/arch/mips/loongson64/loongson-3/ls2h-irq.c
++++ b/arch/mips/loongson64/loongson-3/ls2h-irq.c
+@@ -158,11 +158,12 @@ void ls2h_init_irq(void)
+ 	/* Route INTn0 to Core0 INT1 */
+ 	LOONGSON_INT_ROUTER_ENTRY(0) = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 1);
+ 
+-	/* Route the LPC interrupt to Core0 INT0 */
+-	LOONGSON_INT_ROUTER_LPC = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
++	/* Route the UART interrupt to Core0 INT0 */
++	LOONGSON_INT_ROUTER_UART0 = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
++	LOONGSON_INT_ROUTER_UART1 = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
+ 
+ 	/* Enable UART and INT0 interrupts */
+-	LOONGSON_INT_ROUTER_INTENSET = (0x1 << 10) | (1 << 0);
++	LOONGSON_INT_ROUTER_INTENSET = (0x1 << 15) | (0x1 << 10) | (0x1 << 0);
+ 
+ 	/* uart, keyboard, and mouse are active high */
+ 	(int_ctrl_regs + 0)->int_edge	= 0x00000000;
+diff --git a/arch/mips/loongson64/loongson-3/ls7a-irq.c b/arch/mips/loongson64/loongson-3/ls7a-irq.c
+index 4f34af93dee2..a161f736a5e3 100644
+--- a/arch/mips/loongson64/loongson-3/ls7a-irq.c
++++ b/arch/mips/loongson64/loongson-3/ls7a-irq.c
+@@ -142,9 +142,10 @@ void ls7a_init_irq(void)
+ {
+ 	int i;
+ 
+-	/* Route LPC int to cpu Core0 INT0 */
+-	LOONGSON_INT_ROUTER_LPC = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
+-	LOONGSON_INT_ROUTER_INTENSET = LOONGSON_INT_ROUTER_INTEN | 0x1 << 10;
++	/* Route UART int to cpu Core0 INT0 */
++	LOONGSON_INT_ROUTER_UART0 = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
++	LOONGSON_INT_ROUTER_UART1 = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
++	LOONGSON_INT_ROUTER_INTENSET = LOONGSON_INT_ROUTER_INTEN | (0x1 << 15) | (0x1 << 10);
+ 
+ 	/* Route INTn0 to Core0 INT1 (IP3) */
+ 	LOONGSON_INT_ROUTER_ENTRY(0) = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 1);
+diff --git a/arch/mips/loongson64/loongson-3/rs780-irq.c b/arch/mips/loongson64/loongson-3/rs780-irq.c
+index b7b93b3447ff..bfdd945bce3d 100644
+--- a/arch/mips/loongson64/loongson-3/rs780-irq.c
++++ b/arch/mips/loongson64/loongson-3/rs780-irq.c
+@@ -62,16 +62,17 @@ void rs780_init_irq(void)
+ 	int i;
+ 	struct irq_chip *chip;
+ 
+-	/* Route LPC int to cpu Core0 INT0 */
+-	LOONGSON_INT_ROUTER_LPC = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
++	/* Route UART int to cpu Core0 INT0 */
++	LOONGSON_INT_ROUTER_UART0 = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
++	LOONGSON_INT_ROUTER_UART1 = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
+ 	/* Route HT1 int0 ~ int3 to cpu Core0 INT1 */
+ 	for (i = 0; i < 4; i++)
+ 		LOONGSON_INT_ROUTER_HT1(i) = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 1);
+ 	/* Enable HT1 interrupts */
+ 	LOONGSON_HT1_INTN_EN(0) = 0xffffffff;
+ 	/* Enable router interrupt intenset */
+-	LOONGSON_INT_ROUTER_INTENSET =
+-		LOONGSON_INT_ROUTER_INTEN | (0xffff << 16) | 0x1 << 10;
++	LOONGSON_INT_ROUTER_INTENSET = LOONGSON_INT_ROUTER_INTEN |
++				       (0xffff << 16) | (0x1 << 15) | (0x1 << 10);
+ 
+ 	chip = irq_get_chip(I8259A_IRQ_BASE);
+ 	chip->irq_set_affinity = plat_set_irq_affinity;
+-- 
+2.31.1
+

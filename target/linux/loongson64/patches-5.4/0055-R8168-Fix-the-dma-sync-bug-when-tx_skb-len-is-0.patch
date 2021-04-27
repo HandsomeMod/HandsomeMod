@@ -1,0 +1,76 @@
+From f450681fc587f9bf3b91179e64665bf3f2450df9 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Sat, 9 Sep 2017 15:04:17 +0800
+Subject: [PATCH 055/131] R8168: Fix the dma sync bug when tx_skb->len is 0
+
+If the variable tx_skb->len is 0 in rtl8168_unmap_tx_skb(), the function
+pci_unmap_single() will trigger the kernel's dma sync bug, like this:
+
+[   25.500000] task: 98000000fce77840 ti: 98000000fddb8000 task.ti: 98000000fddb8000
+[   25.500000] $ 0   : 0000000000000000 ffffffffd500cce0 0000000000000001 0000000000000000
+[   25.500000] $ 4   : 98000000fdcc5802 0000000000000000 0000000000000000 0000000000000001
+[   25.500000] $ 8   : 0000000000000000 8080000000000000 0000000000000002 0000000000000002
+[   25.500000] $12   : ffffffffd500cce0 000000005000001f 0000000000000001 0000000000000000
+[   25.500000] $16   : 98000000fc7ab090 0000000000000001 0000000000000000 00000000fdcc5802
+[   25.500000] $20   : 98000000fc80a8f0 0000000000000000 0000000000000000 0000000000000005
+[   25.500000] $24   : a89244068124b587 ffffffff80223934
+[   25.500000] $28   : 98000000fddb8000 98000000fddbbce0 ffffffff80b10000 ffffffff802046c8
+[   25.500000] Hi    : 0000000000000000
+[   25.500000] Lo    : 0000000000000180
+[   25.500000] epc   : ffffffff80223940 r4k_dma_cache_wback_inv+0xc/0x74
+[   25.500000]     Not tainted
+[   25.500000] ra    : ffffffff802046c8 loongson_dma_unmap_page+0xe8/0x118
+[   25.500000] Status: d500cce2 KX SX UX KERNEL EXL
+[   25.500000] Cause : 10000034
+[   25.605468] Modules linked in: xt_tcpudp ip6t_REJECT ipt_REJECT xt_conntrack ip6table_nat
+               nf_conntrack_ipv6 nf_defrag_ipv6 nf_nat_ipv6 ip6table_mangle ip6table_security ip6t6
+[   25.605468] Process in:imjournal (pid: 226, threadinfo=98000000fddb8000, task=98000000fce77840, tls=000000ffde6928a0)
+[   25.605468] Stack : 0000000000000001 ffffffff802046c8 0000000000000000 98000000fddbbeb0
+                       9800000007d20400 90000000fd494000 98000000fc80a8f0 98000000fc7ab090
+                       00000000fdcc5802 ffffffff806ca96c 0000000000000000 98000000fc8087c0
+                       98000000fc808000 9000000044114000 0000000000000001 ffffffff806e1634
+                       0000000000000005 98000000fdbda380 ffffffff80a6cd00 0000000000000005
+                       0000000000000000 0000000000000000 ffffffff80a6cdc0 ffffffff8029fa34
+                       ffffffff80a6cd00 ffffffff80a6cd98 0000000000010000 fffffffff0000000
+                       ffffffffff000000 ffffffffffff0000 ffffffffffffffdf 000000ffea1b8110
+                       000000ffde68a7e8 ffffffff8029fc60 98000000fd719e00 ffffffff80a6cd00
+                       ffffffffd500cce0 ffffffff80a6cd00 ffffffff80a6cd98 ffffffff802a3640
+                       ...
+[   25.605468] Call Trace:
+[   25.605468] [<ffffffff80223940>] r4k_dma_cache_wback_inv+0xc/0x74
+[   25.605468] [<ffffffff802046c8>] loongson_dma_unmap_page+0xe8/0x118
+[   25.605468] [<ffffffff806ca96c>] rtl8168_unmap_tx_skb+0xd4/0x100
+[   25.605468] [<ffffffff806e1634>] rtl8168_interrupt+0x260/0x3a4
+[   25.605468] [<ffffffff8029fa34>] handle_irq_event_percpu+0x5c/0x234
+[   25.605468] [<ffffffff8029fc60>] handle_irq_event+0x54/0x8c
+[   25.605468] [<ffffffff802a3640>] handle_level_irq+0x12c/0x178
+[   25.605468] [<ffffffff8029f3a8>] generic_handle_irq+0x3c/0x54
+[   25.605468] [<ffffffff80208b18>] do_IRQ+0x18/0x24
+[   25.605468] [<ffffffff80202bfc>] loongson3_ipi_interrupt+0x1d0/0x2c4
+[   25.605468] [<ffffffff80206d00>] ret_from_irq+0x0/0x4
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/net/ethernet/realtek/r8168/r8168_n.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/net/ethernet/realtek/r8168/r8168_n.c b/drivers/net/ethernet/realtek/r8168/r8168_n.c
+index b3f16c62edac..886a13b147fc 100644
+--- a/drivers/net/ethernet/realtek/r8168/r8168_n.c
++++ b/drivers/net/ethernet/realtek/r8168/r8168_n.c
+@@ -28481,9 +28481,9 @@ rtl8168_tx_interrupt(struct net_device *dev,
+                 RTLDEV->stats.tx_bytes += len;
+                 RTLDEV->stats.tx_packets++;
+ 
+-                rtl8168_unmap_tx_skb(tp->pci_dev,
+-                                     tx_skb,
+-                                     tp->TxDescArray + entry);
++                if (len)
++                        rtl8168_unmap_tx_skb(tp->pci_dev, tx_skb,
++                                             tp->TxDescArray + entry);
+ 
+                 if (tx_skb->skb!=NULL) {
+ #if LINUX_VERSION_CODE >= KERNEL_VERSION(3,14,0)
+-- 
+2.31.1
+

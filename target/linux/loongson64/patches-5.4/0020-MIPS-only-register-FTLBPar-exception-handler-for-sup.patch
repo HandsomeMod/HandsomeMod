@@ -1,0 +1,93 @@
+From 291fac6bea64f65035bf1c1d5abe270d4e09339b Mon Sep 17 00:00:00 2001
+From: WANG Xuerui <git@xen0n.name>
+Date: Wed, 29 Jul 2020 21:14:15 +0800
+Subject: [PATCH 020/131] MIPS: only register FTLBPar exception handler for
+ supported models
+
+Previously ExcCode 16 is unconditionally treated as the FTLB parity
+exception (FTLBPar), but in fact its semantic is implementation-
+dependent. Looking at various manuals it seems the FTLBPar exception is
+only present on some recent MIPS Technologies cores, so only register
+the handler on these.
+
+Fixes: 75b5b5e0a262790f ("MIPS: Add support for FTLBs")
+Reviewed-by: Huacai Chen <chenhc@lemote.com>
+Signed-off-by: WANG Xuerui <git@xen0n.name>
+Cc: Paul Burton <paulburton@kernel.org>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ arch/mips/include/asm/cpu-features.h |  4 ++++
+ arch/mips/include/asm/cpu.h          |  1 +
+ arch/mips/kernel/cpu-probe.c         | 13 +++++++++++++
+ arch/mips/kernel/traps.c             |  3 ++-
+ 4 files changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/arch/mips/include/asm/cpu-features.h b/arch/mips/include/asm/cpu-features.h
+index 240b9e114145..7737b0e570fc 100644
+--- a/arch/mips/include/asm/cpu-features.h
++++ b/arch/mips/include/asm/cpu-features.h
+@@ -557,6 +557,10 @@
+ # define cpu_has_perf		__opt(MIPS_CPU_PERF)
+ #endif
+ 
++#ifndef cpu_has_ftlbparex
++# define cpu_has_ftlbparex	__opt(MIPS_CPU_FTLBPAREX)
++#endif
++
+ #ifdef CONFIG_SMP
+ /*
+  * Some systems share FTLB RAMs between threads within a core (siblings in
+diff --git a/arch/mips/include/asm/cpu.h b/arch/mips/include/asm/cpu.h
+index 7395413c5142..de70b9a04d1f 100644
+--- a/arch/mips/include/asm/cpu.h
++++ b/arch/mips/include/asm/cpu.h
+@@ -416,6 +416,7 @@ enum cpu_type_enum {
+ 				BIT_ULL(56)	/* CPU has perf counters implemented per TC (MIPSMT ASE) */
+ #define MIPS_CPU_MMID		BIT_ULL(57)	/* CPU supports MemoryMapIDs */
+ #define MIPS_CPU_CONST_TIMER	BIT_ULL(58)	/* CPU has constant timer */
++#define MIPS_CPU_FTLBPAREX	BIT_ULL(59)	/* CPU has FTLB parity exception */
+ 
+ /*
+  * CPU ASE encodings
+diff --git a/arch/mips/kernel/cpu-probe.c b/arch/mips/kernel/cpu-probe.c
+index c455d7f61e7e..2dec2feba765 100644
+--- a/arch/mips/kernel/cpu-probe.c
++++ b/arch/mips/kernel/cpu-probe.c
+@@ -1745,6 +1745,19 @@ static inline void cpu_probe_mips(struct cpuinfo_mips *c, unsigned int cpu)
+ 	default:
+ 		break;
+ 	}
++
++	/* Recent MIPS cores use the implementation-dependent ExcCode 16 for
++	 * cache/FTLB parity exceptions.
++	 */
++	switch (__get_cpu_type(c->cputype)) {
++	case CPU_PROAPTIV:
++	case CPU_P5600:
++	case CPU_P6600:
++	case CPU_I6400:
++	case CPU_I6500:
++		c->options |= MIPS_CPU_FTLBPAREX;
++		break;
++	}
+ }
+ 
+ static inline void cpu_probe_alchemy(struct cpuinfo_mips *c, unsigned int cpu)
+diff --git a/arch/mips/kernel/traps.c b/arch/mips/kernel/traps.c
+index 8282d0feb0b2..06a36ff6d665 100644
+--- a/arch/mips/kernel/traps.c
++++ b/arch/mips/kernel/traps.c
+@@ -2424,7 +2424,8 @@ void __init trap_init(void)
+ 	if (cpu_has_fpu && !cpu_has_nofpuex)
+ 		set_except_vector(EXCCODE_FPE, handle_fpe);
+ 
+-	set_except_vector(MIPS_EXCCODE_TLBPAR, handle_ftlb);
++	if (cpu_has_ftlbparex)
++		set_except_vector(MIPS_EXCCODE_TLBPAR, handle_ftlb);
+ 
+ 	if (cpu_has_rixiex) {
+ 		set_except_vector(EXCCODE_TLBRI, tlb_do_page_fault_0);
+-- 
+2.31.1
+

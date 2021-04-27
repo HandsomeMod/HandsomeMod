@@ -1,0 +1,134 @@
+From 5ed0a014d25fcb26cf7eea6604c4e6e4a1143a5b Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 050/131] mips/mm: Add NUMA balancing support
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ arch/mips/Kconfig                      |  1 +
+ arch/mips/include/asm/pgtable-64.h     |  2 +-
+ arch/mips/include/asm/pgtable-bits.h   |  4 +++-
+ arch/mips/include/asm/pgtable.h        | 18 +++++++++++++++---
+ arch/mips/loongson64/loongson-3/numa.c |  2 +-
+ 5 files changed, 21 insertions(+), 6 deletions(-)
+
+diff --git a/arch/mips/Kconfig b/arch/mips/Kconfig
+index c99da7af1f6d..44f8ec70f28e 100644
+--- a/arch/mips/Kconfig
++++ b/arch/mips/Kconfig
+@@ -7,6 +7,7 @@ config MIPS
+ 	select ARCH_CLOCKSOURCE_DATA
+ 	select ARCH_HAS_TICK_BROADCAST if GENERIC_CLOCKEVENTS_BROADCAST
+ 	select ARCH_HAS_UBSAN_SANITIZE_ALL
++	select ARCH_SUPPORTS_NUMA_BALANCING
+ 	select ARCH_SUPPORTS_UPROBES
+ 	select ARCH_USE_BUILTIN_BSWAP
+ 	select ARCH_USE_CMPXCHG_LOCKREF if 64BIT
+diff --git a/arch/mips/include/asm/pgtable-64.h b/arch/mips/include/asm/pgtable-64.h
+index 813dfe5f45a5..2d34fb43c70f 100644
+--- a/arch/mips/include/asm/pgtable-64.h
++++ b/arch/mips/include/asm/pgtable-64.h
+@@ -272,7 +272,7 @@ static inline int pmd_present(pmd_t pmd)
+ {
+ #ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT
+ 	if (unlikely(pmd_val(pmd) & _PAGE_HUGE))
+-		return pmd_val(pmd) & _PAGE_PRESENT;
++		return pmd_val(pmd) & (_PAGE_PRESENT | _PAGE_PROTNONE);
+ #endif
+ 
+ 	return pmd_val(pmd) != (unsigned long) invalid_pte_table;
+diff --git a/arch/mips/include/asm/pgtable-bits.h b/arch/mips/include/asm/pgtable-bits.h
+index 4da79b85c179..e20467278a9b 100644
+--- a/arch/mips/include/asm/pgtable-bits.h
++++ b/arch/mips/include/asm/pgtable-bits.h
+@@ -122,6 +122,7 @@ enum pgtable_bits {
+ #if defined(CONFIG_MIPS_HUGE_TLB_SUPPORT)
+ 	_PAGE_HUGE_SHIFT,
+ #endif
++	_PAGE_PROTNONE_SHIFT,
+ #if defined(CONFIG_ARCH_HAS_PTE_SPECIAL)
+ 	_PAGE_SPECIAL_SHIFT,
+ #endif
+@@ -147,6 +148,7 @@ enum pgtable_bits {
+ #if defined(CONFIG_MIPS_HUGE_TLB_SUPPORT)
+ # define _PAGE_HUGE		(1 << _PAGE_HUGE_SHIFT)
+ #endif
++#define _PAGE_PROTNONE		(1 <<_PAGE_PROTNONE_SHIFT)
+ #if defined(CONFIG_ARCH_HAS_PTE_SPECIAL)
+ # define _PAGE_SPECIAL		(1 << _PAGE_SPECIAL_SHIFT)
+ #else
+@@ -268,7 +270,7 @@ static inline uint64_t pte_to_entrylo(unsigned long pte_val)
+ #define __READABLE	(_PAGE_SILENT_READ | _PAGE_ACCESSED)
+ #define __WRITEABLE	(_PAGE_SILENT_WRITE | _PAGE_WRITE | _PAGE_MODIFIED)
+ 
+-#define _PAGE_CHG_MASK	(_PAGE_ACCESSED | _PAGE_MODIFIED |	\
++#define _PAGE_CHG_MASK	(_PAGE_ACCESSED | _PAGE_MODIFIED | _PAGE_SPECIAL | \
+ 			 _PFN_MASK | _CACHE_MASK)
+ 
+ #endif /* _ASM_PGTABLE_BITS_H */
+diff --git a/arch/mips/include/asm/pgtable.h b/arch/mips/include/asm/pgtable.h
+index f85bd5b15f51..85b9f920222c 100644
+--- a/arch/mips/include/asm/pgtable.h
++++ b/arch/mips/include/asm/pgtable.h
+@@ -25,7 +25,7 @@
+ struct mm_struct;
+ struct vm_area_struct;
+ 
+-#define PAGE_NONE	__pgprot(_PAGE_PRESENT | _PAGE_NO_READ | \
++#define PAGE_NONE	__pgprot(_PAGE_PROTNONE | _PAGE_NO_READ | \
+ 				 _page_cachable_default)
+ #define PAGE_SHARED	__pgprot(_PAGE_PRESENT | _PAGE_WRITE | \
+ 				 _page_cachable_default)
+@@ -188,7 +188,7 @@ static inline void pte_clear(struct mm_struct *mm, unsigned long addr, pte_t *pt
+ #else
+ 
+ #define pte_none(pte)		(!(pte_val(pte) & ~_PAGE_GLOBAL))
+-#define pte_present(pte)	(pte_val(pte) & _PAGE_PRESENT)
++#define pte_present(pte)	(pte_val(pte) & (_PAGE_PRESENT | _PAGE_PROTNONE))
+ #define pte_no_exec(pte)	(pte_val(pte) & _PAGE_NO_EXEC)
+ 
+ /*
+@@ -617,7 +617,7 @@ static inline pmd_t pmd_modify(pmd_t pmd, pgprot_t newprot)
+ 
+ static inline pmd_t pmd_mknotpresent(pmd_t pmd)
+ {
+-	pmd_val(pmd) &= ~(_PAGE_PRESENT | _PAGE_VALID | _PAGE_DIRTY);
++	pmd_val(pmd) &= ~(_PAGE_PRESENT | _PAGE_VALID | _PAGE_DIRTY | _PAGE_PROTNONE);
+ 
+ 	return pmd;
+ }
+@@ -639,6 +639,18 @@ static inline pmd_t pmdp_huge_get_and_clear(struct mm_struct *mm,
+ 
+ #endif /* CONFIG_TRANSPARENT_HUGEPAGE */
+ 
++#ifdef CONFIG_NUMA_BALANCING
++static inline long pte_protnone(pte_t pte)
++{
++	return (pte_val(pte) & _PAGE_PROTNONE);
++}
++
++static inline long pmd_protnone(pmd_t pmd)
++{
++	return (pmd_val(pmd) & _PAGE_PROTNONE);
++}
++#endif /* CONFIG_NUMA_BALANCING */
++
+ #define gup_fast_permitted(start, end)	(!cpu_has_dc_aliases)
+ 
+ #include <asm-generic/pgtable.h>
+diff --git a/arch/mips/loongson64/loongson-3/numa.c b/arch/mips/loongson64/loongson-3/numa.c
+index 35d6fa32ac41..dd0de574de3f 100644
+--- a/arch/mips/loongson64/loongson-3/numa.c
++++ b/arch/mips/loongson64/loongson-3/numa.c
+@@ -76,7 +76,7 @@ static int __init compute_node_distance(int row, int col)
+ 	else if (package_row == package_col)
+ 		return 40;
+ 	else
+-		return 100;
++		return 200;
+ }
+ 
+ static void __init init_topology_matrix(void)
+-- 
+2.31.1
+

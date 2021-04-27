@@ -1,0 +1,108 @@
+From e0900fe343c086e57a4bee8799fbab07b54934f1 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 075/131] drm/radeon: recover the GPU if it fails at resume
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+Signed-off-by: Binbin Zhou <zhoubb@lemote.com>
+---
+ drivers/gpu/drm/radeon/radeon.h         |  2 ++
+ drivers/gpu/drm/radeon/radeon_device.c  | 30 ++++++++++++++++++++++++-
+ drivers/gpu/drm/radeon/radeon_irq_kms.c |  5 +++++
+ 3 files changed, 36 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/radeon/radeon.h b/drivers/gpu/drm/radeon/radeon.h
+index d59b004f6695..13715d4e88f3 100644
+--- a/drivers/gpu/drm/radeon/radeon.h
++++ b/drivers/gpu/drm/radeon/radeon.h
+@@ -2411,6 +2411,8 @@ struct radeon_device {
+ 	struct delayed_work hotplug_work;
+ 	struct work_struct dp_work;
+ 	struct work_struct audio_work;
++	int need_recover;
++	struct delayed_work recover_work;
+ 	int num_crtc; /* number of crtcs */
+ 	struct mutex dc_hw_i2c_mutex; /* display controller hw i2c mutex */
+ 	bool has_uvd;
+diff --git a/drivers/gpu/drm/radeon/radeon_device.c b/drivers/gpu/drm/radeon/radeon_device.c
+index 5d017f0aec66..d40d312cbcf3 100644
+--- a/drivers/gpu/drm/radeon/radeon_device.c
++++ b/drivers/gpu/drm/radeon/radeon_device.c
+@@ -1656,6 +1656,27 @@ int radeon_suspend_kms(struct drm_device *dev, bool suspend,
+ 	return 0;
+ }
+ 
++void radeon_recover_callback(struct work_struct *work)
++{
++	int resched;
++	struct radeon_device *rdev = container_of(to_delayed_work(work),
++			struct radeon_device, recover_work);
++
++	printk("Radeon GPU Recover...\n");
++	down_write(&rdev->exclusive_lock);
++	radeon_save_bios_scratch_regs(rdev);
++	resched = ttm_bo_lock_delayed_workqueue(&rdev->mman.bdev);
++	radeon_pm_suspend(rdev);
++	radeon_suspend(rdev);
++	radeon_resume(rdev);
++	radeon_restore_bios_scratch_regs(rdev);
++	radeon_ib_ring_tests(rdev);
++	radeon_pm_resume(rdev);
++	drm_helper_resume_force_mode(rdev->ddev);
++	ttm_bo_unlock_delayed_workqueue(&rdev->mman.bdev, resched);
++	up_write(&rdev->exclusive_lock);
++}
++
+ /**
+  * radeon_resume_kms - initiate device resume
+  *
+@@ -1692,8 +1713,10 @@ int radeon_resume_kms(struct drm_device *dev, bool resume, bool fbcon)
+ 	radeon_resume(rdev);
+ 
+ 	r = radeon_ib_ring_tests(rdev);
+-	if (r)
++	if (r) {
++		rdev->need_recover = 1;
+ 		DRM_ERROR("ib ring test failed (%d).\n", r);
++	}
+ 
+ 	if ((rdev->pm.pm_method == PM_METHOD_DPM) && rdev->pm.dpm_enabled) {
+ 		/* do dpm late init */
+@@ -1766,6 +1789,11 @@ int radeon_resume_kms(struct drm_device *dev, bool resume, bool fbcon)
+ 		console_unlock();
+ 	}
+ 
++
++	if (rdev->need_recover) {
++		rdev->need_recover = 0;
++		schedule_delayed_work_on(0, &rdev->recover_work, msecs_to_jiffies(2000));
++	}
+ 	return 0;
+ }
+ 
+diff --git a/drivers/gpu/drm/radeon/radeon_irq_kms.c b/drivers/gpu/drm/radeon/radeon_irq_kms.c
+index d9613638f9cc..be5e83fc0b8d 100644
+--- a/drivers/gpu/drm/radeon/radeon_irq_kms.c
++++ b/drivers/gpu/drm/radeon/radeon_irq_kms.c
+@@ -277,6 +277,8 @@ static bool radeon_msi_ok(struct radeon_device *rdev)
+ 	return true;
+ }
+ 
++extern void radeon_recover_callback(struct work_struct *work);
++
+ /**
+  * radeon_irq_kms_init - init driver interrupt info
+  *
+@@ -314,6 +316,9 @@ int radeon_irq_kms_init(struct radeon_device *rdev)
+ 	INIT_WORK(&rdev->dp_work, radeon_dp_work_func);
+ 	INIT_WORK(&rdev->audio_work, r600_audio_update_hdmi);
+ 
++	rdev->need_recover = 0;
++	INIT_DEFERRABLE_WORK(&rdev->recover_work, radeon_recover_callback);
++
+ 	rdev->irq.installed = true;
+ 	r = drm_irq_install(rdev->ddev, rdev->ddev->pdev->irq);
+ 	if (r) {
+-- 
+2.31.1
+

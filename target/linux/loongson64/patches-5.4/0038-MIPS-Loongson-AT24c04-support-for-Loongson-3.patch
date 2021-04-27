@@ -1,0 +1,61 @@
+From 0e36fbf125cbf5262043646b91a3bfa3f5100863 Mon Sep 17 00:00:00 2001
+From: Binbin Zhou <zhoubb@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 038/131] MIPS: Loongson: AT24c04 support for Loongson-3
+
+Signed-off-by: Binbin Zhou <zhoubb@lemote.com>
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/platform/mips/Makefile  |  2 +-
+ drivers/platform/mips/at24c04.c | 26 ++++++++++++++++++++++++++
+ 2 files changed, 27 insertions(+), 1 deletion(-)
+ create mode 100644 drivers/platform/mips/at24c04.c
+
+diff --git a/drivers/platform/mips/Makefile b/drivers/platform/mips/Makefile
+index bef6586d0002..b88ccaa24323 100644
+--- a/drivers/platform/mips/Makefile
++++ b/drivers/platform/mips/Makefile
+@@ -3,7 +3,7 @@ obj-$(CONFIG_CPU_HWMON) += cpu_hwmon.o
+ obj-$(CONFIG_I2C_PIIX4) += emc1412.o sd5075.o tmp75.o
+ obj-$(CONFIG_CPU_HWMON) += wpce_fan.o sbx00_fan.o
+ obj-$(CONFIG_LEMOTE3A_LAPTOP) += lemote3a-laptop.o
+-obj-m += ec_rom.o
++obj-m += ec_rom.o at24c04.o
+ 
+ ifdef CONFIG_MTD
+ obj-m += pmon_flash.o
+diff --git a/drivers/platform/mips/at24c04.c b/drivers/platform/mips/at24c04.c
+new file mode 100644
+index 000000000000..7ba3d1c8692e
+--- /dev/null
++++ b/drivers/platform/mips/at24c04.c
+@@ -0,0 +1,26 @@
++#include <linux/module.h>
++
++static int __init at24c04_init(void)
++{
++	printk("====Please use device-tree for AT24 Driver====\n");
++	printk("You can put the at24 node under the i2c node:\n"
++	       "eeprom@51 {\n"
++	       "	compatible = \"atmel,24c04\"\n"
++	       "	reg = <0x51>\n"
++	       "	size = <512>\n"
++	       "	pagesize = <16>\n"
++	       "}\n");
++	printk("==================Thank you!==================\n");
++	return 0;
++}
++
++static void __exit at24c04_exit(void)
++{
++}
++
++module_init(at24c04_init);
++module_exit(at24c04_exit);
++
++MODULE_AUTHOR("Binbin Zhou <zhoubb@lemote.com>");
++MODULE_DESCRIPTION("AT24c04 driver, based on the at24 driver");
++MODULE_LICENSE("GPL");
+-- 
+2.31.1
+

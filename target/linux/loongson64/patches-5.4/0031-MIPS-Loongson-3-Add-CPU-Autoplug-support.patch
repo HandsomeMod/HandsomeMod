@@ -1,0 +1,652 @@
+From 00b9b22aa176181a2f78bbb5ce18f54948a21857 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 031/131] MIPS: Loongson 3: Add CPU Autoplug support.
+
+CPU Autoplug is used for power saving. Loongson 3 supports CPUFreq, but
+the clock frequency of each core is always the same (cannot be adjusted
+independently). If there is a single-thread CPU-intensive program, we
+cannot use frequency scaling for power saving (if we do, performance of
+the program will slowdown). Therefore, we introduce CPU Autoplug to
+adjust the number of online cores based on the global CPU load.
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+Signed-off-by: Hongliang Tao <taohl@lemote.com>
+Signed-off-by: Hua Yan <yanh@lemote.com>
+---
+ arch/mips/Kconfig                             |   9 +
+ arch/mips/kernel/smp.c                        |   3 +-
+ arch/mips/loongson64/common/pm.c              |  15 +
+ arch/mips/loongson64/loongson-3/Makefile      |   2 +
+ .../loongson-3/loongson3_cpuautoplug.c        | 423 ++++++++++++++++++
+ arch/mips/loongson64/loongson-3/smp.c         |  16 +-
+ arch/mips/mm/c-r4k.c                          |  32 +-
+ 7 files changed, 482 insertions(+), 18 deletions(-)
+ create mode 100644 arch/mips/loongson64/loongson-3/loongson3_cpuautoplug.c
+
+diff --git a/arch/mips/Kconfig b/arch/mips/Kconfig
+index 5fbada7a1838..cbe638d2124d 100644
+--- a/arch/mips/Kconfig
++++ b/arch/mips/Kconfig
+@@ -1400,6 +1400,15 @@ config CPU_LOONGSON3
+ 		The Loongson 3 processor implements the MIPS64R2 instruction
+ 		set with many extensions.
+ 
++config LOONGSON3_CPUAUTOPLUG
++	tristate "Loongson 3 CPUAutoplug Driver"
++	depends on CPU_LOONGSON3 && HOTPLUG_CPU
++	help
++	  This option adds a CPUAutoplug driver for Loongson-3 multi-core processors
++	  which cpu frequencies of all cores should be configured together.
++
++	  If in doubt, say N.
++
+ config LOONGSON3_ENHANCEMENT
+ 	bool "New Loongson 3 CPU Enhancements"
+ 	default n
+diff --git a/arch/mips/kernel/smp.c b/arch/mips/kernel/smp.c
+index 579b55b33839..d0f7703dfab9 100644
+--- a/arch/mips/kernel/smp.c
++++ b/arch/mips/kernel/smp.c
+@@ -348,7 +348,8 @@ asmlinkage void start_secondary(void)
+ 	per_cpu_trap_init(false);
+ 	mips_clockevent_init();
+ 	mp_ops->init_secondary();
+-	cpu_report();
++	if (system_state == SYSTEM_BOOTING)
++		cpu_report();
+ 	maar_init();
+ 
+ 	/*
+diff --git a/arch/mips/loongson64/common/pm.c b/arch/mips/loongson64/common/pm.c
+index 20ba690f0896..adab73efc877 100644
+--- a/arch/mips/loongson64/common/pm.c
++++ b/arch/mips/loongson64/common/pm.c
+@@ -18,6 +18,7 @@
+ static unsigned int __maybe_unused cached_master_mask;	/* i8259A */
+ static unsigned int __maybe_unused cached_slave_mask;
+ static unsigned int __maybe_unused cached_bonito_irq_mask; /* bonito */
++static unsigned int __maybe_unused cached_autoplug_enabled;
+ 
+ void arch_suspend_disable_irqs(void)
+ {
+@@ -56,10 +57,23 @@ void arch_suspend_enable_irqs(void)
+ 
+ static int loongson_pm_begin(suspend_state_t state)
+ {
++#ifdef CONFIG_LOONGSON3_CPUAUTOPLUG
++	extern int autoplug_enabled;
++	cached_autoplug_enabled = autoplug_enabled;
++	autoplug_enabled = 0;
++#endif
+ 	pm_set_suspend_via_firmware();
+ 	return 0;
+ }
+ 
++static void loongson_pm_end(void)
++{
++#ifdef CONFIG_LOONGSON3_CPUAUTOPLUG
++	extern int autoplug_enabled;
++	autoplug_enabled = cached_autoplug_enabled;
++#endif
++}
++
+ static int loongson_pm_enter(suspend_state_t state)
+ {
+ 	mach_suspend();
+@@ -96,6 +110,7 @@ static const struct platform_suspend_ops loongson_pm_ops = {
+ 	.valid	= loongson_pm_valid_state,
+ 	.begin	= loongson_pm_begin,
+ 	.enter	= loongson_pm_enter,
++	.end	= loongson_pm_end,
+ };
+ 
+ static int __init loongson_pm_init(void)
+diff --git a/arch/mips/loongson64/loongson-3/Makefile b/arch/mips/loongson64/loongson-3/Makefile
+index 89ebb7fa3471..821c3f50c16f 100644
+--- a/arch/mips/loongson64/loongson-3/Makefile
++++ b/arch/mips/loongson64/loongson-3/Makefile
+@@ -11,3 +11,5 @@ obj-$(CONFIG_NUMA)	+= numa.o
+ obj-$(CONFIG_SUSPEND)	+= pm.o sleep.o
+ 
+ obj-$(CONFIG_RS780_HPET) += hpet.o
++
++obj-$(CONFIG_LOONGSON3_CPUAUTOPLUG) += loongson3_cpuautoplug.o
+diff --git a/arch/mips/loongson64/loongson-3/loongson3_cpuautoplug.c b/arch/mips/loongson64/loongson-3/loongson3_cpuautoplug.c
+new file mode 100644
+index 000000000000..f2e1db5bb80b
+--- /dev/null
++++ b/arch/mips/loongson64/loongson-3/loongson3_cpuautoplug.c
+@@ -0,0 +1,423 @@
++/*
++ * CPU Autoplug driver for the Loongson-3 processors
++ *
++ * Copyright (C) 2010 - 2012 Lemote Inc.
++ * Author: Huacai Chen, chenhc@lemote.com
++ *
++ * This file is subject to the terms and conditions of the GNU General Public
++ * License.  See the file "COPYING" in the main directory of this archive
++ * for more details.
++ */
++#include <linux/module.h>
++#include <linux/cpu.h>
++#include <linux/sched.h>
++#include <linux/tick.h>
++#include <linux/kernel_stat.h>
++#include <linux/platform_device.h>
++
++#include <asm/clock.h>
++
++#include <loongson.h>
++
++/*
++ * CPU Autoplug enabled ?
++ */
++int autoplug_enabled = 0;
++int autoplug_verbose = 0;
++int autoplug_adjusting = 0;
++
++struct cpu_autoplug_info {
++	u64 prev_idle;
++	u64 prev_wall;
++	struct delayed_work work;
++	unsigned int sampling_rate;
++	int maxcpus;   /* max cpus for autoplug */
++	int mincpus;   /* min cpus for autoplug */
++	int dec_reqs;  /* continous core-decreasing requests */
++};
++
++struct cpu_autoplug_info ap_info;
++
++static ssize_t show_autoplug_enabled(struct device *dev,
++				     struct device_attribute *attr,
++				     char *buf)
++{
++	return sprintf(buf, "%d\n", autoplug_enabled);
++}
++
++static ssize_t store_autoplug_enabled(struct device *dev,
++				      struct device_attribute *attr,
++				      const char *buf, size_t count)
++{
++	char val[5];
++	int n;
++
++	memcpy(val, buf, count);
++	n = simple_strtol(val, NULL, 0);
++
++	if (n > 1 || n < 0)
++		return -EINVAL;
++
++	autoplug_enabled = n;
++
++	return count;
++}
++
++static ssize_t show_autoplug_verbose(struct device *dev,
++				     struct device_attribute *attr,
++				     char *buf)
++{
++	return sprintf(buf, "%d\n", autoplug_verbose);
++}
++
++static ssize_t store_autoplug_verbose(struct device *dev,
++				      struct device_attribute *attr,
++				      const char *buf, size_t count)
++{
++	char val[5];
++	int n;
++
++	memcpy(val, buf, count);
++	n = simple_strtol(val, NULL, 0);
++
++	if (n > 1 || n < 0)
++		return -EINVAL;
++
++	autoplug_verbose = n;
++
++	return count;
++}
++
++static ssize_t show_autoplug_maxcpus(struct device *dev,
++				     struct device_attribute *attr,
++				     char *buf)
++{
++	return sprintf(buf, "%d\n", ap_info.maxcpus);
++}
++
++static ssize_t store_autoplug_maxcpus(struct device *dev,
++				      struct device_attribute *attr,
++				      const char *buf, size_t count)
++{
++	char val[5];
++	int n;
++
++	memcpy(val, buf, count);
++	n = simple_strtol(val, NULL, 0);
++
++	if (n > num_possible_cpus() || n < ap_info.mincpus)
++		return -EINVAL;
++
++	ap_info.maxcpus = n;
++
++	return count;
++}
++
++static ssize_t show_autoplug_mincpus(struct device *dev,
++				     struct device_attribute *attr,
++				     char *buf)
++{
++	return sprintf(buf, "%d\n", ap_info.mincpus);
++}
++
++static ssize_t store_autoplug_mincpus(struct device *dev,
++				      struct device_attribute *attr,
++				      const char *buf, size_t count)
++{
++	char val[5];
++	int n;
++
++	memcpy(val, buf, count);
++	n = simple_strtol(val, NULL, 0);
++
++	if (n > ap_info.maxcpus || n < 1)
++		return -EINVAL;
++
++	ap_info.mincpus = n;
++
++	return count;
++}
++
++static ssize_t show_autoplug_sampling_rate(struct device *dev,
++				     struct device_attribute *attr,
++				     char *buf)
++{
++	return sprintf(buf, "%d\n", ap_info.sampling_rate);
++}
++
++#define SAMPLING_RATE_MAX 1000
++#define SAMPLING_RATE_MIN 600
++
++static ssize_t store_autoplug_sampling_rate(struct device *dev,
++				      struct device_attribute *attr,
++				      const char *buf, size_t count)
++{
++	char val[6];
++	int n;
++
++	memcpy(val, buf, count);
++	n = simple_strtol(val, NULL, 0);
++
++	if (n > SAMPLING_RATE_MAX || n < SAMPLING_RATE_MIN)
++		return -EINVAL;
++
++	ap_info.sampling_rate = n;
++
++	return count;
++}
++
++static ssize_t show_autoplug_available_values(struct device *dev,
++				     struct device_attribute *attr,
++				     char *buf)
++{
++	return sprintf(buf, "enabled: 0-1\nverbose: 0-1\n"
++			"maxcpus: 1-%d\nmincpus: 1-%d\nsampling_rate: %d-%d\n",
++			num_possible_cpus(), num_possible_cpus(), SAMPLING_RATE_MIN, SAMPLING_RATE_MAX);
++}
++
++static DEVICE_ATTR(enabled, 0644, show_autoplug_enabled, store_autoplug_enabled);
++static DEVICE_ATTR(verbose, 0644, show_autoplug_verbose, store_autoplug_verbose);
++static DEVICE_ATTR(maxcpus, 0644, show_autoplug_maxcpus, store_autoplug_maxcpus);
++static DEVICE_ATTR(mincpus, 0644, show_autoplug_mincpus, store_autoplug_mincpus);
++static DEVICE_ATTR(sampling_rate, 0644, show_autoplug_sampling_rate, store_autoplug_sampling_rate);
++static DEVICE_ATTR(available_values, 0444, show_autoplug_available_values, NULL);
++
++static struct attribute *cpuclass_default_attrs[] = {
++	&dev_attr_enabled.attr,
++	&dev_attr_verbose.attr,
++	&dev_attr_maxcpus.attr,
++	&dev_attr_mincpus.attr,
++	&dev_attr_sampling_rate.attr,
++	&dev_attr_available_values.attr,
++	NULL
++};
++
++static struct attribute_group cpuclass_attr_group = {
++	.attrs = cpuclass_default_attrs,
++	.name = "cpuautoplug",
++};
++
++#ifndef MODULE
++/*
++ * Enable / Disable CPU Autoplug
++ */
++static int __init setup_autoplug(char *str)
++{
++	if (!strcmp(str, "off"))
++		autoplug_enabled = 0;
++	else if (!strcmp(str, "on"))
++		autoplug_enabled = 1;
++	else
++		return 0;
++	return 1;
++}
++
++__setup("autoplug=", setup_autoplug);
++
++#endif
++
++static inline u64 get_idle_time_jiffy(u64 *wall)
++{
++	unsigned int cpu;
++	u64 idle_time = 0;
++	u64 cur_wall_time;
++	u64 busy_time;
++
++	cur_wall_time = jiffies64_to_nsecs(get_jiffies_64());
++
++	for_each_online_cpu(cpu) {
++		busy_time  = kcpustat_cpu(cpu).cpustat[CPUTIME_USER];
++		busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SYSTEM];
++		busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_IRQ];
++		busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_SOFTIRQ];
++		busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_STEAL];
++		busy_time += kcpustat_cpu(cpu).cpustat[CPUTIME_NICE];
++
++		idle_time += cur_wall_time - busy_time;
++	}
++
++	if (wall)
++		*wall = div_u64(cur_wall_time, NSEC_PER_USEC);
++
++	return div_u64(idle_time, NSEC_PER_USEC);
++}
++
++static inline u64 get_idle_time(u64 *wall)
++{
++	unsigned int cpu;
++	u64 idle_time = 0;
++
++	for_each_online_cpu(cpu) {
++		idle_time += get_cpu_idle_time_us(cpu, wall);
++		if (idle_time == -1ULL)
++			return get_idle_time_jiffy(wall);
++	}
++
++	return idle_time;
++}
++
++static void increase_cores(int cur_cpus)
++{
++	int target_cpu;
++
++	if (cur_cpus == ap_info.maxcpus)
++		return;
++
++	target_cpu = cpumask_next_zero(0, cpu_online_mask);
++	lock_device_hotplug();
++	cpu_up(target_cpu);
++	get_cpu_device(target_cpu)->offline = false;
++	unlock_device_hotplug();
++}
++
++
++static void decrease_cores(int cur_cpus)
++{
++	int target_cpu;
++
++	if (cur_cpus == ap_info.mincpus)
++		return;
++
++	target_cpu = find_last_bit(cpumask_bits(cpu_online_mask), num_possible_cpus());
++	lock_device_hotplug();
++	cpu_down(target_cpu);
++	get_cpu_device(target_cpu)->offline = true;
++	unlock_device_hotplug();
++}
++
++#define INC_THRESHOLD 95
++#define DEC_THRESHOLD 10
++
++static void do_autoplug_timer(struct work_struct *work)
++{
++	u64 cur_wall_time = 0, cur_idle_time;
++	unsigned int idle_time, wall_time;
++	int delay, load;
++	int nr_cur_cpus = num_online_cpus();
++	int nr_all_cpus = num_possible_cpus();
++
++	BUG_ON(smp_processor_id() != 0);
++	delay = msecs_to_jiffies(ap_info.sampling_rate);
++	if (!autoplug_enabled || system_state != SYSTEM_RUNNING)
++		goto out;
++
++	autoplug_adjusting = 1;
++
++	/* user limits */
++	if (nr_cur_cpus > ap_info.maxcpus) {
++		decrease_cores(nr_cur_cpus);
++		autoplug_adjusting = 0;
++		goto out;
++	}
++	if (nr_cur_cpus < ap_info.mincpus) {
++		increase_cores(nr_cur_cpus);
++		autoplug_adjusting = 0;
++		goto out;
++	}
++
++	/* based on cpu load */
++	cur_idle_time = get_idle_time(&cur_wall_time);
++	if (cur_wall_time == 0) {
++		cur_wall_time = jiffies64_to_nsecs(get_jiffies_64());
++		cur_wall_time = div_u64(cur_wall_time, NSEC_PER_USEC);
++	}
++
++	wall_time = (unsigned int)(cur_wall_time - ap_info.prev_wall);
++	ap_info.prev_wall = cur_wall_time;
++
++	idle_time = (unsigned int)(cur_idle_time - ap_info.prev_idle);
++	idle_time += wall_time * (nr_all_cpus - nr_cur_cpus);
++	ap_info.prev_idle = cur_idle_time;
++
++	if (unlikely(!wall_time || wall_time * nr_all_cpus < idle_time)) {
++		autoplug_adjusting = 0;
++		goto out;
++	}
++
++	load = 100 * (wall_time * nr_all_cpus - idle_time) / wall_time;
++
++	if (load < (nr_cur_cpus - 1) * 100 - DEC_THRESHOLD) {
++		if (ap_info.dec_reqs <= 2)
++			ap_info.dec_reqs++;
++		else {
++			ap_info.dec_reqs = 0;
++			decrease_cores(nr_cur_cpus);
++		}
++	}
++	else {
++		ap_info.dec_reqs = 0;
++		if (load > (nr_cur_cpus - 1) * 100 + INC_THRESHOLD)
++			increase_cores(nr_cur_cpus);
++	}
++
++	autoplug_adjusting = 0;
++out:
++	schedule_delayed_work_on(0, &ap_info.work, delay);
++}
++
++static struct platform_device_id platform_device_ids[] = {
++	{
++		.name = "ls3_cpuautoplug",
++	},
++	{}
++};
++
++MODULE_DEVICE_TABLE(platform, platform_device_ids);
++
++static struct platform_driver platform_driver = {
++	.driver = {
++		.name = "ls3_cpuautoplug",
++		.owner = THIS_MODULE,
++	},
++	.id_table = platform_device_ids,
++};
++
++static int __init cpuautoplug_init(void)
++{
++	int ret, delay;
++
++	ret = sysfs_create_group(&cpu_subsys.dev_root->kobj, &cpuclass_attr_group);
++	if (ret)
++		return ret;
++
++	/* Register platform stuff */
++	ret = platform_driver_register(&platform_driver);
++	if (ret)
++		return ret;
++
++	pr_info("cpuautoplug: Loongson-3 CPU autoplug driver.\n");
++
++	ap_info.maxcpus = setup_max_cpus > nr_cpu_ids ? nr_cpu_ids : setup_max_cpus;
++	ap_info.mincpus = 1;
++	ap_info.dec_reqs = 0;
++	ap_info.sampling_rate = 720;  /* 720 ms */
++	if (setup_max_cpus == 0) {  /* boot with nosmp */
++		ap_info.maxcpus = 1;
++		autoplug_enabled = 0;
++	}
++	if (setup_max_cpus > num_possible_cpus())
++		ap_info.maxcpus = num_possible_cpus();
++#ifndef MODULE
++	delay = msecs_to_jiffies(ap_info.sampling_rate * 24);
++#else
++	delay = msecs_to_jiffies(ap_info.sampling_rate * 8);
++#endif
++	INIT_DEFERRABLE_WORK(&ap_info.work, do_autoplug_timer);
++	schedule_delayed_work_on(0, &ap_info.work, delay);
++
++	return ret;
++}
++
++static void __exit cpuautoplug_exit(void)
++{
++	cancel_delayed_work_sync(&ap_info.work);
++	platform_driver_unregister(&platform_driver);
++	sysfs_remove_group(&cpu_subsys.dev_root->kobj, &cpuclass_attr_group);
++}
++
++late_initcall(cpuautoplug_init);
++module_exit(cpuautoplug_exit);
++
++MODULE_AUTHOR("Huacai Chen <chenhc@lemote.com>");
++MODULE_DESCRIPTION("cpuautoplug driver for Loongson3A");
++MODULE_LICENSE("GPL");
+diff --git a/arch/mips/loongson64/loongson-3/smp.c b/arch/mips/loongson64/loongson-3/smp.c
+index 1bf8e157d707..ba39c59d5806 100644
+--- a/arch/mips/loongson64/loongson-3/smp.c
++++ b/arch/mips/loongson64/loongson-3/smp.c
+@@ -32,6 +32,13 @@ static void *ipi_en0_regs[16];
+ static void *ipi_mailbox_buf[16];
+ static uint32_t core0_c0count[NR_CPUS];
+ 
++#ifdef CONFIG_LOONGSON3_CPUAUTOPLUG
++extern int autoplug_verbose;
++#define verbose autoplug_verbose
++#else
++#define verbose 1
++#endif
++
+ /* read a 32bit value from ipi register */
+ #define loongson3_ipi_read32(addr) readl(addr)
+ /* read a 64bit value from ipi register */
+@@ -399,7 +406,8 @@ static void loongson3_smp_finish(void)
+ 	local_irq_enable();
+ 	loongson3_ipi_write64(0,
+ 			ipi_mailbox_buf[cpu_logical_map(cpu)] + 0x0);
+-	pr_info("CPU#%d finished, CP0_ST=%x\n",
++	if (verbose || system_state == SYSTEM_BOOTING)
++		pr_info("CPU#%d finished, CP0_ST=%x\n",
+ 			smp_processor_id(), read_c0_status());
+ }
+ 
+@@ -458,7 +466,8 @@ static int loongson3_boot_secondary(int cpu, struct task_struct *idle)
+ {
+ 	unsigned long startargs[4];
+ 
+-	pr_info("Booting CPU#%d...\n", cpu);
++	if (verbose || system_state == SYSTEM_BOOTING)
++		pr_info("Booting CPU#%d...\n", cpu);
+ 
+ 	/* startargs[] are initial PC, SP and GP for secondary CPU */
+ 	startargs[0] = (unsigned long)&smp_bootstrap;
+@@ -466,7 +475,8 @@ static int loongson3_boot_secondary(int cpu, struct task_struct *idle)
+ 	startargs[2] = (unsigned long)task_thread_info(idle);
+ 	startargs[3] = 0;
+ 
+-	pr_debug("CPU#%d, func_pc=%lx, sp=%lx, gp=%lx\n",
++	if (verbose || system_state == SYSTEM_BOOTING)
++		pr_debug("CPU#%d, func_pc=%lx, sp=%lx, gp=%lx\n",
+ 			cpu, startargs[0], startargs[1], startargs[2]);
+ 
+ 	loongson3_ipi_write64(startargs[3],
+diff --git a/arch/mips/mm/c-r4k.c b/arch/mips/mm/c-r4k.c
+index fe111712e721..923d97ad9513 100644
+--- a/arch/mips/mm/c-r4k.c
++++ b/arch/mips/mm/c-r4k.c
+@@ -1461,17 +1461,19 @@ static void probe_pcache(void)
+ 		c->icache.ways = 1;
+ 	}
+ 
+-	printk("Primary instruction cache %ldkB, %s, %s, linesize %d bytes.\n",
+-	       icache_size >> 10,
+-	       c->icache.flags & MIPS_CACHE_VTAG ? "VIVT" : "VIPT",
+-	       way_string[c->icache.ways], c->icache.linesz);
++	if (system_state == SYSTEM_BOOTING)
++		printk("Primary instruction cache %ldkB, %s, %s, linesize %d bytes.\n",
++		       icache_size >> 10,
++		       c->icache.flags & MIPS_CACHE_VTAG ? "VIVT" : "VIPT",
++		       way_string[c->icache.ways], c->icache.linesz);
+ 
+-	printk("Primary data cache %ldkB, %s, %s, %s, linesize %d bytes\n",
+-	       dcache_size >> 10, way_string[c->dcache.ways],
+-	       (c->dcache.flags & MIPS_CACHE_PINDEX) ? "PIPT" : "VIPT",
+-	       (c->dcache.flags & MIPS_CACHE_ALIASES) ?
+-			"cache aliases" : "no aliases",
+-	       c->dcache.linesz);
++	if (system_state == SYSTEM_BOOTING)
++		printk("Primary data cache %ldkB, %s, %s, %s, linesize %d bytes\n",
++		       dcache_size >> 10, way_string[c->dcache.ways],
++		       (c->dcache.flags & MIPS_CACHE_PINDEX) ? "PIPT" : "VIPT",
++		       (c->dcache.flags & MIPS_CACHE_ALIASES) ?
++				"cache aliases" : "no aliases",
++		       c->dcache.linesz);
+ }
+ 
+ static void probe_vcache(void)
+@@ -1496,8 +1498,9 @@ static void probe_vcache(void)
+ 	c->vcache.waybit = 0;
+ 	c->vcache.waysize = vcache_size / c->vcache.ways;
+ 
+-	pr_info("Unified victim cache %ldkB %s, linesize %d bytes.\n",
+-		vcache_size >> 10, way_string[c->vcache.ways], c->vcache.linesz);
++	if (system_state == SYSTEM_BOOTING)
++		pr_info("Unified victim cache %ldkB %s, linesize %d bytes.\n",
++			vcache_size >> 10, way_string[c->vcache.ways], c->vcache.linesz);
+ }
+ 
+ /*
+@@ -1598,8 +1601,9 @@ static void loongson3_sc_init(void)
+ 	scache_size *= 4;
+ 	c->scache.waybit = 0;
+ 	c->scache.waysize = scache_size / c->scache.ways;
+-	pr_info("Unified secondary cache %ldkB %s, linesize %d bytes.\n",
+-	       scache_size >> 10, way_string[c->scache.ways], c->scache.linesz);
++	if (system_state == SYSTEM_BOOTING)
++		pr_info("Unified secondary cache %ldkB %s, linesize %d bytes.\n",
++		       scache_size >> 10, way_string[c->scache.ways], c->scache.linesz);
+ 	if (scache_size)
+ 		c->options |= MIPS_CPU_INCLUSIVE_CACHES;
+ 	return;
+-- 
+2.31.1
+

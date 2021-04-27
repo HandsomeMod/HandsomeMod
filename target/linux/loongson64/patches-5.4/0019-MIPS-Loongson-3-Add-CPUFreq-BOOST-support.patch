@@ -1,0 +1,401 @@
+From 22b32e9c37e654885c5fd24edd88a250f5820b9c Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Wed, 27 Nov 2019 16:02:18 +0800
+Subject: [PATCH 019/131] MIPS: Loongson-3: Add CPUFreq BOOST support
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ .../asm/mach-loongson64/loongson_regs.h       |   2 +
+ .../asm/mach-loongson64/loongson_smc.h        | 149 ++++++++++++++++++
+ drivers/cpufreq/loongson3_cpufreq.c           | 146 +++++++++++++++--
+ 3 files changed, 287 insertions(+), 10 deletions(-)
+ create mode 100644 arch/mips/include/asm/mach-loongson64/loongson_smc.h
+
+diff --git a/arch/mips/include/asm/mach-loongson64/loongson_regs.h b/arch/mips/include/asm/mach-loongson64/loongson_regs.h
+index 2975e4c88564..340eef5415b5 100644
+--- a/arch/mips/include/asm/mach-loongson64/loongson_regs.h
++++ b/arch/mips/include/asm/mach-loongson64/loongson_regs.h
+@@ -199,7 +199,9 @@ static inline void csr_writeq(u64 val, u32 reg)
+ #define LOONGSON_CSR_VENDOR	0x10 /* Vendor name string, should be "Loongson" */
+ #define LOONGSON_CSR_CPUNAME	0x20 /* Processor name string */
+ #define LOONGSON_CSR_NODECNT	0x408
++#define LOONGSON_CSR_SMCINT	0x420
+ #define LOONGSON_CSR_CPUTEMP	0x428
++#define LOONGSON_CSR_SMCMBX	0x51c
+ 
+ /* PerCore CSR, only accessable by local cores */
+ #define LOONGSON_CSR_IPI_STATUS	0x1000
+diff --git a/arch/mips/include/asm/mach-loongson64/loongson_smc.h b/arch/mips/include/asm/mach-loongson64/loongson_smc.h
+new file mode 100644
+index 000000000000..c5af9cd25aee
+--- /dev/null
++++ b/arch/mips/include/asm/mach-loongson64/loongson_smc.h
+@@ -0,0 +1,149 @@
++#ifndef _LOONGSON_SMC_H_
++#define _LOONGSON_SMC_H_
++
++union smc_message {
++	u32 value;
++	struct {
++		u32 arg : 24;
++		u8  cmd : 7; /* Return 0x7f if command failed */
++		u8  complete : 1;
++	};
++};
++
++/* Commands in SMC mailbox registers */
++
++#define CMD_GET_VERSION 0x1
++/* Interface Version, input none, return version */
++
++/* Features */
++#define CMD_GET_FEATURES 0x2
++/* Get features that SMC implemented, input index, output feature flags */
++#define CMD_GET_ENABLED_FEATURES 0x3
++/* Get currently enabled features, input index, output feature flags */
++#define CMD_SET_ENABLED_FEATURES 0x4
++/* Set features enabled state, input index and flags, output sucessfully enabled flags */
++struct feature_args {
++	u16 flags : 16;
++	u8  index : 8;
++};
++
++#define FEATURE_INDEX_GENERAL 0x0
++#define FEATURE_INDEX_ADVANCED 0x1
++
++/* General Feature Flags */
++#define FEATURE_FREQ_SCALE (1 << 0)
++#define FEATURE_VOLTAGE_SCALE (1 << 1)
++#define FEATURE_BOOST (1 << 2) /* Enable Boost means set PLL from normal to higher */
++#define FEATURE_SENSORS (1 << 3) /* Temperature/Voltage sensors */
++#define FEATURE_FAN_CONTROL (1 << 4)
++
++/* Advanced Features Flags */
++#define FEATURE_ADJUST_DVFS_PARAM (1 << 0) /* Allow OS adjust FreqScale/VID of each level. */
++
++/* Freqscale Related */
++#define CMD_GET_CPU_FREQUENCY 0x5
++/* Input CPUNum, output frequency, in MHz */
++#define CMD_GET_FREQ_LEVELS 0x6
++/* Input none, output freq levels */
++struct freq_level_args {
++	u8 min_level : 8;
++	u8 max_normal_level : 8;
++	u8 max_boost_level : 8;
++};
++
++#define CMD_GET_FREQ_INFO 0x7
++/* Input index and level, output info */
++#define CMD_SET_FREQ_INFO 0x8
++/* Input index and info, output none, available only with FEATURE_ADJUST_DVFS_PARAM */
++#define FREQ_INFO_INDEX_FREQ 0x0 /* Freq in MHz */
++struct freq_info_args {
++	u16 info : 16;
++	u8  index : 8;
++};
++
++#define CMD_SET_CPU_LEVEL 0x9
++/* Input cpu mask and level, output none */
++/*
++ * Note: This command return as completed only means
++ * SMC already knows the request, does not means the
++ * CPU freqency have changed. SMC should ensure constant
++ * counter frequency unchanged.
++ */
++struct freq_level_setting_args {
++	u16 cpumask : 16;
++	u8  level : 8;
++};
++
++/* TEMP Sensors */
++#define CMD_GET_SENSOR_NUM 0x10
++/* Input none, output Number of sensors in u4 */
++
++#define CMD_GET_SENSOR_STATUS 0x11
++/* Input sensor_id and info_type, output info */
++#define SENSOR_INFO_TYPE_TEMP 0x0
++#define SENSOR_INFO_TYPE_VOLTAGE 0x1
++#define SENSOR_INFO_TYPE_FLAGS 0xf
++#define SENSOR_FLAG_TEMP (1 << 0)
++#define SENSOR_FLAG_VOLTAGE (1 << 1)
++struct sensor_info_args {
++	union {
++		u16 val;
++		s16 temp; /* Signed 16bit, in Celsius */
++	};
++	u8 info_type : 4;
++	u8 sensor_id : 4;
++};
++
++/* Fan Control */
++#define CMD_GET_FAN_NUM 0x12
++/* Input none, output Number of fans in u4 */
++
++#define CMD_GET_FAN_INFO 0x13
++/* Input sensor_id and info_type, output info */
++#define CMD_SET_FAN_INFO 0x14
++/* Input sensor_id and info_type info, output none */
++#define FAN_INFO_RPM 0x0 /* Return RPM, can not set */
++#define FAN_INFO_LEVEL 0x1 /* PWM Level, 0~255, only set with manual mode */
++#define FAN_INFO_FLAGS 0xf /* Determine Mode */
++#define FAN_FLAG_AUTO (1 << 0)
++#define FAN_FLAG_MANUAL (1 << 1)
++
++struct fan_info_args {
++	u16 val;
++	u8  info_type : 4;
++	u8  fan_id : 4;
++};
++
++static inline int do_service_request(u8 cmd, void *arg)
++{
++	int retries;
++	union smc_message msg;
++
++	msg.value = csr_readl(LOONGSON_CSR_SMCMBX);
++	if (!msg.complete)
++		return -1;
++
++	msg.cmd = cmd;
++	msg.arg = *(u32 *)arg;
++	msg.complete = 0x0;
++
++	csr_writel(msg.value, LOONGSON_CSR_SMCMBX);
++	csr_writel(csr_readl(LOONGSON_CSR_SMCINT) | 1<<10, LOONGSON_CSR_SMCINT);
++
++	for (retries = 0; retries < 10000; retries++) {
++		msg.value = csr_readl(LOONGSON_CSR_SMCMBX);
++		if (msg.complete)
++			break;
++
++		usleep_range(2, 5);
++	}
++
++	if (!msg.complete || msg.cmd == 0x7f)
++		return -1;
++
++	*(u32 *)arg = msg.arg;
++
++	return 0;
++}
++
++#endif
+diff --git a/drivers/cpufreq/loongson3_cpufreq.c b/drivers/cpufreq/loongson3_cpufreq.c
+index ed874845c166..539779fdbb77 100644
+--- a/drivers/cpufreq/loongson3_cpufreq.c
++++ b/drivers/cpufreq/loongson3_cpufreq.c
+@@ -21,9 +21,44 @@
+ #include <asm/cevt-r4k.h>
+ 
+ #include <loongson.h>
++#include <loongson_regs.h>
++#include <loongson_smc.h>
+ 
++static int new_method = 0;
++static int boost_supported = 0;
++static struct mutex cpufreq_mutex[MAX_PACKAGES];
+ static spinlock_t cpufreq_reg_lock[MAX_PACKAGES];
+ 
++enum freq {
++	FREQ_LEV0, /* Reserved */
++	FREQ_LEV1, FREQ_LEV2, FREQ_LEV3, FREQ_LEV4,
++	FREQ_LEV5, FREQ_LEV6, FREQ_LEV7, FREQ_LEV8,
++	FREQ_LEV9, FREQ_LEV10, FREQ_LEV11, FREQ_LEV12,
++	FREQ_LEV13, FREQ_LEV14, FREQ_LEV15, FREQ_LEV16,
++	FREQ_RESV
++};
++
++/* For Loongson-3A4000+, support boost */
++static struct cpufreq_frequency_table loongson3_cpufreq_table[] = {
++	{0, FREQ_LEV0, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV1, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV2, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV3, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV4, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV5, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV6, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV7, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV8, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV9, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV10, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV11, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV12, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV13, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV14, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV15, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_LEV16, CPUFREQ_ENTRY_INVALID},
++	{0, FREQ_RESV, CPUFREQ_TABLE_END},
++};
+ extern struct clk *cpu_clk_get(int cpu);
+ 
+ static int loongson3_cpu_freq_notifier(struct notifier_block *nb,
+@@ -41,6 +76,9 @@ static int loongson3_cpu_freq_notifier(struct notifier_block *nb,
+ 	struct clock_event_device *cd;
+ 	struct cpufreq_freqs *freqs = (struct cpufreq_freqs *)data;
+ 
++	if (freqs->flags & CPUFREQ_CONST_LOOPS)
++		return 0;
++
+ 	if (val != CPUFREQ_POSTCHANGE)
+ 		return 0;
+ 
+@@ -65,6 +103,9 @@ static int loongson3_cpu_freq_notifier(struct notifier_block *nb,
+ 	struct cpufreq_freqs *freqs = (struct cpufreq_freqs *)data;
+ 	struct clock_event_device *cd = &per_cpu(mips_clockevent_device, 0);
+ 
++	if (freqs->flags & CPUFREQ_CONST_LOOPS)
++		return 0;
++
+ 	if (val == CPUFREQ_POSTCHANGE)
+ 		clockevents_update_freq(cd, freqs->new * 1000 / 2);
+ 
+@@ -77,6 +118,18 @@ static unsigned int loongson3_cpufreq_get(unsigned int cpu)
+ 	return clk_get_rate(cpu_clk_get(cpu));
+ }
+ 
++static int loongson3_cpufreq_set(struct cpufreq_policy *policy, int freq_level)
++{
++	uint32_t core_id = cpu_core(&cpu_data[policy->cpu]);
++	struct freq_level_setting_args args;
++
++	args.level = freq_level;
++	args.cpumask = 1 << core_id;
++	do_service_request(CMD_SET_CPU_LEVEL, &args);
++
++	return 0;
++}
++
+ /*
+  * Here we notify other drivers of the proposed change and the final change.
+  */
+@@ -95,9 +148,15 @@ static int loongson3_cpufreq_target(struct cpufreq_policy *policy,
+ 	     loongson3_clockmod_table[index].driver_data) / 8;
+ 
+ 	/* setting the cpu frequency */
+-	spin_lock(&cpufreq_reg_lock[package]);
+-	clk_set_rate(policy->clk, freq);
+-	spin_unlock(&cpufreq_reg_lock[package]);
++	if (new_method) {
++		mutex_lock(&cpufreq_mutex[package]);
++		loongson3_cpufreq_set(policy, index);
++		mutex_unlock(&cpufreq_mutex[package]);
++	} else {
++		spin_lock(&cpufreq_reg_lock[package]);
++		clk_set_rate(policy->clk, freq);
++		spin_unlock(&cpufreq_reg_lock[package]);
++	}
+ 
+ 	return 0;
+ }
+@@ -110,12 +169,17 @@ static int loongson3_cpufreq_cpu_init(struct cpufreq_policy *policy)
+ 	policy->clk = cpu_clk_get(policy->cpu);
+ 	policy->cur = loongson3_cpufreq_get(policy->cpu);
+ 
+-	policy->cpuinfo.transition_latency = 1000;
+-	policy->freq_table = loongson3_clockmod_table;
+-
+-	/* Loongson-3A R1: all cores in a package share one clock */
+-	if ((read_c0_prid() & 0xf) == PRID_REV_LOONGSON3A_R1)
+-		cpumask_copy(policy->cpus, topology_core_cpumask(policy->cpu));
++	if (new_method) {
++		/* Loongson-3A R4: new method */
++		policy->cpuinfo.transition_latency = 5000;
++		policy->freq_table = loongson3_cpufreq_table;
++	} else {
++		policy->cpuinfo.transition_latency = 1000;
++		policy->freq_table = loongson3_clockmod_table;
++		/* Loongson-3A R1: all cores in a package share one clock */
++		if ((read_c0_prid() & PRID_REV_MASK) == PRID_REV_LOONGSON3A_R1)
++			cpumask_copy(policy->cpus, topology_core_cpumask(policy->cpu));
++	}
+ 
+ 	return 0;
+ }
+@@ -152,6 +216,61 @@ static struct platform_driver platform_driver = {
+ 	.id_table = platform_device_ids,
+ };
+ 
++static int configure_cpufreq_info(void)
++{
++	int i, r, max_level;
++	struct feature_args args1;
++	struct freq_level_args args2;
++	struct freq_info_args args3;
++
++	if (!cpu_has_csr())
++		return -EPERM;
++
++	if (cpu_has_constant_timer)
++		loongson3_cpufreq_driver.flags |= CPUFREQ_CONST_LOOPS;
++
++	args1.index = FEATURE_INDEX_GENERAL;
++	r = do_service_request(CMD_GET_FEATURES, &args1);
++	if (r < 0)
++		return -EPERM;
++
++	if (args1.flags & FEATURE_FREQ_SCALE)
++		new_method = 1;
++
++	if (args1.flags & FEATURE_BOOST)
++		boost_supported = 1;
++
++	r = do_service_request(CMD_SET_ENABLED_FEATURES, &args1);
++	if (r < 0) {
++		new_method = 0;
++		boost_supported = 0;
++		return -EPERM;
++	}
++
++	r = do_service_request(CMD_GET_FREQ_LEVELS, &args2);
++	if (r < 0) {
++		new_method = 0;
++		boost_supported = 0;
++		return -EPERM;
++	}
++
++	if (boost_supported)
++		max_level = args2.max_boost_level;
++	else
++		max_level = args2.max_normal_level;
++
++	for (i = args2.min_level; i <= max_level; i++) {
++		args3.info = i;
++		args3.index = FREQ_INFO_INDEX_FREQ;
++		do_service_request(CMD_GET_FREQ_INFO, &args3);
++		loongson3_cpufreq_table[i].frequency = args3.info * 1000;
++		if (i > args2.max_normal_level)
++			loongson3_cpufreq_table[i].flags = CPUFREQ_BOOST_FREQ;
++	}
++
++	return 0;
++}
++
+ static int __init cpufreq_init(void)
+ {
+ 	int i, ret;
+@@ -163,14 +282,21 @@ static int __init cpufreq_init(void)
+ 
+ 	pr_info("cpufreq: Loongson-3 CPU frequency driver.\n");
+ 
+-	for (i = 0; i < MAX_PACKAGES; i++)
++	configure_cpufreq_info();
++
++	for (i = 0; i < MAX_PACKAGES; i++) {
++		mutex_init(&cpufreq_mutex[i]);
+ 		spin_lock_init(&cpufreq_reg_lock[i]);
++	}
+ 
+ 	cpufreq_register_notifier(&loongson3_cpufreq_notifier_block,
+ 				  CPUFREQ_TRANSITION_NOTIFIER);
+ 
+ 	ret = cpufreq_register_driver(&loongson3_cpufreq_driver);
+ 
++	if (boost_supported)
++		cpufreq_enable_boost_support();
++
+ 	return ret;
+ }
+ 
+-- 
+2.31.1
+

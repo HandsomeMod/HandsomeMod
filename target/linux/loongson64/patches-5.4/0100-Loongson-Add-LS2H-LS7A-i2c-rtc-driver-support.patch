@@ -1,0 +1,773 @@
+From 41d65fa79c0deed69f5a810af7933c44e44ebd10 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Mon, 17 Sep 2018 16:53:45 +0800
+Subject: [PATCH 100/131] Loongson: Add LS2H/LS7A i2c/rtc driver support
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/i2c/busses/Kconfig    |   7 +
+ drivers/i2c/busses/Makefile   |   1 +
+ drivers/i2c/busses/i2c-ls2x.c | 364 ++++++++++++++++++++++++++++++++++
+ drivers/rtc/Kconfig           |   7 +
+ drivers/rtc/Makefile          |   1 +
+ drivers/rtc/rtc-ls2x.c        | 317 +++++++++++++++++++++++++++++
+ 6 files changed, 697 insertions(+)
+ create mode 100644 drivers/i2c/busses/i2c-ls2x.c
+ create mode 100644 drivers/rtc/rtc-ls2x.c
+
+diff --git a/drivers/i2c/busses/Kconfig b/drivers/i2c/busses/Kconfig
+index 2d08a8719506..c2cb4f160a58 100644
+--- a/drivers/i2c/busses/Kconfig
++++ b/drivers/i2c/busses/Kconfig
+@@ -813,6 +813,13 @@ config I2C_OWL
+ 	  Say Y here if you want to use the I2C bus controller on
+ 	  the Actions Semiconductor Owl SoC's.
+ 
++config I2C_LS2X
++	tristate "Loongson LS2X I2C adapter"
++	depends on CPU_LOONGSON3
++	help
++	  If you say yes to this option, support will be included for the
++	  I2C interface on the Loongson's LS2H/LS2K/LS7A Platform-Bridge.
++
+ config I2C_PASEMI
+ 	tristate "PA Semi SMBus interface"
+ 	depends on PPC_PASEMI && PCI
+diff --git a/drivers/i2c/busses/Makefile b/drivers/i2c/busses/Makefile
+index 3ab8aebc39c9..7347537f8812 100644
+--- a/drivers/i2c/busses/Makefile
++++ b/drivers/i2c/busses/Makefile
+@@ -84,6 +84,7 @@ obj-$(CONFIG_I2C_NOMADIK)	+= i2c-nomadik.o
+ obj-$(CONFIG_I2C_OCORES)	+= i2c-ocores.o
+ obj-$(CONFIG_I2C_OMAP)		+= i2c-omap.o
+ obj-$(CONFIG_I2C_OWL)		+= i2c-owl.o
++obj-$(CONFIG_I2C_LS2X)		+= i2c-ls2x.o
+ obj-$(CONFIG_I2C_PASEMI)	+= i2c-pasemi.o
+ obj-$(CONFIG_I2C_PCA_PLATFORM)	+= i2c-pca-platform.o
+ obj-$(CONFIG_I2C_PMCMSP)	+= i2c-pmcmsp.o
+diff --git a/drivers/i2c/busses/i2c-ls2x.c b/drivers/i2c/busses/i2c-ls2x.c
+new file mode 100644
+index 000000000000..7ec414c6524d
+--- /dev/null
++++ b/drivers/i2c/busses/i2c-ls2x.c
+@@ -0,0 +1,364 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Loongson-2H I2C master mode driver
++ *
++ * Copyright (C) 2013 Loongson Technology Corporation Limited
++ * Copyright (C) 2014-2017 Lemote, Inc.
++ *
++ * Originally written by liushaozong
++ */
++
++#include <linux/module.h>
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/err.h>
++#include <linux/interrupt.h>
++#include <linux/completion.h>
++#include <linux/platform_device.h>
++#include <linux/clk.h>
++#include <linux/io.h>
++#include <linux/slab.h>
++#include <loongson-pch.h>
++
++#define LS2X_I2C_PRER_LO_REG	0x0
++#define LS2X_I2C_PRER_HI_REG	0x1
++#define LS2X_I2C_CTR_REG    	0x2
++#define LS2X_I2C_TXR_REG    	0x3
++#define LS2X_I2C_RXR_REG    	0x3
++#define LS2X_I2C_CR_REG     	0x4
++#define LS2X_I2C_SR_REG     	0x4
++
++#define	CR_START			0x80
++#define	CR_STOP				0x40
++#define	CR_READ				0x20
++#define	CR_WRITE			0x10
++#define	CR_ACK				0x8
++#define	CR_IACK				0x1
++
++#define	SR_NOACK			0x80
++#define	SR_BUSY				0x40
++#define	SR_AL				0x20
++#define	SR_TIP				0x2
++#define	SR_IF				0x1
++
++#define i2c_readb(addr)		readb(dev->base + addr)
++#define i2c_writeb(val, addr)	writeb(val, dev->base + addr)
++
++#ifdef LS2X_I2C_DEBUG
++#define i2c_debug(fmt, args...)	printk(KERN_CRIT fmt, ##args)
++#else
++#define i2c_debug(fmt, args...)
++#endif
++
++struct ls2x_i2c_dev {
++	spinlock_t		lock;
++	unsigned int		suspended:1;
++	struct device		*dev;
++	void __iomem		*base;
++	int			irq;
++	struct completion	cmd_complete;
++	struct resource		*ioarea;
++	struct i2c_adapter	adapter;
++};
++
++static void i2c_stop(struct ls2x_i2c_dev *dev)
++{
++again:
++        i2c_writeb(CR_STOP, LS2X_I2C_CR_REG);
++        i2c_readb(LS2X_I2C_SR_REG);
++        while (i2c_readb(LS2X_I2C_SR_REG) & SR_BUSY)
++                goto again;
++}
++
++static int i2c_start(struct ls2x_i2c_dev *dev,
++		int dev_addr, int flags)
++{
++	int retry = 5;
++	unsigned char addr = (dev_addr & 0x7f) << 1;
++	addr |= (flags & I2C_M_RD)? 1:0;
++
++start:
++	mdelay(1);
++	i2c_writeb(addr, LS2X_I2C_TXR_REG);
++	i2c_debug("%s <line%d>: i2c device address: 0x%x\n",
++			__func__, __LINE__, addr);
++	i2c_writeb((CR_START | CR_WRITE), LS2X_I2C_CR_REG);
++	while (i2c_readb(LS2X_I2C_SR_REG) & SR_TIP) ;
++
++	if (i2c_readb(LS2X_I2C_SR_REG) & SR_NOACK) {
++		i2c_stop(dev);
++		while (retry--)
++			goto start;
++		pr_info("There is no i2c device ack\n");
++		return 0;
++	}
++	return 1;
++}
++
++static void ls2x_i2c_reginit(struct ls2x_i2c_dev *dev)
++{
++        i2c_writeb(0, LS2X_I2C_CTR_REG);
++        i2c_writeb(0x2c, LS2X_I2C_PRER_LO_REG);
++        i2c_writeb(0x1, LS2X_I2C_PRER_HI_REG);
++        i2c_writeb(0x80, LS2X_I2C_CTR_REG);
++}
++
++static int i2c_read(struct ls2x_i2c_dev *dev,
++		unsigned char *buf, int count)
++{
++	int i;
++
++	for (i = 0; i < count; i++) {
++		i2c_writeb((i == count - 1)?
++				(CR_READ | CR_ACK) : CR_READ,
++				LS2X_I2C_CR_REG);
++		while (i2c_readb(LS2X_I2C_SR_REG) & SR_TIP) ;
++		buf[i] = i2c_readb(LS2X_I2C_RXR_REG);
++		i2c_debug("%s <line%d>: read buf[%d] <= %02x\n",
++				__func__, __LINE__, i, buf[i]);
++        }
++
++        return i;
++}
++
++static int i2c_write(struct ls2x_i2c_dev *dev,
++		unsigned char *buf, int count)
++{
++        int i;
++
++        for (i = 0; i < count; i++) {
++		i2c_writeb(buf[i], LS2X_I2C_TXR_REG);
++		i2c_debug("%s <line%d>: write buf[%d] => %02x\n",
++				__func__, __LINE__, i, buf[i]);
++		i2c_writeb(CR_WRITE, LS2X_I2C_CR_REG);
++		while (i2c_readb(LS2X_I2C_SR_REG) & SR_TIP) ;
++
++		if (i2c_readb(LS2X_I2C_SR_REG) & SR_NOACK) {
++			i2c_debug("%s <line%d>: device no ack\n",
++					__func__, __LINE__);
++			i2c_stop(dev);
++			return 0;
++		}
++        }
++
++        return i;
++}
++
++static int i2c_doxfer(struct ls2x_i2c_dev *dev,
++		struct i2c_msg *msgs, int num)
++{
++	struct i2c_msg *m = msgs;
++	unsigned long flags;
++	int i;
++
++	spin_lock_irqsave(&dev->lock, flags);
++	for(i = 0; i < num; i++) {
++		if (!i2c_start(dev, m->addr, m->flags)) {
++			spin_unlock_irqrestore(&dev->lock, flags);
++			return 0;
++		}
++		if (m->flags & I2C_M_RD)
++			i2c_read(dev, m->buf, m->len);
++		else
++			i2c_write(dev, m->buf, m->len);
++		++m;
++	}
++
++	i2c_stop(dev);
++	spin_unlock_irqrestore(&dev->lock, flags);
++
++	return i;
++}
++
++static int i2c_xfer(struct i2c_adapter *adap,
++                        struct i2c_msg *msgs, int num)
++{
++	int ret;
++	int retry;
++	struct ls2x_i2c_dev *dev;
++
++	dev = i2c_get_adapdata(adap);
++	for (retry = 0; retry < adap->retries; retry++) {
++		ret = i2c_doxfer(dev, msgs, num);
++		if (ret != -EAGAIN)
++			return ret;
++
++		udelay(100);
++	}
++
++	return -EREMOTEIO;
++}
++
++static unsigned int i2c_func(struct i2c_adapter *adap)
++{
++	return I2C_FUNC_I2C | I2C_FUNC_SMBUS_EMUL;
++}
++
++static const struct i2c_algorithm ls2x_i2c_algo = {
++	.master_xfer	= i2c_xfer,
++	.functionality	= i2c_func,
++};
++
++static int ls2x_i2c_probe(struct platform_device *pdev)
++{
++	struct ls2x_i2c_dev	*dev;
++	struct i2c_adapter	*adap;
++	struct resource		*mem, *irq, *ioarea;
++	int r;
++
++	/* NOTE: driver uses the static register mapping */
++	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	if (!mem) {
++		dev_err(&pdev->dev, "no mem resource?\n");
++		return -ENODEV;
++	}
++	irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
++	if (!irq) {
++		dev_err(&pdev->dev, "no irq resource?\n");
++		return -ENODEV;
++	}
++
++	ioarea = request_mem_region(mem->start, resource_size(mem),
++			pdev->name);
++	if (!ioarea) {
++		dev_err(&pdev->dev, "I2C region already claimed\n");
++		return -EBUSY;
++	}
++
++	dev = kzalloc(sizeof(struct ls2x_i2c_dev), GFP_KERNEL);
++	if (!dev) {
++		r = -ENOMEM;
++		goto err_release_region;
++	}
++
++	spin_lock_init(&dev->lock);
++	dev->dev = &pdev->dev;
++	dev->irq = irq->start;
++	dev->base = ioremap(mem->start, resource_size(mem));
++	if (!dev->base) {
++		r = -ENOMEM;
++		goto err_free_mem;
++	}
++
++	platform_set_drvdata(pdev, dev);
++
++	ls2x_i2c_reginit(dev);
++
++	adap = &dev->adapter;
++	i2c_set_adapdata(adap, dev);
++	adap->nr = pdev->id;
++	adap->owner = THIS_MODULE;
++	adap->class = I2C_CLASS_HWMON;
++	adap->retries = 5;
++	adap->algo = &ls2x_i2c_algo;
++	adap->dev.parent = &pdev->dev;
++#ifdef CONFIG_OF
++	adap->dev.of_node = pdev->dev.of_node;
++	adap->nr = of_alias_get_id(adap->dev.of_node, "i2c");
++#endif
++	sprintf(adap->name, "LS2X I2C%d adapter", adap->nr);
++
++	/* i2c device drivers may be active on return from add_adapter() */
++	r = i2c_add_numbered_adapter(adap);
++	if (r) {
++		dev_err(dev->dev, "failure adding adapter\n");
++		goto err_iounmap;
++	}
++
++	return 0;
++
++err_iounmap:
++	iounmap(dev->base);
++err_free_mem:
++	platform_set_drvdata(pdev, NULL);
++	kfree(dev);
++err_release_region:
++	release_mem_region(mem->start, resource_size(mem));
++
++	return r;
++}
++
++static int ls2x_i2c_remove(struct platform_device *pdev)
++{
++	struct ls2x_i2c_dev	*dev = platform_get_drvdata(pdev);
++	struct resource		*mem;
++
++	platform_set_drvdata(pdev, NULL);
++	i2c_del_adapter(&dev->adapter);
++	iounmap(dev->base);
++	kfree(dev);
++	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	release_mem_region(mem->start, resource_size(mem));
++	return 0;
++}
++
++#ifdef CONFIG_PM
++static int ls2x_i2c_suspend_noirq(struct device *dev)
++{
++	struct platform_device *pdev = to_platform_device(dev);
++	struct ls2x_i2c_dev *i2c_dev = platform_get_drvdata(pdev);
++
++	i2c_dev->suspended = 1;
++
++	return 0;
++}
++
++static int ls2x_i2c_resume(struct device *dev)
++{
++	struct platform_device *pdev = to_platform_device(dev);
++	struct ls2x_i2c_dev *i2c_dev = platform_get_drvdata(pdev);
++
++	i2c_dev->suspended = 0;
++	ls2x_i2c_reginit(i2c_dev);
++
++	return 0;
++}
++
++static const struct dev_pm_ops ls2x_i2c_dev_pm_ops = {
++	.suspend_noirq	= ls2x_i2c_suspend_noirq,
++	.resume		= ls2x_i2c_resume,
++};
++
++#define LS2X_DEV_PM_OPS (&ls2x_i2c_dev_pm_ops)
++#else
++#define LS2X_DEV_PM_OPS NULL
++#endif
++
++#ifdef CONFIG_OF
++static struct of_device_id ls2x_i2c_id_table[] = {
++	{.compatible = "loongson,ls2h-i2c"},
++	{.compatible = "loongson,ls2k-i2c"},
++	{.compatible = "loongson,ls7a-i2c"},
++	{},
++};
++#endif
++
++static struct platform_driver ls2x_i2c_driver = {
++	.probe		= ls2x_i2c_probe,
++	.remove		= ls2x_i2c_remove,
++	.driver		= {
++		.name	= "ls2x-i2c",
++		.owner	= THIS_MODULE,
++		.pm	= LS2X_DEV_PM_OPS,
++#ifdef CONFIG_OF
++		.of_match_table = of_match_ptr(ls2x_i2c_id_table),
++#endif
++	},
++};
++
++static int __init ls2x_i2c_init_driver(void)
++{
++	return platform_driver_register(&ls2x_i2c_driver);
++}
++subsys_initcall(ls2x_i2c_init_driver);
++
++static void __exit ls2x_i2c_exit_driver(void)
++{
++	platform_driver_unregister(&ls2x_i2c_driver);
++}
++module_exit(ls2x_i2c_exit_driver);
++
++MODULE_AUTHOR("Loongson Technology Corporation Limited");
++MODULE_DESCRIPTION("Loongson LS2X I2C bus adapter");
++MODULE_LICENSE("GPL");
++MODULE_ALIAS("platform:ls2x-i2c");
+diff --git a/drivers/rtc/Kconfig b/drivers/rtc/Kconfig
+index c5b980414086..48f72910dc33 100644
+--- a/drivers/rtc/Kconfig
++++ b/drivers/rtc/Kconfig
+@@ -1302,6 +1302,13 @@ config RTC_DRV_CROS_EC
+ 	  This driver can also be built as a module. If so, the module
+ 	  will be called rtc-cros-ec.
+ 
++config RTC_DRV_LS2X
++	tristate "Loongson LS2X RTC"
++	depends on CPU_LOONGSON3
++	help
++         If you say yes here you get support for the RTC on the
++         Loongson's LS2H/LS2K/LS7A Platform-Bridge.
++
+ comment "on-CPU RTC drivers"
+ 
+ config RTC_DRV_ASM9260
+diff --git a/drivers/rtc/Makefile b/drivers/rtc/Makefile
+index 4ac8f19fb631..c90af82d967c 100644
+--- a/drivers/rtc/Makefile
++++ b/drivers/rtc/Makefile
+@@ -47,6 +47,7 @@ obj-$(CONFIG_RTC_DRV_CMOS)	+= rtc-cmos.o
+ obj-$(CONFIG_RTC_DRV_COH901331)	+= rtc-coh901331.o
+ obj-$(CONFIG_RTC_DRV_CPCAP)	+= rtc-cpcap.o
+ obj-$(CONFIG_RTC_DRV_CROS_EC)	+= rtc-cros-ec.o
++obj-$(CONFIG_RTC_DRV_LS2X)     	+= rtc-ls2x.o
+ obj-$(CONFIG_RTC_DRV_DA9052)	+= rtc-da9052.o
+ obj-$(CONFIG_RTC_DRV_DA9055)	+= rtc-da9055.o
+ obj-$(CONFIG_RTC_DRV_DA9063)	+= rtc-da9063.o
+diff --git a/drivers/rtc/rtc-ls2x.c b/drivers/rtc/rtc-ls2x.c
+new file mode 100644
+index 000000000000..8325d24a9c16
+--- /dev/null
++++ b/drivers/rtc/rtc-ls2x.c
+@@ -0,0 +1,317 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Loongson-2H Real Time Clock interface for Linux
++ *
++ * Author: Shaozong Liu <liushaozong@loongson.cn>
++ *	   Huacai Chen <chenhc@lemote.com>
++ *
++ */
++
++#include <linux/kernel.h>
++#include <linux/slab.h>
++#include <linux/init.h>
++#include <linux/module.h>
++#include <linux/ioport.h>
++#include <linux/delay.h>
++#include <linux/rtc.h>
++#include <linux/bcd.h>
++#include <linux/platform_device.h>
++#include <linux/time.h>
++#include <linux/spinlock.h>
++#include <linux/device.h>
++#include <asm/io.h>
++#include <asm/time.h>
++#include <loongson-pch.h>
++
++/**
++ * Loongson-2H rtc register
++ */
++
++#define TOY_TRIM_REG   0x20
++#define TOY_WRITE0_REG 0x24
++#define TOY_WRITE1_REG 0x28
++#define TOY_READ0_REG  0x2c
++#define TOY_READ1_REG  0x30
++#define TOY_MATCH0_REG 0x34
++#define TOY_MATCH1_REG 0x38
++#define TOY_MATCH2_REG 0x3c
++#define RTC_CTRL_REG   0x40
++#define RTC_TRIM_REG   0x60
++#define RTC_WRITE0_REG 0x64
++#define RTC_READE0_REG 0x68
++#define RTC_MATCH0_REG 0x6c
++#define RTC_MATCH1_REG 0x70
++#define RTC_MATCH2_REG 0x74
++
++/**
++ * shift bits and filed mask
++ */
++#define TOY_MON_MASK   0x3f
++#define TOY_DAY_MASK   0x1f
++#define TOY_HOUR_MASK  0x1f
++#define TOY_MIN_MASK   0x3f
++#define TOY_SEC_MASK   0x3f
++#define TOY_MSEC_MASK  0xf
++
++#define TOY_MON_SHIFT  26
++#define TOY_DAY_SHIFT  21
++#define TOY_HOUR_SHIFT 16
++#define TOY_MIN_SHIFT  10
++#define TOY_SEC_SHIFT  4
++#define TOY_MSEC_SHIFT 0
++
++/* shift bits for TOY_MATCH */
++#define TOY_MATCH_YEAR_SHIFT 26
++#define TOY_MATCH_MON_SHIFT  22
++#define TOY_MATCH_DAY_SHIFT  17
++#define TOY_MATCH_HOUR_SHIFT 12
++#define TOY_MATCH_MIN_SHIFT  6
++#define TOY_MATCH_SEC_SHIFT  0
++
++/* Filed mask bits for TOY_MATCH */
++#define TOY_MATCH_YEAR_MASK  0x3f
++#define TOY_MATCH_MON_MASK   0xf
++#define TOY_MATCH_DAY_MASK   0x1f
++#define TOY_MATCH_HOUR_MASK  0x1f
++#define TOY_MATCH_MIN_MASK   0x3f
++#define TOY_MATCH_SEC_MASK   0x3f
++
++/* ACPI and RTC offset */
++#define ACPI_RTC_OFFSET		0x100
++
++/* support rtc wakeup */
++#define PM1_STS_FOR_RTC		0x10
++#define RTC_STS_WAKEUP_BIT	(0x1 << 10)
++#define ACPI_FOR_RTC_WAKEUP_BASE	\
++	(rtc_reg_base - ACPI_RTC_OFFSET + PM1_STS_FOR_RTC)
++
++/* interface for rtc read and write */
++#define rtc_write(val, addr)   writel(val, rtc_reg_base + (addr))
++#define rtc_read(addr)         readl(rtc_reg_base + (addr))
++
++struct ls2x_rtc_info {
++	struct platform_device *pdev;
++	struct rtc_device *rtc_dev;
++	struct resource *mem_res;
++	void __iomem *rtc_base;
++	int irq_base;
++};
++
++static void __iomem *rtc_reg_base;
++
++static int ls2x_rtc_read_time(struct device *dev, struct rtc_time *tm)
++{
++	unsigned int val;
++	unsigned long flags;
++
++	spin_lock_irqsave(&rtc_lock, flags);
++
++	val = rtc_read(TOY_READ1_REG);
++	tm->tm_year = val;
++	val = rtc_read(TOY_READ0_REG);
++	tm->tm_sec = (val >> TOY_SEC_SHIFT) & TOY_SEC_MASK;
++	tm->tm_min = (val >> TOY_MIN_SHIFT) & TOY_MIN_MASK;
++	tm->tm_hour = (val >> TOY_HOUR_SHIFT) & TOY_HOUR_MASK;
++	tm->tm_mday = (val >> TOY_DAY_SHIFT) & TOY_DAY_MASK;
++	tm->tm_mon = ((val >> TOY_MON_SHIFT) & TOY_MON_MASK) - 1;
++
++	spin_unlock_irqrestore(&rtc_lock, flags);
++
++	return 0;
++}
++
++static int ls2x_rtc_set_time(struct device *dev, struct rtc_time *tm)
++{
++	unsigned int val = 0;
++	unsigned long flags;
++
++	spin_lock_irqsave(&rtc_lock, flags);
++
++	val |= (tm->tm_sec << TOY_SEC_SHIFT);
++	val |= (tm->tm_min << TOY_MIN_SHIFT);
++	val |= (tm->tm_hour << TOY_HOUR_SHIFT);
++	val |= (tm->tm_mday << TOY_DAY_SHIFT);
++	val |= ((tm->tm_mon + 1) << TOY_MON_SHIFT);
++	rtc_write(val, TOY_WRITE0_REG);
++	val = tm->tm_year;
++	rtc_write(val, TOY_WRITE1_REG);
++
++	spin_unlock_irqrestore(&rtc_lock, flags);
++
++	return 0;
++}
++
++static int ls2x_rtc_read_alarm(struct device *dev, struct rtc_wkalrm *alrm)
++{
++	unsigned int val;
++	unsigned long flags;
++	struct rtc_time *tm = &alrm->time;
++
++	spin_lock_irqsave(&rtc_lock, flags);
++
++	val = rtc_read(TOY_MATCH0_REG);
++	tm->tm_sec = (val >> TOY_MATCH_SEC_SHIFT) & TOY_MATCH_SEC_MASK;
++	tm->tm_min = (val >> TOY_MATCH_MIN_SHIFT) & TOY_MATCH_MIN_MASK;
++	tm->tm_hour = (val >> TOY_MATCH_HOUR_SHIFT) & TOY_MATCH_HOUR_MASK;
++	tm->tm_mday = (val >> TOY_MATCH_DAY_SHIFT) & TOY_MATCH_DAY_MASK;
++	tm->tm_mon = ((val >> TOY_MATCH_MON_SHIFT) & TOY_MATCH_MON_MASK) - 1;
++	tm->tm_year = ((val >> TOY_MATCH_YEAR_SHIFT) & TOY_MATCH_YEAR_MASK);
++
++	spin_unlock_irqrestore(&rtc_lock, flags);
++
++	return 0;
++}
++
++static int ls2x_rtc_set_alarm(struct device *dev, struct rtc_wkalrm *alrm)
++{
++	unsigned int val = 0;
++	unsigned int temp = 0;
++	unsigned long flags;
++	struct rtc_time *tm = &alrm->time;
++
++	spin_lock_irqsave(&rtc_lock, flags);
++
++	val |= (tm->tm_sec << TOY_MATCH_SEC_SHIFT);
++	val |= (tm->tm_min << TOY_MATCH_MIN_SHIFT);
++	val |= (tm->tm_hour << TOY_MATCH_HOUR_SHIFT);
++	val |= (tm->tm_mday << TOY_MATCH_DAY_SHIFT);
++	val |= ((tm->tm_mon + 1) << TOY_MATCH_MON_SHIFT);
++	val |= ((tm->tm_year & TOY_MATCH_YEAR_MASK) << TOY_MATCH_YEAR_SHIFT);
++	rtc_write(val, TOY_MATCH0_REG);
++
++	/* enalbe acpi rtc wakeup */
++	temp = readl(ACPI_FOR_RTC_WAKEUP_BASE) | RTC_STS_WAKEUP_BIT;
++	writel(temp, ACPI_FOR_RTC_WAKEUP_BASE);
++
++	spin_unlock_irqrestore(&rtc_lock, flags);
++
++	return 0;
++}
++
++static struct rtc_class_ops ls2x_rtc_ops = {
++	.read_time = ls2x_rtc_read_time,
++	.set_time = ls2x_rtc_set_time,
++	.read_alarm = ls2x_rtc_read_alarm,
++	.set_alarm = ls2x_rtc_set_alarm,
++};
++
++
++static int ls2x_rtc_probe(struct platform_device *pdev)
++{
++	struct resource *res, *mem;
++	struct device *dev = &pdev->dev;
++	struct rtc_device *rtc;
++	struct ls2x_rtc_info *info;
++
++	info = kzalloc(sizeof(struct ls2x_rtc_info), GFP_KERNEL);
++	if (!info) {
++		pr_debug("%s: no enough memory\n", pdev->name);
++		return -ENOMEM;
++	}
++
++	info->pdev = pdev;
++	info->irq_base = platform_get_irq(pdev, 0);
++	if (info->irq_base <= 0) {
++		pr_debug("%s: no irq?\n", pdev->name);
++		return -ENOENT;
++	}
++
++	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
++	if (!res) {
++		pr_debug("%s: RTC resource data missing\n", pdev->name);
++		return -ENOENT;
++	}
++
++	mem = request_mem_region(res->start, resource_size(res), pdev->name);
++	if (!mem) {
++		pr_debug("%s: RTC registers at %x are not free\n",
++			 pdev->name, (unsigned int)res->start);
++		return -EBUSY;
++	}
++	info->mem_res = mem;
++
++	info->rtc_base = ioremap(res->start, resource_size(res));
++	if (!info->rtc_base) {
++		pr_debug("%s: RTC registers can't be mapped\n", pdev->name);
++		goto fail1;
++	}
++	rtc_reg_base = info->rtc_base;
++
++	device_init_wakeup(dev, 1);
++
++	rtc = info->rtc_dev = devm_rtc_device_register(&pdev->dev, pdev->name,
++						  &ls2x_rtc_ops, THIS_MODULE);
++
++	/* There don't need alarm interrupt */
++	info->rtc_dev->uie_unsupported = 1;
++
++	if (IS_ERR(info->rtc_dev)) {
++		pr_debug("%s: can't register RTC device, err %ld\n",
++			 pdev->name, PTR_ERR(rtc));
++		goto fail0;
++	}
++
++	platform_set_drvdata(pdev, info);
++	dev_set_drvdata(&rtc->dev, info);
++
++	return 0;
++
++fail0:
++	iounmap(info->rtc_base);
++fail1:
++	release_resource(mem);
++	kfree(info);
++
++	return -EIO;
++}
++
++static int ls2x_rtc_remove(struct platform_device *pdev)
++{
++	struct ls2x_rtc_info *info = platform_get_drvdata(pdev);
++	struct rtc_device *rtc = info->rtc_dev;
++
++	iounmap(info->rtc_base);
++	release_resource(dev_get_drvdata(&rtc->dev));
++	release_resource(info->mem_res);
++	kfree(info);
++
++	return 0;
++}
++
++#ifdef CONFIG_OF
++static struct of_device_id ls2x_rtc_id_table[] = {
++	{.compatible = "loongson,ls2h-rtc"},
++	{.compatible = "loongson,ls2k-rtc"},
++	{.compatible = "loongson,ls7a-rtc"},
++	{},
++};
++#endif
++
++static struct platform_driver ls2x_rtc_driver = {
++	.probe		= ls2x_rtc_probe,
++	.remove		= ls2x_rtc_remove,
++	.driver		= {
++		.name	= "ls2x-rtc",
++		.owner	= THIS_MODULE,
++#ifdef CONFIG_OF
++		.of_match_table = of_match_ptr(ls2x_rtc_id_table),
++#endif
++	},
++};
++
++static int __init rtc_init(void)
++{
++	return platform_driver_register(&ls2x_rtc_driver);
++}
++
++static void __exit rtc_exit(void)
++{
++	platform_driver_unregister(&ls2x_rtc_driver);
++}
++
++module_init(rtc_init);
++module_exit(rtc_exit);
++
++MODULE_AUTHOR("Liu Shaozong");
++MODULE_LICENSE("GPL");
++MODULE_ALIAS("platform:ls2x-rtc");
+-- 
+2.31.1
+

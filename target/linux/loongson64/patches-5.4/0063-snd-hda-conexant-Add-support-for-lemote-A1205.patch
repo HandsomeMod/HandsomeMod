@@ -1,0 +1,82 @@
+From e4d74295813fe409477c82e091b480852ca299a4 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 063/131] snd/hda/conexant: Add support for lemote A1205
+
+Lemote A1205 is a all in one product.
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+Signed-off-by: Hongliang Tao <taohl@lemote.com>
+Signed-off-by: Hua Yan <yanh@lemote.com>
+---
+ sound/pci/hda/patch_conexant.c | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/sound/pci/hda/patch_conexant.c b/sound/pci/hda/patch_conexant.c
+index a62f4d6d36af..437e3627b1a7 100644
+--- a/sound/pci/hda/patch_conexant.c
++++ b/sound/pci/hda/patch_conexant.c
+@@ -206,6 +206,7 @@ enum {
+ 	CXT_PINCFG_COMPAQ_CQ60,
+ 	CXT_FIXUP_STEREO_DMIC,
+ 	CXT_FIXUP_INC_MIC_BOOST,
++	CXT_FIXUP_SET_RAW_VERBS,
+ 	CXT_FIXUP_HEADPHONE_MIC_PIN,
+ 	CXT_FIXUP_HEADPHONE_MIC,
+ 	CXT_FIXUP_GPIO1,
+@@ -228,6 +229,12 @@ enum {
+ /* for hda_fixup_thinkpad_acpi() */
+ #include "thinkpad_helper.c"
+ 
++static unsigned int cxt5066_raw_init_verbs_lemote_aio_a1205[] = {
++	0x273f01c, /* Set speaker power to 1.5W@8ohm */
++	0x2729003, /* Set High pass filter to 90Hz */
++	-1 /* end */
++};
++
+ static void cxt_fixup_stereo_dmic(struct hda_codec *codec,
+ 				  const struct hda_fixup *fix, int action)
+ {
+@@ -248,6 +255,19 @@ static void cxt5066_increase_mic_boost(struct hda_codec *codec,
+ 				  (0 << AC_AMPCAP_MUTE_SHIFT));
+ }
+ 
++static void cxt5066_set_raw_verbs(struct hda_codec *codec,
++				   const struct hda_fixup *fix, int action)
++{
++	struct conexant_spec *spec = codec->spec;
++
++	if (action != HDA_FIXUP_ACT_PRE_PROBE)
++		return;
++
++	spec->raw_init_verbs[spec->num_raw_init_verbs] =
++		cxt5066_raw_init_verbs_lemote_aio_a1205;
++	spec->num_raw_init_verbs++;
++}
++
+ static void cxt_update_headset_mode(struct hda_codec *codec)
+ {
+ 	/* The verbs used in this function were tested on a Conexant CX20751/2 codec. */
+@@ -730,6 +750,8 @@ static const struct hda_fixup cxt_fixups[] = {
+ 	},
+ 	[CXT_PINCFG_LEMOTE_A1205] = {
+ 		.type = HDA_FIXUP_PINS,
++		.chained = true,
++		.chain_id = CXT_FIXUP_SET_RAW_VERBS,
+ 		.v.pins = cxt_pincfg_lemote,
+ 	},
+ 	[CXT_PINCFG_COMPAQ_CQ60] = {
+@@ -749,6 +771,10 @@ static const struct hda_fixup cxt_fixups[] = {
+ 		.type = HDA_FIXUP_FUNC,
+ 		.v.func = cxt5066_increase_mic_boost,
+ 	},
++	[CXT_FIXUP_SET_RAW_VERBS] = {
++		.type = HDA_FIXUP_FUNC,
++		.v.func = cxt5066_set_raw_verbs,
++	},
+ 	[CXT_FIXUP_HEADPHONE_MIC_PIN] = {
+ 		.type = HDA_FIXUP_PINS,
+ 		.chained = true,
+-- 
+2.31.1
+

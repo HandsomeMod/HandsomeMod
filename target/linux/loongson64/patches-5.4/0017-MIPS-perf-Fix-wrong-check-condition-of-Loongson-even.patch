@@ -1,0 +1,41 @@
+From 38574491c6a769d953e23d1b38e072723418eb47 Mon Sep 17 00:00:00 2001
+From: Tiezhu Yang <yangtiezhu@loongson.cn>
+Date: Thu, 27 Aug 2020 16:03:08 +0800
+Subject: [PATCH 017/131] MIPS: perf: Fix wrong check condition of Loongson
+ event IDs
+
+According to the user's manual chapter 8.2.1 of Loongson 3A2000 CPU [1]
+and 3A3000 CPU [2], we should take some event IDs such as 274, 358, 359
+and 360 as valid in the check condition, otherwise they are recognized
+as "not supported", fix it.
+
+[1] http://www.loongson.cn/uploadfile/cpu/3A2000/Loongson3A2000_user2.pdf
+[2] http://www.loongson.cn/uploadfile/cpu/3A3000/Loongson3A3000_3B3000user2.pdf
+
+Fixes: e9dfbaaeef1c ("MIPS: perf: Add hardware perf events support for new Loongson-3")
+Signed-off-by: Tiezhu Yang <yangtiezhu@loongson.cn>
+Acked-by: Huang Pei <huangpei@loongson.cn>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ arch/mips/kernel/perf_event_mipsxx.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/mips/kernel/perf_event_mipsxx.c b/arch/mips/kernel/perf_event_mipsxx.c
+index 77ef66ddedf0..25e0e3b942ea 100644
+--- a/arch/mips/kernel/perf_event_mipsxx.c
++++ b/arch/mips/kernel/perf_event_mipsxx.c
+@@ -1891,8 +1891,8 @@ static const struct mips_perf_event *mipsxx_pmu_map_raw_event(u64 config)
+ 				(base_id >= 64 && base_id < 90) ||
+ 				(base_id >= 128 && base_id < 164) ||
+ 				(base_id >= 192 && base_id < 200) ||
+-				(base_id >= 256 && base_id < 274) ||
+-				(base_id >= 320 && base_id < 358) ||
++				(base_id >= 256 && base_id < 275) ||
++				(base_id >= 320 && base_id < 361) ||
+ 				(base_id >= 384 && base_id < 574))
+ 				break;
+ 			else
+-- 
+2.31.1
+

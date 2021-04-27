@@ -1,0 +1,648 @@
+From bb89130341888cc18888a5e33384a6c583415a32 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 2 Mar 2017 14:00:21 +0800
+Subject: [PATCH 091/131] MIPS: Loongson-3: Add io coherency detection support
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ arch/mips/include/asm/dma-coherence.h         |  23 ++
+ arch/mips/include/asm/dma-mapping.h           |   3 +
+ .../include/asm/mach-loongson64/boot_param.h  |   3 +-
+ .../include/asm/mach-loongson64/kmalloc.h     |   6 +
+ arch/mips/kernel/setup.c                      |   1 +
+ arch/mips/loongson64/Kconfig                  |   1 +
+ arch/mips/loongson64/common/env.c             |   3 +
+ arch/mips/loongson64/loongson-3/acpi_init.c   |   2 +-
+ arch/mips/loongson64/loongson-3/dma.c         | 201 +++++++++++++++++-
+ arch/mips/mm/cache.c                          |   4 +
+ arch/mips/mm/dma-noncoherent.c                |  21 --
+ drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c      |   6 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_object.c    |  20 +-
+ drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c       |   7 +-
+ drivers/gpu/drm/radeon/radeon_object.c        |  35 ++-
+ drivers/gpu/drm/ttm/ttm_bo.c                  |   5 +
+ 16 files changed, 302 insertions(+), 39 deletions(-)
+ create mode 100644 arch/mips/include/asm/mach-loongson64/kmalloc.h
+
+diff --git a/arch/mips/include/asm/dma-coherence.h b/arch/mips/include/asm/dma-coherence.h
+index 5eaa1fcc878a..837b853ea300 100644
+--- a/arch/mips/include/asm/dma-coherence.h
++++ b/arch/mips/include/asm/dma-coherence.h
+@@ -9,6 +9,8 @@
+ #ifndef __ASM_DMA_COHERENCE_H
+ #define __ASM_DMA_COHERENCE_H
+ 
++#include <linux/dma-direction.h>
++
+ enum coherent_io_user_state {
+ 	IO_COHERENCE_DEFAULT,
+ 	IO_COHERENCE_ENABLED,
+@@ -35,4 +37,25 @@ static inline bool dev_is_dma_coherent(struct device *dev)
+ #define hw_coherentio	0
+ #endif /* CONFIG_DMA_MAYBE_COHERENT */
+ 
++static inline void dma_sync_virt(void *addr, size_t size,
++		enum dma_data_direction dir)
++{
++	switch (dir) {
++	case DMA_TO_DEVICE:
++		dma_cache_wback((unsigned long)addr, size);
++		break;
++
++	case DMA_FROM_DEVICE:
++		dma_cache_inv((unsigned long)addr, size);
++		break;
++
++	case DMA_BIDIRECTIONAL:
++		dma_cache_wback_inv((unsigned long)addr, size);
++		break;
++
++	default:
++		BUG();
++	}
++}
++
+ #endif
+diff --git a/arch/mips/include/asm/dma-mapping.h b/arch/mips/include/asm/dma-mapping.h
+index 34de7b17b41b..968dfc59ac67 100644
+--- a/arch/mips/include/asm/dma-mapping.h
++++ b/arch/mips/include/asm/dma-mapping.h
+@@ -5,11 +5,14 @@
+ #include <linux/swiotlb.h>
+ 
+ extern const struct dma_map_ops jazz_dma_ops;
++extern const struct dma_map_ops loongson_dma_ops;
+ 
+ static inline const struct dma_map_ops *get_arch_dma_ops(struct bus_type *bus)
+ {
+ #if defined(CONFIG_MACH_JAZZ)
+ 	return &jazz_dma_ops;
++#elif defined(CONFIG_CPU_LOONGSON3)
++	return &loongson_dma_ops;
+ #else
+ 	return NULL;
+ #endif
+diff --git a/arch/mips/include/asm/mach-loongson64/boot_param.h b/arch/mips/include/asm/mach-loongson64/boot_param.h
+index 1d69e4c53665..016acd1c33dc 100644
+--- a/arch/mips/include/asm/mach-loongson64/boot_param.h
++++ b/arch/mips/include/asm/mach-loongson64/boot_param.h
+@@ -116,7 +116,8 @@ struct irq_source_routing_table {
+ 	u64 pci_io_start_addr;
+ 	u64 pci_io_end_addr;
+ 	u64 pci_config_addr;
+-	u32 dma_mask_bits;
++	u16 dma_mask_bits;
++	u16 dma_noncoherent;
+ } __packed;
+ 
+ struct interface_info {
+diff --git a/arch/mips/include/asm/mach-loongson64/kmalloc.h b/arch/mips/include/asm/mach-loongson64/kmalloc.h
+new file mode 100644
+index 000000000000..2731d9e521e0
+--- /dev/null
++++ b/arch/mips/include/asm/mach-loongson64/kmalloc.h
+@@ -0,0 +1,6 @@
++#ifndef __ASM_MACH_LOONGSON64_KMALLOC_H
++#define __ASM_MACH_LOONGSON64_KMALLOC_H
++
++#define ARCH_DMA_MINALIGN L1_CACHE_BYTES
++
++#endif /* __ASM_MACH_LOONGSON64_KMALLOC_H */
+diff --git a/arch/mips/kernel/setup.c b/arch/mips/kernel/setup.c
+index e4c0695d5a04..3a3c96f621b7 100644
+--- a/arch/mips/kernel/setup.c
++++ b/arch/mips/kernel/setup.c
+@@ -860,6 +860,7 @@ arch_initcall(debugfs_mips);
+ enum coherent_io_user_state coherentio = IO_COHERENCE_DEFAULT;
+ EXPORT_SYMBOL_GPL(coherentio);
+ int hw_coherentio = 0;	/* Actual hardware supported DMA coherency setting. */
++EXPORT_SYMBOL_GPL(hw_coherentio);
+ 
+ static int __init setcoherentio(char *str)
+ {
+diff --git a/arch/mips/loongson64/Kconfig b/arch/mips/loongson64/Kconfig
+index 81d838250240..7e7e7f6d9111 100644
+--- a/arch/mips/loongson64/Kconfig
++++ b/arch/mips/loongson64/Kconfig
+@@ -90,6 +90,7 @@ config LOONGSON_MACH3X
+ 	select SYS_SUPPORTS_LITTLE_ENDIAN
+ 	select LOONGSON_MC146818
+ 	select ZONE_DMA32
++	select DMA_MAYBE_COHERENT
+ 	select LEFI_FIRMWARE_INTERFACE
+ 	help
+ 		Generic Loongson 3 family machines utilize the 3A/3B revision
+diff --git a/arch/mips/loongson64/common/env.c b/arch/mips/loongson64/common/env.c
+index d1e9bef4575c..99da451fb642 100644
+--- a/arch/mips/loongson64/common/env.c
++++ b/arch/mips/loongson64/common/env.c
+@@ -16,6 +16,7 @@
+ #include <linux/export.h>
+ #include <asm/time.h>
+ #include <asm/bootinfo.h>
++#include <asm/dma-coherence.h>
+ #include <loongson.h>
+ #include <boot_param.h>
+ #include <workarounds.h>
+@@ -172,6 +173,8 @@ void __init prom_init_env(void)
+ 	if (loongson_sysconf.dma_mask_bits < 32 ||
+ 		loongson_sysconf.dma_mask_bits > 64)
+ 		loongson_sysconf.dma_mask_bits = 32;
++	hw_coherentio = !eirq_source->dma_noncoherent;
++	pr_info("BIOS configured I/O coherency: %s\n", hw_coherentio?"ON":"OFF");
+ 
+ 	loongson_sysconf.restart_addr = boot_p->reset_system.ResetWarm;
+ 	loongson_sysconf.poweroff_addr = boot_p->reset_system.Shutdown;
+diff --git a/arch/mips/loongson64/loongson-3/acpi_init.c b/arch/mips/loongson64/loongson-3/acpi_init.c
+index 9c39d54acea8..f8a08deb6370 100644
+--- a/arch/mips/loongson64/loongson-3/acpi_init.c
++++ b/arch/mips/loongson64/loongson-3/acpi_init.c
+@@ -132,7 +132,7 @@ static int __init power_button_init(void)
+ 	int ret;
+ 	struct pci_dev *dev;
+ 
+-	dev = pci_get_bus_and_slot(0, 0);
++	dev = pci_get_domain_bus_and_slot(0, 0, 0);
+ 	switch (dev->vendor) {
+ 	case PCI_VENDOR_ID_AMD:
+ 	case PCI_VENDOR_ID_ATI:
+diff --git a/arch/mips/loongson64/loongson-3/dma.c b/arch/mips/loongson64/loongson-3/dma.c
+index 5e86635f71db..24febcda5458 100644
+--- a/arch/mips/loongson64/loongson-3/dma.c
++++ b/arch/mips/loongson64/loongson-3/dma.c
+@@ -1,8 +1,189 @@
+ // SPDX-License-Identifier: GPL-2.0
+-#include <linux/dma-direct.h>
++#include <linux/mm.h>
+ #include <linux/init.h>
++#include <linux/dma-direct.h>
++#include <linux/dma-mapping.h>
++#include <linux/dma-noncoherent.h>
++#include <linux/scatterlist.h>
+ #include <linux/swiotlb.h>
+ 
++#include <asm/bootinfo.h>
++#include <asm/dma-coherence.h>
++
++static inline void *dma_to_virt(struct device *dev, dma_addr_t dma_addr)
++{
++	return phys_to_virt(__dma_to_phys(dev, dma_addr));
++}
++
++static void *loongson_dma_alloc_coherent(struct device *dev, size_t size,
++		dma_addr_t *dma_handle, gfp_t gfp, unsigned long attrs)
++{
++	void *ret = dma_direct_alloc_pages(dev, size, dma_handle, gfp, attrs);
++
++	if (!dev_is_dma_coherent(dev)) {
++		dma_cache_wback_inv((unsigned long)dma_to_virt(dev, *dma_handle), size);
++		ret = uncached_kernel_address(ret);
++	}
++	mb();
++
++	return ret;
++}
++
++static void loongson_dma_free_coherent(struct device *dev, size_t size,
++		void *vaddr, dma_addr_t dma_handle, unsigned long attrs)
++ {
++	if (!dev_is_dma_coherent(dev)) {
++		vaddr = cached_kernel_address(vaddr);
++		dma_cache_wback_inv((unsigned long)dma_to_virt(dev, dma_handle), size);
++	}
++	dma_direct_free_pages(dev, size, vaddr, dma_handle, attrs);
++}
++
++static dma_addr_t loongson_dma_map_page(struct device *dev, struct page *page,
++				unsigned long offset, size_t size,
++				enum dma_data_direction dir,
++				unsigned long attrs)
++{
++	dma_addr_t daddr = dma_direct_map_page(dev, page, offset, size,
++					dir, attrs);
++	if (!dev_is_dma_coherent(dev) && !(attrs & DMA_ATTR_SKIP_CPU_SYNC))
++		dma_sync_virt(dma_to_virt(dev, daddr), size, dir);
++	mb();
++
++	return daddr;
++}
++
++static void loongson_dma_unmap_page(struct device *dev, dma_addr_t dev_addr,
++			size_t size, enum dma_data_direction dir,
++			unsigned long attrs)
++{
++	if (!dev_is_dma_coherent(dev) && !(attrs & DMA_ATTR_SKIP_CPU_SYNC))
++		dma_sync_virt(dma_to_virt(dev, dev_addr), size, dir);
++	dma_direct_unmap_page(dev, dev_addr, size, dir, attrs);
++}
++
++static int loongson_dma_map_sg(struct device *dev, struct scatterlist *sgl,
++				int nents, enum dma_data_direction dir,
++				unsigned long attrs)
++{
++	int i, r;
++	struct scatterlist *sg;
++
++	r = dma_direct_map_sg(dev, sgl, nents, dir, attrs);
++	if (!dev_is_dma_coherent(dev) && !(attrs & DMA_ATTR_SKIP_CPU_SYNC)) {
++		for_each_sg(sgl, sg, nents, i)
++			dma_sync_virt(dma_to_virt(dev, sg->dma_address), sg->length, dir);
++	}
++	mb();
++
++	return r;
++}
++
++static void loongson_dma_unmap_sg(struct device *dev, struct scatterlist *sgl,
++			int nelems, enum dma_data_direction dir,
++			unsigned long attrs)
++{
++	int i;
++	struct scatterlist *sg;
++
++	if (!dev_is_dma_coherent(dev) && !(attrs & DMA_ATTR_SKIP_CPU_SYNC) && dir != DMA_TO_DEVICE) {
++		for_each_sg(sgl, sg, nelems, i)
++			dma_sync_virt(dma_to_virt(dev, sg->dma_address), sg->length, dir);
++	}
++
++	dma_direct_unmap_sg(dev, sgl, nelems, dir, attrs);
++}
++
++static int loongson_dma_mmap(struct device *dev, struct vm_area_struct *vma,
++	void *cpu_addr, dma_addr_t dma_addr, size_t size, unsigned long attrs)
++{
++	int ret = -ENXIO;
++	unsigned long user_count = vma_pages(vma);
++	unsigned long count = PAGE_ALIGN(size) >> PAGE_SHIFT;
++	unsigned long pfn = page_to_pfn(virt_to_page(cpu_addr));
++	unsigned long off = vma->vm_pgoff;
++
++	if (!dev_is_dma_coherent(dev)) {
++		if (attrs & DMA_ATTR_WRITE_COMBINE)
++			vma->vm_page_prot = pgprot_writecombine(vma->vm_page_prot);
++		else
++			vma->vm_page_prot = pgprot_noncached(vma->vm_page_prot);
++	} else {
++		unsigned long prot = pgprot_val(vma->vm_page_prot);
++		prot = (prot & ~_CACHE_MASK) | _page_cachable_default;
++		vma->vm_page_prot = __pgprot(prot);
++	}
++
++	if (dma_mmap_from_dev_coherent(dev, vma, cpu_addr, size, &ret))
++		return ret;
++
++	if (off < count && user_count <= (count - off)) {
++		ret = remap_pfn_range(vma, vma->vm_start, pfn + off,
++				      user_count << PAGE_SHIFT, vma->vm_page_prot);
++	}
++
++	return ret;
++}
++
++static void loongson_dma_sync_single_for_cpu(struct device *dev, dma_addr_t dev_addr,
++			size_t size, enum dma_data_direction dir)
++{
++	if (!dev_is_dma_coherent(dev))
++		dma_sync_virt(dma_to_virt(dev, dev_addr), size, dir);
++	dma_direct_sync_single_for_cpu(dev, dev_addr, size, dir);
++}
++
++static void loongson_dma_sync_single_for_device(struct device *dev,
++				dma_addr_t dma_handle, size_t size,
++				enum dma_data_direction dir)
++{
++	dma_direct_sync_single_for_device(dev, dma_handle, size, dir);
++	if (!dev_is_dma_coherent(dev))
++		dma_sync_virt(dma_to_virt(dev, dma_handle), size, dir);
++	mb();
++}
++
++static void loongson_dma_sync_sg_for_cpu(struct device *dev,
++				struct scatterlist *sgl, int nents,
++				enum dma_data_direction dir)
++{
++	int i;
++	struct scatterlist *sg;
++
++	if (!dev_is_dma_coherent(dev)) {
++		for_each_sg(sgl, sg, nents, i) {
++			dma_sync_virt(dma_to_virt(dev,
++				sg->dma_address), sg->length, dir);
++		}
++	}
++	dma_direct_sync_sg_for_cpu(dev, sgl, nents, dir);
++}
++
++static void loongson_dma_sync_sg_for_device(struct device *dev,
++				struct scatterlist *sgl, int nents,
++				enum dma_data_direction dir)
++{
++	int i;
++	struct scatterlist *sg;
++
++	dma_direct_sync_sg_for_device(dev, sgl, nents, dir);
++	if (!dev_is_dma_coherent(dev)) {
++		for_each_sg(sgl, sg, nents, i) {
++			dma_sync_virt(dma_to_virt(dev,
++				sg->dma_address), sg->length, dir);
++		}
++	}
++	mb();
++}
++
++static int loongson_dma_supported(struct device *dev, u64 mask)
++{
++	if (mask > DMA_BIT_MASK(loongson_sysconf.dma_mask_bits))
++		return 0;
++
++	return (mask >= SZ_256M);
++}
++
+ dma_addr_t __phys_to_dma(struct device *dev, phys_addr_t paddr)
+ {
+ 	/* We extract 2bit node id (bit 44~47, only bit 44~45 used now) from
+@@ -19,6 +200,24 @@ phys_addr_t __dma_to_phys(struct device *dev, dma_addr_t daddr)
+ 	return ((nid << 37) ^ daddr) | (nid << 44);
+ }
+ 
++const struct dma_map_ops loongson_dma_ops = {
++	.alloc = loongson_dma_alloc_coherent,
++	.free = loongson_dma_free_coherent,
++	.map_page = loongson_dma_map_page,
++	.unmap_page = loongson_dma_unmap_page,
++	.map_sg = loongson_dma_map_sg,
++	.unmap_sg = loongson_dma_unmap_sg,
++	.mmap = loongson_dma_mmap,
++	.get_sgtable = dma_common_get_sgtable,
++	.sync_single_for_cpu = loongson_dma_sync_single_for_cpu,
++	.sync_single_for_device = loongson_dma_sync_single_for_device,
++	.sync_sg_for_cpu = loongson_dma_sync_sg_for_cpu,
++	.sync_sg_for_device = loongson_dma_sync_sg_for_device,
++	.dma_supported = loongson_dma_supported,
++	.cache_sync = arch_dma_cache_sync,
++};
++EXPORT_SYMBOL(loongson_dma_ops);
++
+ void __init plat_swiotlb_setup(void)
+ {
+ 	swiotlb_init(1);
+diff --git a/arch/mips/mm/cache.c b/arch/mips/mm/cache.c
+index 33b409391ddb..a01923b30086 100644
+--- a/arch/mips/mm/cache.c
++++ b/arch/mips/mm/cache.c
+@@ -62,6 +62,10 @@ void (*_dma_cache_wback_inv)(unsigned long start, unsigned long size);
+ void (*_dma_cache_wback)(unsigned long start, unsigned long size);
+ void (*_dma_cache_inv)(unsigned long start, unsigned long size);
+ 
++EXPORT_SYMBOL(_dma_cache_wback_inv);
++EXPORT_SYMBOL(_dma_cache_wback);
++EXPORT_SYMBOL(_dma_cache_inv);
++
+ #endif /* CONFIG_DMA_NONCOHERENT */
+ 
+ /*
+diff --git a/arch/mips/mm/dma-noncoherent.c b/arch/mips/mm/dma-noncoherent.c
+index 1d4d57dd9acf..813ad66dcaa0 100644
+--- a/arch/mips/mm/dma-noncoherent.c
++++ b/arch/mips/mm/dma-noncoherent.c
+@@ -65,27 +65,6 @@ long arch_dma_coherent_to_pfn(struct device *dev, void *cpu_addr,
+ 	return page_to_pfn(virt_to_page(cached_kernel_address(cpu_addr)));
+ }
+ 
+-static inline void dma_sync_virt(void *addr, size_t size,
+-		enum dma_data_direction dir)
+-{
+-	switch (dir) {
+-	case DMA_TO_DEVICE:
+-		dma_cache_wback((unsigned long)addr, size);
+-		break;
+-
+-	case DMA_FROM_DEVICE:
+-		dma_cache_inv((unsigned long)addr, size);
+-		break;
+-
+-	case DMA_BIDIRECTIONAL:
+-		dma_cache_wback_inv((unsigned long)addr, size);
+-		break;
+-
+-	default:
+-		BUG();
+-	}
+-}
+-
+ /*
+  * A single sg entry may refer to multiple physically contiguous pages.  But
+  * we still need to process highmem pages individually.  If highmem is not
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c
+index b1172d93c99c..94ab8ffe3b00 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_bios.c
+@@ -32,6 +32,7 @@
+ #include <linux/pci.h>
+ #include <linux/slab.h>
+ #include <linux/acpi.h>
++#include <drm/drm_cache.h>
+ /*
+  * BIOS.
+  */
+@@ -99,7 +100,10 @@ static bool igp_read_bios_from_vram(struct amdgpu_device *adev)
+ 
+ 	adev->bios = NULL;
+ 	vram_base = pci_resource_start(adev->pdev, 0);
+-	bios = ioremap_wc(vram_base, size);
++	if (drm_arch_can_wc_memory())
++		bios = ioremap_wc(vram_base, size);
++	else
++		bios = ioremap_uc(vram_base, size);
+ 	if (!bios) {
+ 		return false;
+ 	}
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+index 28361a9c5add..34ba9a19a88a 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+@@ -34,6 +34,7 @@
+ 
+ #include <drm/amdgpu_drm.h>
+ #include <drm/drm_cache.h>
++#include <asm/dma-coherence.h>
+ #include "amdgpu.h"
+ #include "amdgpu_trace.h"
+ #include "amdgpu_amdkfd.h"
+@@ -135,8 +136,10 @@ void amdgpu_bo_placement_from_domain(struct amdgpu_bo *abo, u32 domain)
+ 
+ 		places[c].fpfn = 0;
+ 		places[c].lpfn = 0;
+-		places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED |
+-			TTM_PL_FLAG_VRAM;
++		places[c].flags = TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_VRAM;
++
++		if (flags & AMDGPU_GEM_CREATE_CPU_GTT_USWC)
++			places[c].flags |= TTM_PL_FLAG_WC;
+ 
+ 		if (flags & AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED)
+ 			places[c].lpfn = visible_pfn;
+@@ -155,8 +158,10 @@ void amdgpu_bo_placement_from_domain(struct amdgpu_bo *abo, u32 domain)
+ 		if (flags & AMDGPU_GEM_CREATE_CPU_GTT_USWC)
+ 			places[c].flags |= TTM_PL_FLAG_WC |
+ 				TTM_PL_FLAG_UNCACHED;
+-		else
++		else if (dev_is_dma_coherent(NULL))
+ 			places[c].flags |= TTM_PL_FLAG_CACHED;
++		else
++			places[c].flags |= TTM_PL_FLAG_UNCACHED;
+ 		c++;
+ 	}
+ 
+@@ -167,8 +172,10 @@ void amdgpu_bo_placement_from_domain(struct amdgpu_bo *abo, u32 domain)
+ 		if (flags & AMDGPU_GEM_CREATE_CPU_GTT_USWC)
+ 			places[c].flags |= TTM_PL_FLAG_WC |
+ 				TTM_PL_FLAG_UNCACHED;
+-		else
++		else if (dev_is_dma_coherent(NULL))
+ 			places[c].flags |= TTM_PL_FLAG_CACHED;
++		else
++			places[c].flags |= TTM_PL_FLAG_UNCACHED;
+ 		c++;
+ 	}
+ 
+@@ -196,7 +203,10 @@ void amdgpu_bo_placement_from_domain(struct amdgpu_bo *abo, u32 domain)
+ 	if (!c) {
+ 		places[c].fpfn = 0;
+ 		places[c].lpfn = 0;
+-		places[c].flags = TTM_PL_MASK_CACHING | TTM_PL_FLAG_SYSTEM;
++		if (dev_is_dma_coherent(NULL))
++			places[c].flags = TTM_PL_MASK_CACHING | TTM_PL_FLAG_SYSTEM;
++		else
++			places[c].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED | TTM_PL_FLAG_SYSTEM;
+ 		c++;
+ 	}
+ 
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
+index dad3ad676a7d..c2f30006fdc0 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
++++ b/drivers/gpu/drm/amd/amdgpu/amdgpu_ttm.c
+@@ -47,6 +47,7 @@
+ #include <drm/ttm/ttm_module.h>
+ #include <drm/ttm/ttm_page_alloc.h>
+ 
++#include <drm/drm_cache.h>
+ #include <drm/drm_debugfs.h>
+ #include <drm/amdgpu_drm.h>
+ 
+@@ -1708,7 +1709,11 @@ int amdgpu_ttm_init(struct amdgpu_device *adev)
+ 	/* Change the size here instead of the init above so only lpfn is affected */
+ 	amdgpu_ttm_set_buffer_funcs_status(adev, false);
+ #ifdef CONFIG_64BIT
+-	adev->mman.aper_base_kaddr = ioremap_wc(adev->gmc.aper_base,
++	if (drm_arch_can_wc_memory())
++		adev->mman.aper_base_kaddr = ioremap_wc(adev->gmc.aper_base,
++						adev->gmc.visible_vram_size);
++	else
++		adev->mman.aper_base_kaddr = ioremap_uc(adev->gmc.aper_base,
+ 						adev->gmc.visible_vram_size);
+ #endif
+ 
+diff --git a/drivers/gpu/drm/radeon/radeon_object.c b/drivers/gpu/drm/radeon/radeon_object.c
+index 2abe1eab471f..3c080562e16c 100644
+--- a/drivers/gpu/drm/radeon/radeon_object.c
++++ b/drivers/gpu/drm/radeon/radeon_object.c
+@@ -37,6 +37,7 @@
+ #include <drm/drm_cache.h>
+ #include <drm/drm_prime.h>
+ #include <drm/radeon_drm.h>
++#include <asm/dma-coherence.h>
+ 
+ #include "radeon.h"
+ #include "radeon_trace.h"
+@@ -117,10 +118,16 @@ void radeon_ttm_placement_from_domain(struct radeon_bo *rbo, u32 domain)
+ 						     TTM_PL_FLAG_VRAM;
+ 		}
+ 
+-		rbo->placements[c].fpfn = 0;
+-		rbo->placements[c++].flags = TTM_PL_FLAG_WC |
+-					     TTM_PL_FLAG_UNCACHED |
+-					     TTM_PL_FLAG_VRAM;
++		if (rbo->flags & RADEON_GEM_GTT_WC) {
++			rbo->placements[c].fpfn = 0;
++			rbo->placements[c++].flags = TTM_PL_FLAG_WC |
++						     TTM_PL_FLAG_UNCACHED |
++						     TTM_PL_FLAG_VRAM;
++		} else {
++			rbo->placements[c].fpfn = 0;
++			rbo->placements[c++].flags = TTM_PL_FLAG_UNCACHED |
++						     TTM_PL_FLAG_VRAM;
++		}
+ 	}
+ 
+ 	if (domain & RADEON_GEM_DOMAIN_GTT) {
+@@ -135,10 +142,14 @@ void radeon_ttm_placement_from_domain(struct radeon_bo *rbo, u32 domain)
+ 			rbo->placements[c++].flags = TTM_PL_FLAG_WC |
+ 				TTM_PL_FLAG_UNCACHED |
+ 				TTM_PL_FLAG_TT;
+-		} else {
++		} else if (dev_is_dma_coherent(NULL)) {
+ 			rbo->placements[c].fpfn = 0;
+ 			rbo->placements[c++].flags = TTM_PL_FLAG_CACHED |
+ 						     TTM_PL_FLAG_TT;
++		} else {
++			rbo->placements[c].fpfn = 0;
++			rbo->placements[c++].flags = TTM_PL_FLAG_UNCACHED |
++						     TTM_PL_FLAG_TT;
+ 		}
+ 	}
+ 
+@@ -154,16 +165,24 @@ void radeon_ttm_placement_from_domain(struct radeon_bo *rbo, u32 domain)
+ 			rbo->placements[c++].flags = TTM_PL_FLAG_WC |
+ 				TTM_PL_FLAG_UNCACHED |
+ 				TTM_PL_FLAG_SYSTEM;
+-		} else {
++		} else if (dev_is_dma_coherent(NULL)) {
+ 			rbo->placements[c].fpfn = 0;
+ 			rbo->placements[c++].flags = TTM_PL_FLAG_CACHED |
+ 						     TTM_PL_FLAG_SYSTEM;
++		} else {
++			rbo->placements[c].fpfn = 0;
++			rbo->placements[c++].flags = TTM_PL_FLAG_UNCACHED |
++						     TTM_PL_FLAG_SYSTEM;
+ 		}
+ 	}
+ 	if (!c) {
+ 		rbo->placements[c].fpfn = 0;
+-		rbo->placements[c++].flags = TTM_PL_MASK_CACHING |
+-					     TTM_PL_FLAG_SYSTEM;
++		if (dev_is_dma_coherent(NULL))
++			rbo->placements[c++].flags = TTM_PL_MASK_CACHING |
++						     TTM_PL_FLAG_SYSTEM;
++		else
++			rbo->placements[c++].flags = TTM_PL_FLAG_WC | TTM_PL_FLAG_UNCACHED |
++						     TTM_PL_FLAG_SYSTEM;
+ 	}
+ 
+ 	rbo->placement.num_placement = c;
+diff --git a/drivers/gpu/drm/ttm/ttm_bo.c b/drivers/gpu/drm/ttm/ttm_bo.c
+index 3ffcbaa13878..591aec9a335f 100644
+--- a/drivers/gpu/drm/ttm/ttm_bo.c
++++ b/drivers/gpu/drm/ttm/ttm_bo.c
+@@ -42,6 +42,8 @@
+ #include <linux/module.h>
+ #include <linux/atomic.h>
+ #include <linux/dma-resv.h>
++#include <linux/dma-mapping.h>
++#include <asm/dma-coherence.h>
+ 
+ static void ttm_bo_global_kobj_release(struct kobject *kobj);
+ 
+@@ -996,6 +998,9 @@ static uint32_t ttm_bo_select_caching(struct ttm_mem_type_manager *man,
+ 	uint32_t caching = proposed_placement & TTM_PL_MASK_CACHING;
+ 	uint32_t result = proposed_placement & ~TTM_PL_MASK_CACHING;
+ 
++	if (!dev_is_dma_coherent(NULL))
++		caching &= ~TTM_PL_FLAG_CACHED;
++
+ 	/**
+ 	 * Keep current caching if possible.
+ 	 */
+-- 
+2.31.1
+

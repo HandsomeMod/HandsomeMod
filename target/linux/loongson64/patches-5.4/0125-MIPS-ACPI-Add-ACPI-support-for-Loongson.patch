@@ -1,0 +1,4577 @@
+From 01f1af45fd8fac83bbb0a5416089be02bfe337af Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhuacai@kernel.org>
+Date: Sat, 8 Aug 2020 20:32:27 +0800
+Subject: [PATCH 125/131] MIPS/ACPI: Add ACPI support for Loongson
+
+Add basic ACPI (compatible with 5.1 or newer) support for Loongson
+processor based platforms.
+
+Signed-off-by: Huacai Chen <chenhuacai@kernel.org>
+---
+ arch/mips/Kbuild                              |   1 +
+ arch/mips/Kconfig                             |  27 +
+ arch/mips/boot/dts/loongson/Makefile          |   2 +-
+ .../mips/boot/dts/loongson/loongson3_acpi.dts | 109 ++++
+ arch/mips/configs/loongson3_defconfig         |   8 +
+ arch/mips/configs/loongson3_hpcconfig         |   8 +
+ arch/mips/include/asm/acenv.h                 |  55 ++
+ arch/mips/include/asm/acpi.h                  |  96 +++
+ arch/mips/include/asm/dmi.h                   |  22 +-
+ arch/mips/include/asm/early_ioremap.h         |  25 +
+ arch/mips/include/asm/efi.h                   |  38 ++
+ .../include/asm/mach-loongson64/boot_param.h  |  44 ++
+ .../include/asm/mach-loongson64/ioremap.h     |   3 +
+ arch/mips/include/asm/mach-loongson64/irq.h   |   3 +
+ .../include/asm/mach-loongson64/loongson.h    |   5 +-
+ arch/mips/include/asm/mach-loongson64/pci.h   |   4 +
+ arch/mips/include/asm/mmzone.h                |   1 +
+ arch/mips/include/asm/numa.h                  |  43 ++
+ arch/mips/include/asm/pci.h                   |   7 +
+ arch/mips/include/asm/processor.h             |   4 +
+ arch/mips/include/asm/smp.h                   |   1 +
+ arch/mips/include/asm/topology.h              |   3 +
+ arch/mips/kernel/Makefile                     |   1 +
+ arch/mips/kernel/acpi/Makefile                |   1 +
+ arch/mips/kernel/acpi/boot.c                  | 594 ++++++++++++++++++
+ arch/mips/kernel/process.c                    |   6 +
+ arch/mips/kernel/setup.c                      |  57 +-
+ arch/mips/loongson64/common/efi.c             |   5 -
+ arch/mips/loongson64/common/env.c             | 129 +++-
+ arch/mips/loongson64/common/init.c            | 170 ++++-
+ arch/mips/loongson64/common/mem.c             |  93 ++-
+ arch/mips/loongson64/common/reset.c           |  26 +-
+ arch/mips/loongson64/common/serial.c          |  38 +-
+ arch/mips/loongson64/common/setup.c           |  12 +
+ arch/mips/loongson64/common/uart_base.c       |  10 +-
+ arch/mips/loongson64/loongson-3/acpi_init.c   |   8 +
+ .../loongson64/loongson-3/ls2h-platform.c     |   5 +
+ .../loongson64/loongson-3/ls7a-platform.c     |   9 +
+ arch/mips/loongson64/loongson-3/numa.c        | 254 +++++++-
+ arch/mips/loongson64/loongson-3/platform.c    |  24 +
+ arch/mips/loongson64/loongson-3/pm.c          |  23 +-
+ .../loongson64/loongson-3/rs780-platform.c    |   9 +
+ arch/mips/loongson64/loongson-3/sleep.S       |  16 +-
+ arch/mips/pci/Makefile                        |   1 +
+ arch/mips/pci/acpi.c                          | 133 ++++
+ arch/mips/pci/fixup-loongson3.c               |  16 +
+ arch/mips/pci/pci.c                           |  17 +
+ arch/mips/platform/Makefile                   |   2 +
+ arch/mips/platform/efi/Makefile               |   1 +
+ arch/mips/platform/efi/efi.c                  |  85 +++
+ drivers/acpi/Kconfig                          |   8 +-
+ drivers/i2c/busses/i2c-gpio.c                 |  39 +-
+ drivers/i2c/busses/i2c-ls2x.c                 |  24 +-
+ drivers/i2c/i2c-core-base.c                   |   9 +-
+ drivers/input/serio/i8042-mipsio.h            | 325 ++++++++++
+ drivers/input/serio/i8042.h                   |   2 +
+ drivers/platform/mips/Kconfig                 |  20 +-
+ drivers/platform/mips/Makefile                |   1 +
+ drivers/platform/mips/generic-laptop.c        | 585 +++++++++++++++++
+ drivers/rtc/rtc-ls2x.c                        |   8 +
+ drivers/tty/serial/8250/8250_pnp.c            |   4 +-
+ include/acpi/actypes.h                        |   3 +-
+ include/acpi/pdc_loongson.h                   |  44 ++
+ include/linux/acpi.h                          |   4 +-
+ 64 files changed, 3220 insertions(+), 110 deletions(-)
+ create mode 100644 arch/mips/boot/dts/loongson/loongson3_acpi.dts
+ create mode 100644 arch/mips/include/asm/acenv.h
+ create mode 100644 arch/mips/include/asm/acpi.h
+ create mode 100644 arch/mips/include/asm/early_ioremap.h
+ create mode 100644 arch/mips/include/asm/efi.h
+ create mode 100644 arch/mips/include/asm/numa.h
+ create mode 100644 arch/mips/kernel/acpi/Makefile
+ create mode 100644 arch/mips/kernel/acpi/boot.c
+ create mode 100644 arch/mips/pci/acpi.c
+ create mode 100644 arch/mips/platform/Makefile
+ create mode 100644 arch/mips/platform/efi/Makefile
+ create mode 100644 arch/mips/platform/efi/efi.c
+ create mode 100644 drivers/input/serio/i8042-mipsio.h
+ create mode 100644 drivers/platform/mips/generic-laptop.c
+ create mode 100644 include/acpi/pdc_loongson.h
+
+diff --git a/arch/mips/Kbuild b/arch/mips/Kbuild
+index a8d5e4fcbe53..a5923b7e7a97 100644
+--- a/arch/mips/Kbuild
++++ b/arch/mips/Kbuild
+@@ -21,6 +21,7 @@ obj-y += kernel/
+ obj-y += mm/
+ obj-y += net/
+ obj-y += vdso/
++obj-y += platform/
+ 
+ ifdef CONFIG_KVM
+ obj-y += kvm/
+diff --git a/arch/mips/Kconfig b/arch/mips/Kconfig
+index 9365c2a08cbc..29d32f8885aa 100644
+--- a/arch/mips/Kconfig
++++ b/arch/mips/Kconfig
+@@ -1395,7 +1395,10 @@ choice
+ config CPU_LOONGSON3
+ 	bool "Loongson 3 CPU"
+ 	depends on SYS_HAS_CPU_LOONGSON3
++	select ACPI_SYSTEM_POWER_STATES_SUPPORT	if ACPI
+ 	select ARCH_HAS_PHYS_TO_DMA
++	select ARCH_HAS_ACPI_TABLE_UPGRADE if ACPI
++	select ARCH_SUPPORTS_ACPI
+ 	select CPU_SUPPORTS_64BIT_KERNEL
+ 	select CPU_SUPPORTS_HIGHMEM
+ 	select CPU_SUPPORTS_HUGEPAGES
+@@ -2048,6 +2051,26 @@ config WEAK_ORDERING
+ #
+ config WEAK_REORDERING_BEYOND_LLSC
+ 	bool
++
++
++
++config EFI
++	bool "EFI runtime service support"
++	depends on ACPI
++	select UCS2_STRING
++	select EFI_RUNTIME_WRAPPERS
++	---help---
++	  This enables the kernel to use EFI runtime services that are
++	  available (such as the EFI variable services).
++
++	  This option is only useful on systems that have EFI firmware.
++	  In addition, you should use the latest ELILO loader available
++	  at <http://elilo.sourceforge.net> in order to take advantage
++	  of EFI runtime services. However, even with this option, the
++	  resultant kernel should continue to boot on existing non-EFI
++	  platforms.
++
++
+ endmenu
+ 
+ #
+@@ -3219,6 +3242,10 @@ config ARCH_SUSPEND_POSSIBLE
+ 
+ source "kernel/power/Kconfig"
+ 
++if CPU_LOONGSON3
++source "drivers/acpi/Kconfig"
++endif
++
+ endmenu
+ 
+ config MIPS_EXTERNAL_TIMER
+diff --git a/arch/mips/boot/dts/loongson/Makefile b/arch/mips/boot/dts/loongson/Makefile
+index 7ce60bd0de39..27bfd05361d2 100644
+--- a/arch/mips/boot/dts/loongson/Makefile
++++ b/arch/mips/boot/dts/loongson/Makefile
+@@ -1,4 +1,4 @@
+ # SPDX-License-Identifier: GPL-2.0
+-dtb-$(CONFIG_CPU_LOONGSON3)	+= loongson3_ls2h.dtb loongson3_ls7a.dtb loongson3_rs780.dtb loongson3_virtual.dtb
++dtb-$(CONFIG_CPU_LOONGSON3)	+= loongson3_acpi.dtb loongson3_ls2h.dtb loongson3_ls7a.dtb loongson3_rs780.dtb loongson3_virtual.dtb
+ 
+ obj-y				+= $(patsubst %.dtb, %.dtb.o, $(dtb-y))
+diff --git a/arch/mips/boot/dts/loongson/loongson3_acpi.dts b/arch/mips/boot/dts/loongson/loongson3_acpi.dts
+new file mode 100644
+index 000000000000..7d5c3c8cfd1c
+--- /dev/null
++++ b/arch/mips/boot/dts/loongson/loongson3_acpi.dts
+@@ -0,0 +1,109 @@
++/dts-v1/;
++#include "loongson3.dtsi"
++/ {
++	model = "loongson,generic";
++	compatible = "loongson,loongson3";
++	#address-cells = <2>;
++	#size-cells = <2>;
++
++	memory {
++		name = "memory";
++		device_type = "memory";
++	};
++
++	cpuic: interrupt-controller {
++		compatible = "mti,cpu-interrupt-controller";
++		interrupt-controller;
++		#interrupt-cells = <1>;
++	};
++
++	platic: interrupt-controller@1bd00040 {
++		compatible = "loongson,ls7a-interrupt-controller";
++		interrupt-controller;
++		#interrupt-cells = <1>;
++		interrupts = <3>;
++		interrupt-parent = <&cpuic>;
++	};
++
++	aliases {
++		/* i2c0~i2c5 from ACPI */
++		i2c6 = &i2c6;
++		i2c7 = &i2c7;
++	};
++
++	platform {
++		compatible = "loongson,nbus", "simple-bus";
++		#address-cells = <2>;
++		#size-cells = <1>;
++		ranges = <0x000 0x00000000 0x000 0x00000000 0x20000000
++			  0x000 0x40000000 0x000 0x40000000 0x40000000
++			  0xe00 0x00000000 0xe00 0x00000000 0x80000000>;
++
++		uart0: serial@10080000 {
++			device_type = "serial";
++			compatible = "ns16550a";
++			reg = <0 0x10080000 0x100>;
++			clock-frequency = <50000000>;
++			interrupts = <72>;
++			interrupt-parent = <&platic>;
++			no-loopback-test;
++		};
++
++		uart1: serial@10080100 {
++			device_type = "serial";
++			compatible = "ns16550a";
++			reg = <0 0x10080100 0x100>;
++			clock-frequency = <50000000>;
++			interrupts = <72>;
++			interrupt-parent = <&platic>;
++			no-loopback-test;
++		};
++
++		uart2: serial@10080200 {
++			device_type = "serial";
++			compatible = "ns16550a";
++			reg = <0 0x10080200 0x100>;
++			clock-frequency = <50000000>;
++			interrupts = <72>;
++			interrupt-parent = <&platic>;
++			no-loopback-test;
++		};
++
++		uart3: serial@10080300 {
++			device_type = "serial";
++			compatible = "ns16550a";
++			reg = <0 0x10080300 0x100>;
++			clock-frequency = <50000000>;
++			interrupts = <72>;
++			interrupt-parent = <&platic>;
++			no-loopback-test;
++		};
++
++		/* i2c0~i2c5 from ACPI */
++
++		i2c6: i2c-gpio@0 {
++			compatible = "i2c-gpio";
++			gpios = <&gpio 57 0 /* sda */
++				 &gpio 58 0 /* scl */
++				>;
++			i2c-gpio,delay-us = <100>;
++		};
++
++		i2c7: i2c-gpio@1 {
++			compatible = "i2c-gpio";
++			gpios = <&gpio 59 0 /* sda */
++				 &gpio 60 0 /* scl */
++				>;
++			i2c-gpio,delay-us = <100>;
++		};
++
++		gpio: gpio@100e0000 {
++			compatible = "loongson,ls7a-gpio";
++			reg = <0 0x100e0000 0xc00>;
++			gpio-controller;
++			#gpio-cells = <2>;
++			interrupts = <124>;
++			interrupt-parent = <&platic>;
++		};
++	};
++};
+diff --git a/arch/mips/configs/loongson3_defconfig b/arch/mips/configs/loongson3_defconfig
+index 50f8dbd5640e..9e796ac4f618 100644
+--- a/arch/mips/configs/loongson3_defconfig
++++ b/arch/mips/configs/loongson3_defconfig
+@@ -6,6 +6,7 @@ CONFIG_CPU_LOONGSON3=y
+ CONFIG_LOONGSON3_CPUAUTOPLUG=y
+ CONFIG_64BIT=y
+ CONFIG_PAGE_SIZE_16KB=y
++CONFIG_EFI=y
+ CONFIG_CPU_HAS_MSA=y
+ CONFIG_NUMA=y
+ CONFIG_KSM=y
+@@ -85,6 +86,10 @@ CONFIG_MIPS32_O32=y
+ CONFIG_MIPS32_N32=y
+ CONFIG_HIBERNATION=y
+ CONFIG_PM=y
++CONFIG_ACPI=y
++CONFIG_ACPI_SLEEP=y
++CONFIG_ACPI_NUMA=y
++CONFIG_ACPI_TABLE_UPGRADE=y
+ CONFIG_NET=y
+ CONFIG_CPU_FREQ=y
+ CONFIG_CPU_FREQ_GOV_POWERSAVE=y
+@@ -93,6 +98,8 @@ CONFIG_CPU_FREQ_GOV_ONDEMAND=y
+ CONFIG_CPU_FREQ_GOV_CONSERVATIVE=y
+ CONFIG_CPU_FREQ_GOV_SCHEDUTIL=y
+ CONFIG_LOONGSON3_CPUFREQ=y
++CONFIG_EFI_VARS=m
++CONFIG_EFI_CAPSULE_LOADER=m
+ CONFIG_VIRTUALIZATION=y
+ CONFIG_KVM=m
+ CONFIG_KVM_MIPS_VZ=y
+@@ -562,6 +569,7 @@ CONFIG_USB_GADGET=y
+ CONFIG_RTC_CLASS=y
+ CONFIG_RTC_DRV_PCF8563=y
+ CONFIG_RTC_DRV_CMOS=y
++CONFIG_RTC_DRV_EFI=y
+ CONFIG_RTC_DRV_LS2X=y
+ CONFIG_RTC_DRV_GOLDFISH=y
+ CONFIG_DMADEVICES=y
+diff --git a/arch/mips/configs/loongson3_hpcconfig b/arch/mips/configs/loongson3_hpcconfig
+index 7c7a40244d2b..5cd6e7c02080 100644
+--- a/arch/mips/configs/loongson3_hpcconfig
++++ b/arch/mips/configs/loongson3_hpcconfig
+@@ -7,6 +7,7 @@ CONFIG_LOONGSON3_CPUAUTOPLUG=y
+ CONFIG_LOONGSON3_ENHANCEMENT=y
+ CONFIG_64BIT=y
+ CONFIG_PAGE_SIZE_16KB=y
++CONFIG_EFI=y
+ CONFIG_CPU_HAS_MSA=y
+ CONFIG_NUMA=y
+ CONFIG_KSM=y
+@@ -85,7 +86,13 @@ CONFIG_MIPS32_O32=y
+ CONFIG_MIPS32_N32=y
+ CONFIG_HIBERNATION=y
+ CONFIG_PM=y
++CONFIG_ACPI=y
++CONFIG_ACPI_SLEEP=y
++CONFIG_ACPI_NUMA=y
++CONFIG_ARCH_HAS_ACPI_TABLE_UPGRADE=y
+ CONFIG_NET=y
++CONFIG_EFI_VARS=m
++CONFIG_EFI_CAPSULE_LOADER=m
+ CONFIG_VIRTUALIZATION=y
+ CONFIG_KVM=m
+ CONFIG_KVM_MIPS_VZ=y
+@@ -557,6 +564,7 @@ CONFIG_USB_GADGET=y
+ CONFIG_RTC_CLASS=y
+ CONFIG_RTC_DRV_PCF8563=y
+ CONFIG_RTC_DRV_CMOS=y
++CONFIG_RTC_DRV_EFI=y
+ CONFIG_RTC_DRV_LS2X=y
+ CONFIG_RTC_DRV_GOLDFISH=y
+ CONFIG_DMADEVICES=y
+diff --git a/arch/mips/include/asm/acenv.h b/arch/mips/include/asm/acenv.h
+new file mode 100644
+index 000000000000..008dc8450346
+--- /dev/null
++++ b/arch/mips/include/asm/acenv.h
+@@ -0,0 +1,55 @@
++/*
++ * MIPS specific ACPICA environments and implementation
++ *
++ * Import from arch/mips/include/asm/acenv.h
++ *
++ *   Author: lvjianmin <lvjianmin@loongson.cn>
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 as
++ * published by the Free Software Foundation.
++ */
++
++#ifndef _ASM_MIPS_ACENV_H
++#define _ASM_MIPS_ACENV_H
++
++//#include <asm/special_insns.h>
++
++#define COMPILER_DEPENDENT_INT64   long long
++#define COMPILER_DEPENDENT_UINT64  unsigned long long
++
++/*
++ * Calling conventions:
++ *
++ * ACPI_SYSTEM_XFACE        - Interfaces to host OS (handlers, threads)
++ * ACPI_EXTERNAL_XFACE      - External ACPI interfaces
++ * ACPI_INTERNAL_XFACE      - Internal ACPI interfaces
++ * ACPI_INTERNAL_VAR_XFACE  - Internal variable-parameter list interfaces
++ */
++#define ACPI_SYSTEM_XFACE
++#define ACPI_EXTERNAL_XFACE
++#define ACPI_INTERNAL_XFACE
++#define ACPI_INTERNAL_VAR_XFACE
++
++/* Asm macros */
++#ifdef CONFIG_CPU_LOONGSON3
++#define ACPI_FLUSH_CPU_CACHE()	wbflush()
++#else
++#define ACPI_FLUSH_CPU_CACHE()
++#endif
++int __acpi_acquire_global_lock(unsigned int *lock);
++int __acpi_release_global_lock(unsigned int *lock);
++
++#define ACPI_ACQUIRE_GLOBAL_LOCK(facs, Acq) \
++	((Acq) = __acpi_acquire_global_lock(&facs->global_lock))
++
++#define ACPI_RELEASE_GLOBAL_LOCK(facs, Acq) \
++	((Acq) = __acpi_release_global_lock(&facs->global_lock))
++
++/*
++ * Math helper asm macros
++ */
++#define ACPI_DIV_64_BY_32(n_hi, n_lo, d32, q32, r32)
++
++#define ACPI_SHIFT_RIGHT_64(n_hi, n_lo)
++#endif /* _ASM_MIPS_ACENV_H */
+diff --git a/arch/mips/include/asm/acpi.h b/arch/mips/include/asm/acpi.h
+new file mode 100644
+index 000000000000..ce581d4546c0
+--- /dev/null
++++ b/arch/mips/include/asm/acpi.h
+@@ -0,0 +1,96 @@
++#ifndef _ASM_MIPS_ACPI_H
++#define _ASM_MIPS_ACPI_H
++
++/*
++ *  Lvjianmin <lvjianmin@loongson.cn>
++ *
++ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation; either version 2 of the License, or
++ *  (at your option) any later version.
++ *
++ *  This program is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ *
++ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++ */
++
++#include <asm/early_ioremap.h>
++#include <asm/processor.h>
++#include <asm/mmu.h>
++#include <asm/numa.h>
++#include <acpi/pdc_loongson.h>
++
++#ifdef CONFIG_ACPI
++
++extern int acpi_strict;
++extern int acpi_disabled;
++extern int acpi_pci_disabled;
++extern int acpi_noirq;
++
++static inline void disable_acpi(void)
++{
++	acpi_disabled = 1;
++	acpi_pci_disabled = 1;
++	acpi_noirq = 1;
++}
++
++static inline void acpi_noirq_set(void) { acpi_noirq = 1; }
++
++static inline void acpi_disable_pci(void)
++{
++	acpi_pci_disabled = 1;
++	acpi_noirq_set();
++}
++
++static inline bool acpi_has_cpu_in_madt(void)
++{
++	return true;
++}
++
++extern int acpi_gsi_to_irq(u32 gsi, unsigned int *irq);
++
++/* Low-level suspend routine. */
++extern void wakeup_start(void);
++extern int (*acpi_suspend_lowlevel)(void);
++extern unsigned long long arch_acpi_wakeup_start;
++
++/* Physical address to resume after wakeup */
++#define acpi_wakeup_address arch_acpi_wakeup_start
++#define ACPI_TABLE_UPGRADE_MAX_PHYS (max_low_pfn_mapped << PAGE_SHIFT)
++
++/*
++ * Check if the CPU can handle C2 and deeper
++ */
++static inline unsigned int acpi_processor_cstate_check(unsigned int max_cstate)
++{
++	return max_cstate;
++}
++
++static inline bool arch_has_acpi_pdc(void)
++{
++	return false;
++}
++
++static inline void arch_acpi_set_pdc_bits(u32 *buf)
++{
++}
++#else /* !CONFIG_ACPI */
++
++static inline void acpi_noirq_set(void) { }
++static inline void acpi_disable_pci(void) { }
++static inline void disable_acpi(void) { }
++
++#endif /* !CONFIG_ACPI */
++
++#define acpi_unlazy_tlb(x)
++
++#endif /* _ASM_MIPS_ACPI_H */
+diff --git a/arch/mips/include/asm/dmi.h b/arch/mips/include/asm/dmi.h
+index 27415a288adf..ff7650134066 100644
+--- a/arch/mips/include/asm/dmi.h
++++ b/arch/mips/include/asm/dmi.h
+@@ -2,17 +2,25 @@
+ #ifndef _ASM_DMI_H
+ #define _ASM_DMI_H
+ 
+-#include <linux/io.h>
+-#include <linux/memblock.h>
+-
+-#define dmi_early_remap(x, l)		ioremap_cache(x, l)
+-#define dmi_early_unmap(x, l)		iounmap(x)
+-#define dmi_remap(x, l)			ioremap_cache(x, l)
+-#define dmi_unmap(x)			iounmap(x)
++#include <asm/early_ioremap.h>
+ 
+ /* MIPS initialize DMI scan before SLAB is ready, so we use memblock here */
+ #define dmi_alloc(l)			memblock_alloc_low(l, PAGE_SIZE)
+ 
++static inline void __iomem *dmi_ioremap(resource_size_t phys_addr, unsigned long size)
++{
++	return ((void *)TO_CAC(phys_addr));
++}
++
++static inline void dmi_iounmap(volatile void __iomem *addr)
++{
++}
++
++#define dmi_early_remap		early_ioremap
++#define dmi_early_unmap		early_iounmap
++#define dmi_remap		dmi_ioremap
++#define dmi_unmap		dmi_iounmap
++
+ #if defined(CONFIG_MACH_LOONGSON64)
+ #define SMBIOS_ENTRY_POINT_SCAN_START	0xFFFE000
+ #endif
+diff --git a/arch/mips/include/asm/early_ioremap.h b/arch/mips/include/asm/early_ioremap.h
+new file mode 100644
+index 000000000000..4d6aba4c67a8
+--- /dev/null
++++ b/arch/mips/include/asm/early_ioremap.h
+@@ -0,0 +1,25 @@
++#ifndef _ASM_EARLY_IOREMAP_H
++#define _ASM_EARLY_IOREMAP_H
++
++#include <linux/types.h>
++#include <asm/pgtable.h>
++
++static inline void __iomem *early_ioremap(resource_size_t phys_addr, unsigned long size)
++{
++	return ((void *)TO_CAC(phys_addr));
++}
++
++static inline void early_iounmap(void __iomem *addr, unsigned long size)
++{
++}
++
++#define early_memremap early_ioremap
++#define early_memunmap early_iounmap
++
++static inline void *early_memremap_prot(resource_size_t phys_addr, unsigned long size,
++		    unsigned long prot_val)
++{
++	return early_memremap(phys_addr, size);
++}
++
++#endif /* _ASM_EARLY_IOREMAP_H */
+diff --git a/arch/mips/include/asm/efi.h b/arch/mips/include/asm/efi.h
+new file mode 100644
+index 000000000000..629e3eb43998
+--- /dev/null
++++ b/arch/mips/include/asm/efi.h
+@@ -0,0 +1,38 @@
++/*
++ * This file is subject to the terms and conditions of the GNU General Public
++ * License.  See the file "COPYING" in the main directory of this archive
++ * for more details.
++ *
++ * Copyright (C) 2019 Loongson Technology Corp.
++ * Author: Jianmin Lv, lvjianmin@loongson.cn
++ */
++
++#ifndef _ASM_MIPS_EFI_H
++#define _ASM_MIPS_EFI_H
++
++#include <linux/efi.h>
++
++extern void __init efi_init(void);
++
++static inline void efifb_setup_from_dmi(struct screen_info *si, const char *opt)
++{
++}
++
++#define ARCH_EFI_IRQ_FLAGS_MASK  0x00000001  /* bit0: CP0 Status.IE */
++
++#define arch_efi_call_virt_setup()               \
++({                                               \
++})
++
++#define arch_efi_call_virt(p, f, args...)        \
++({                                               \
++	efi_##f##_t * __f;                       \
++	__f = p->f;                              \
++	__f(args);                               \
++})
++
++#define arch_efi_call_virt_teardown()            \
++({                                               \
++})
++
++#endif /* _ASM_MIPS_EFI_H */
+diff --git a/arch/mips/include/asm/mach-loongson64/boot_param.h b/arch/mips/include/asm/mach-loongson64/boot_param.h
+index 3c8d5319c78a..89297781c413 100644
+--- a/arch/mips/include/asm/mach-loongson64/boot_param.h
++++ b/arch/mips/include/asm/mach-loongson64/boot_param.h
+@@ -2,6 +2,8 @@
+ #ifndef __ASM_MACH_LOONGSON64_BOOT_PARAM_H_
+ #define __ASM_MACH_LOONGSON64_BOOT_PARAM_H_
+ 
++#include <linux/screen_info.h>
++
+ #define SYSTEM_RAM_LOW		1
+ #define SYSTEM_RAM_HIGH		2
+ #define SYSTEM_RAM_RESERVED	3
+@@ -231,12 +233,54 @@ struct loongson_system_configuration {
+ 	u64 workarounds;
+ };
+ 
++#define LOONGSON_EFIBOOT_SIGNATURE	"BPI"
++#define LOONGSON_MEM_LINKLIST		"MEM"
++#define LOONGSON_VBIOS_LINKLIST		"VBIOS"
++#define LOONGSON_SCREENINFO_LINKLIST	"SINFO"
++
++struct _extention_list_hdr {
++	u64	signature;
++	u32	length;
++	u8	revision;
++	u8	checksum;
++	struct	_extention_list_hdr *next;
++} __packed;
++
++struct bootparamsinterface {
++	u64	signature;	/*{"B", "P", "I", "_", "0", "_", "1"}*/
++	void	*systemtable;
++	struct	_extention_list_hdr *extlist;
++} __packed;
++
++struct loongsonlist_mem_map {
++	struct	_extention_list_hdr header;	/*{"M", "E", "M"}*/
++	u8	map_count;
++	struct	_loongson_mem_map {
++		u32 mem_type;
++		u64 mem_start;
++		u64 mem_size;
++	} __packed map[LOONGSON3_BOOT_MEM_MAP_MAX];
++} __packed;
++
++struct loongsonlist_vbios {
++	struct	_extention_list_hdr header;
++	u64	vbios_addr;
++} __packed;
++
++struct loongsonlist_screeninfo{
++	struct	_extention_list_hdr header;
++	struct	screen_info si;
++} __packed;
++
++extern bool acpiboot;
+ extern void *loongson_fdt_blob;
++extern u32 __dtb_loongson3_acpi_begin[];
+ extern u32 __dtb_loongson3_ls2h_begin[];
+ extern u32 __dtb_loongson3_ls7a_begin[];
+ extern u32 __dtb_loongson3_rs780_begin[];
+ extern u32 __dtb_loongson3_virtual_begin[];
+ extern struct efi_memory_map_loongson *loongson_memmap;
++extern struct loongsonlist_mem_map *loongsonlist_memmap;
+ extern struct loongson_system_configuration loongson_sysconf;
+ 
+ #endif
+diff --git a/arch/mips/include/asm/mach-loongson64/ioremap.h b/arch/mips/include/asm/mach-loongson64/ioremap.h
+index 155dafe2ef34..b342cbb49f16 100644
+--- a/arch/mips/include/asm/mach-loongson64/ioremap.h
++++ b/arch/mips/include/asm/mach-loongson64/ioremap.h
+@@ -11,6 +11,9 @@
+ 
+ #include <linux/types.h>
+ 
++#define NR_FIX_BTMAPS 64
++extern unsigned long max_low_pfn_mapped;
++
+ /*
+  * Allow physical addresses to be fixed up to help peripherals located
+  * outside the low 32-bit range -- generic pass-through version.
+diff --git a/arch/mips/include/asm/mach-loongson64/irq.h b/arch/mips/include/asm/mach-loongson64/irq.h
+index 927c92917ac4..8e4001783dc5 100644
+--- a/arch/mips/include/asm/mach-loongson64/irq.h
++++ b/arch/mips/include/asm/mach-loongson64/irq.h
+@@ -13,6 +13,9 @@
+ #define IPI_IRQ_OFFSET 4
+ #define NR_DIRQS (32 - IPI_IRQ_OFFSET)
+ 
++#define MAX_PCH_PICS	16
++#define LIOINTC_DEFAULT_PHYS_BASE	(LOONGSON3_REG_BASE + 0x1400)
++
+ #define LOONGSON_UART_IRQ   (MIPS_CPU_IRQ_BASE + 2) /* UART */
+ #define LOONGSON_BRIDGE_IRQ (MIPS_CPU_IRQ_BASE + 3) /* CASCADE */
+ #define LOONGSON_TIMER_IRQ  (MIPS_CPU_IRQ_BASE + 7) /* CPU Timer */
+diff --git a/arch/mips/include/asm/mach-loongson64/loongson.h b/arch/mips/include/asm/mach-loongson64/loongson.h
+index 89f1d206534e..f195ba9d92db 100644
+--- a/arch/mips/include/asm/mach-loongson64/loongson.h
++++ b/arch/mips/include/asm/mach-loongson64/loongson.h
+@@ -25,7 +25,8 @@ extern u32 memsize, highmemsize;
+ extern const struct plat_smp_ops loongson3_smp_ops;
+ 
+ /* loongson-specific command line, env and memory initialization */
+-extern void __init prom_init_memory(void);
++extern void __init prom_init_memory_old(void);
++extern void __init prom_init_memory_new(void);
+ extern void __init prom_init_cmdline(void);
+ extern void __init prom_init_machtype(void);
+ extern void __init prom_init_env(void);
+@@ -355,6 +356,8 @@ extern unsigned long _loongson_addrwincfg_base;
+ 
+ void mach_suspend(void);
+ void mach_resume(void);
++void mach_common_suspend(void);
++void mach_common_resume(void);
+ void loongson_suspend_enter(void);
+ 
+ #ifdef CONFIG_HOTPLUG_CPU
+diff --git a/arch/mips/include/asm/mach-loongson64/pci.h b/arch/mips/include/asm/mach-loongson64/pci.h
+index 97f807fb2117..723c947bb5f5 100644
+--- a/arch/mips/include/asm/mach-loongson64/pci.h
++++ b/arch/mips/include/asm/mach-loongson64/pci.h
+@@ -45,6 +45,10 @@ extern struct pci_ops loongson_pci_ops;
+ /* this is an offset from mips_io_port_base */
+ #define LOONGSON_PCI_IO_START	0x00004000UL
+ 
++#define LOONGSON_ACPI_PCI_MEM_START		0x40000000
++#define LOONGSON_ACPI_PCI_MEM_END		0x7fffffff
++#define LOONGSON_ACPI_PCI_IOBASE		0xefdfc000000
++
+ #endif	/* !CONFIG_CPU_SUPPORTS_ADDRWINCFG */
+ 
+ #endif /* !__ASM_MACH_LOONGSON64_PCI_H_ */
+diff --git a/arch/mips/include/asm/mmzone.h b/arch/mips/include/asm/mmzone.h
+index b826b8473e95..9d3e35553649 100644
+--- a/arch/mips/include/asm/mmzone.h
++++ b/arch/mips/include/asm/mmzone.h
+@@ -7,6 +7,7 @@
+ #define _ASM_MMZONE_H_
+ 
+ #include <asm/page.h>
++#include <asm/numa.h>
+ 
+ #ifdef CONFIG_NEED_MULTIPLE_NODES
+ # include <mmzone.h>
+diff --git a/arch/mips/include/asm/numa.h b/arch/mips/include/asm/numa.h
+new file mode 100644
+index 000000000000..88418e656256
+--- /dev/null
++++ b/arch/mips/include/asm/numa.h
+@@ -0,0 +1,43 @@
++/*
++ * This file is subject to the terms and conditions of the GNU General Public
++ * License.  See the file "COPYING" in the main directory of this archive
++ * for more details.
++ *
++ * Copyright (C) 2019 Loongson Technology Corp.
++ * Author: Jianmin Lv, lvjianmin@loongson.cn
++ *
++ */
++
++#ifndef _ASM_MIPS_NUMA_H
++#define _ASM_MIPS_NUMA_H
++
++#include <linux/nodemask.h>
++
++#ifdef CONFIG_NUMA
++extern nodemask_t numa_nodes_parsed __initdata;
++struct numa_memblk {
++	u64			start;
++	u64			end;
++	int			nid;
++};
++
++#define NR_NODE_MEMBLKS		(MAX_NUMNODES*2)
++struct numa_meminfo {
++	int			nr_blks;
++	struct numa_memblk	blk[NR_NODE_MEMBLKS];
++};
++extern int __init numa_add_memblk(int nodeid, u64 start, u64 end);
++extern s16 __cpuid_to_node[CONFIG_NR_CPUS];
++extern void __init numa_add_cpu(int cpuid, s16 node);
++static inline void numa_clear_node(int cpu)
++{
++}
++static inline void  set_cpuid_to_node(int cpuid, s16 node)
++{
++	__cpuid_to_node[cpuid] = node;
++}
++extern int numa_off;
++
++#endif	/* CONFIG_NUMA */
++
++#endif	/* _ASM_MIPS_NUMA_H */
+diff --git a/arch/mips/include/asm/pci.h b/arch/mips/include/asm/pci.h
+index 6f48649201c5..0820efb3c792 100644
+--- a/arch/mips/include/asm/pci.h
++++ b/arch/mips/include/asm/pci.h
+@@ -46,6 +46,9 @@ struct pci_controller {
+ 	   and XFree86. Eventually will be removed. */
+ 	unsigned int need_domain_info;
+ #endif
++#ifdef CONFIG_ACPI
++	struct acpi_device *companion;
++#endif
+ 
+ 	/* Optional access methods for reading/writing the bus number
+ 	   of the PCI controller */
+@@ -120,6 +123,10 @@ extern unsigned long PCIBIOS_MIN_MEM;
+ #include <linux/string.h>
+ #include <asm/io.h>
+ 
++extern struct resource *acpi_io_resource;
++extern struct resource *acpi_mem_resource;
++extern struct pci_controller *acpi_controller;
++
+ #ifdef CONFIG_PCI_DOMAINS_GENERIC
+ static inline int pci_proc_domain(struct pci_bus *bus)
+ {
+diff --git a/arch/mips/include/asm/processor.h b/arch/mips/include/asm/processor.h
+index fba18d4a9190..7fc4020876e0 100644
+--- a/arch/mips/include/asm/processor.h
++++ b/arch/mips/include/asm/processor.h
+@@ -367,6 +367,10 @@ struct task_struct;
+ /* Free all resources held by a thread. */
+ #define release_thread(thread) do { } while(0)
+ 
++enum idle_boot_override {IDLE_NO_OVERRIDE=0, IDLE_HALT, IDLE_NOMWAIT,
++			 IDLE_POLL};
++
++extern unsigned long boot_option_idle_override;
+ /*
+  * Do necessary setup to start up a newly executed thread.
+  */
+diff --git a/arch/mips/include/asm/smp.h b/arch/mips/include/asm/smp.h
+index 7990c1c70471..c3d8d754f8b6 100644
+--- a/arch/mips/include/asm/smp.h
++++ b/arch/mips/include/asm/smp.h
+@@ -48,6 +48,7 @@ extern int __cpu_logical_map[NR_CPUS];
+ 
+ #define NO_PROC_ID	(-1)
+ 
++#define cpu_physical_id(cpu)	cpu_logical_map(cpu)
+ #define SMP_RESCHEDULE_YOURSELF 0x1	/* XXX braindead */
+ #define SMP_CALL_FUNCTION	0x2
+ /* Octeon - Tell another core to flush its icache */
+diff --git a/arch/mips/include/asm/topology.h b/arch/mips/include/asm/topology.h
+index 0673d2d0f2e6..f566bcba0812 100644
+--- a/arch/mips/include/asm/topology.h
++++ b/arch/mips/include/asm/topology.h
+@@ -18,4 +18,7 @@
+ #define topology_sibling_cpumask(cpu)		(&cpu_sibling_map[cpu])
+ #endif
+ 
++static inline void arch_fix_phys_package_id(int num, u32 slot)
++{
++}
+ #endif /* __ASM_TOPOLOGY_H */
+diff --git a/arch/mips/kernel/Makefile b/arch/mips/kernel/Makefile
+index 9de423a2e83a..5ad1a6ee907a 100644
+--- a/arch/mips/kernel/Makefile
++++ b/arch/mips/kernel/Makefile
+@@ -45,6 +45,7 @@ obj-y				+= $(sw-y)
+ obj-$(CONFIG_CPU_R2300_FPU)	+= r2300_fpu.o
+ obj-$(CONFIG_CPU_R4K_FPU)	+= r4k_fpu.o
+ 
++obj-y				+= acpi/
+ obj-$(CONFIG_SMP)		+= smp.o
+ obj-$(CONFIG_SMP_UP)		+= smp-up.o
+ obj-$(CONFIG_CPU_BMIPS)		+= smp-bmips.o bmips_vec.o bmips_5xxx_init.o
+diff --git a/arch/mips/kernel/acpi/Makefile b/arch/mips/kernel/acpi/Makefile
+new file mode 100644
+index 000000000000..b8e576477a3c
+--- /dev/null
++++ b/arch/mips/kernel/acpi/Makefile
+@@ -0,0 +1 @@
++obj-$(CONFIG_ACPI)		+= boot.o
+diff --git a/arch/mips/kernel/acpi/boot.c b/arch/mips/kernel/acpi/boot.c
+new file mode 100644
+index 000000000000..7e4fed921484
+--- /dev/null
++++ b/arch/mips/kernel/acpi/boot.c
+@@ -0,0 +1,594 @@
++/*
++ *  boot.c - Architecture-Specific Low-Level ACPI Boot Support
++ *
++ *  Lvjianmin <lvjianmin@loongson.cn>
++ *
++ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation; either version 2 of the License, or
++ *  (at your option) any later version.
++ *
++ *  This program is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program; if not, write to the Free Software
++ *  Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
++ *
++ * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++ */
++
++#include <linux/init.h>
++#include <linux/acpi.h>
++#include <linux/acpi_pmtmr.h>
++#include <linux/efi.h>
++#include <linux/cpumask.h>
++#include <linux/module.h>
++#include <linux/dmi.h>
++#include <linux/irq.h>
++#include <linux/irqdomain.h>
++#include <linux/slab.h>
++#include <linux/ioport.h>
++#include <linux/pci.h>
++#include <linux/memblock.h>
++
++#include <asm/io.h>
++#include <asm/smp.h>
++#include <asm/numa.h>
++#include <loongson.h>
++#include <loongson-pch.h>
++
++int acpi_disabled = 0;
++int acpi_pci_disabled;		/* skip ACPI PCI scan and IRQ initialization */
++int acpi_noirq;			/* skip ACPI IRQ initialization */
++int acpi_strict;
++EXPORT_SYMBOL(acpi_disabled);
++EXPORT_SYMBOL(acpi_pci_disabled);
++static unsigned int num_processors;
++
++extern struct list_head acpi_wakeup_device_list;
++
++u64 acpi_saved_sp;
++u64 arch_acpi_wakeup_start;
++
++#define MAX_LOCAL_APIC 256
++
++u64 acpi_liointc_addr __initdata = LIOINTC_DEFAULT_PHYS_BASE;
++
++static inline void __iomem *loongson_acpi_os_ioremap(acpi_physical_address phys,
++					    acpi_size size)
++{
++	return (void __iomem *)phys;
++}
++#define acpi_os_ioremap loonsonacpi_os_ioremap
++
++#define PREFIX	"ACPI: "
++/*
++ * The default interrupt routing model is PIC (8259).  This gets
++ * overridden if IOAPICs are enumerated (below).
++ */
++enum acpi_irq_model_id acpi_irq_model = ACPI_IRQ_MODEL_PIC;
++
++void __iomem *__init __acpi_map_table(unsigned long phys, unsigned long size)
++{
++
++	if (!phys || !size)
++		return NULL;
++
++	return early_ioremap(phys, size);
++}
++
++void __init __acpi_unmap_table(void __iomem *map, unsigned long size)
++{
++	if (!map || !size)
++		return;
++
++	early_iounmap(map, size);
++}
++
++/*
++ * Following __acpi_xx functions should be implemented for specific cpu.
++ */
++int acpi_gsi_to_irq(u32 gsi, unsigned int *irqp)
++{
++	if (irqp != NULL)
++		*irqp = gsi;
++
++	return 0;
++}
++EXPORT_SYMBOL_GPL(acpi_gsi_to_irq);
++
++int acpi_isa_irq_to_gsi(unsigned isa_irq, u32 *gsi)
++{
++	if (gsi)
++		*gsi = isa_irq;
++
++	return 0;
++}
++
++static void fix_enable_wakeup_gpes(void)
++{
++	u32 data = 0;
++	struct list_head *node, *next;
++
++	list_for_each_safe(node, next, &acpi_wakeup_device_list) {
++		struct acpi_device *dev =
++			container_of(node, struct acpi_device, wakeup_list);
++
++		if (!dev->wakeup.flags.valid
++		    || ACPI_STATE_S3 > (u32) dev->wakeup.sleep_state
++		    || !(device_may_wakeup(&dev->dev)
++		        || dev->wakeup.prepare_count))
++			continue;
++
++		data |= (1 << dev->wakeup.gpe_number);
++	}
++	writel(data, LS7A_GPE0_ENA_REG);
++}
++
++int mips_acpi_suspend_lowlevel(void)
++{
++	mach_common_suspend();
++	fix_enable_wakeup_gpes();
++	/* processor specific suspend */
++	loongson_suspend_enter();
++	mach_common_resume();
++	return 0;
++}
++#ifdef CONFIG_ACPI_SLEEP
++int (*acpi_suspend_lowlevel)(void) = mips_acpi_suspend_lowlevel;
++#else
++int (*acpi_suspend_lowlevel)(void);
++#endif
++
++/*
++ * success: return IRQ number (>=0)
++ * failure: return < 0
++ */
++int acpi_register_gsi(struct device *dev, u32 gsi, int trigger, int polarity)
++{
++	return gsi;
++}
++EXPORT_SYMBOL_GPL(acpi_register_gsi);
++
++void acpi_unregister_gsi(u32 gsi)
++{
++}
++EXPORT_SYMBOL_GPL(acpi_unregister_gsi);
++
++/*
++ *  ACPI based hotplug support for CPU
++ */
++#ifdef CONFIG_ACPI_HOTPLUG_CPU
++
++#include <acpi/processor.h>
++
++/* wrapper to silence section mismatch warning */
++int __ref acpi_map_apic(acpi_handle handle, int physid, int *pcpu)
++{
++	return 0;
++}
++EXPORT_SYMBOL(acpi_map_apic);
++
++int acpi_unmap_apic(int cpu)
++{
++	return 0;
++}
++EXPORT_SYMBOL(acpi_unmap_apic);
++
++#endif			/* CONFIG_ACPI_HOTPLUG_CPU */
++
++void __init acpi_boot_table_init(void)
++{
++	/*
++	 * If acpi_disabled, bail out
++	 */
++	if (acpi_disabled)
++		return;
++
++	/*
++	 * Initialize the ACPI boot-time table parser.
++	 */
++	if (acpi_table_init()) {
++		disable_acpi();
++		return;
++	}
++}
++
++static void set_processor_mask(struct acpi_madt_local_apic *processor)
++{
++
++	int cpu;
++	int cpuid = processor->id;
++
++	if (!(processor->lapic_flags & ACPI_MADT_ENABLED))
++		return;
++
++	if (num_processors >= nr_cpu_ids) {
++		pr_warning("acpi: nr_cpus/possible_cpus limit of %i reached."
++			   "  processor 0x%x ignored.\n", nr_cpu_ids, cpuid);
++
++	}
++	if (cpuid == loongson_sysconf.boot_cpu_id)
++		cpu = 0;
++	else
++		cpu = cpumask_next_zero(-1, cpu_present_mask);
++
++	__cpu_number_map[cpuid] = cpu;
++	__cpu_logical_map[cpu] = cpuid;
++	set_cpu_possible(cpu, true);
++	if (processor->lapic_flags & ACPI_MADT_ENABLED) {
++		set_cpu_present(cpu, true);
++		num_processors++;
++	}
++	loongson_sysconf.reserved_cpus_mask &= (~(1 << cpuid));
++}
++
++static int __init
++acpi_parse_lapic(union acpi_subtable_headers *header, const unsigned long end)
++{
++	struct acpi_madt_local_apic *processor = NULL;
++	processor = (struct acpi_madt_local_apic *)header;
++
++	if (BAD_MADT_ENTRY(processor, end))
++		return -EINVAL;
++
++	acpi_table_print_madt_entry(&header->common);
++
++	set_processor_mask(processor);
++
++	return 0;
++}
++
++static int __init acpi_parse_madt_lapic_entries(void)
++{
++	int ret;
++	struct acpi_subtable_proc madt_proc[1];
++
++	memset(madt_proc, 0, sizeof(madt_proc));
++	madt_proc[0].id = ACPI_MADT_TYPE_LOCAL_APIC;
++	madt_proc[0].handler = acpi_parse_lapic;
++	ret = acpi_table_parse_entries_array(ACPI_SIG_MADT,
++				sizeof(struct acpi_table_madt),
++				madt_proc, ARRAY_SIZE(madt_proc), MAX_LOCAL_APIC);
++	if (ret < 0) {
++		printk(KERN_ERR PREFIX "Error parsing LAPIC entries\n");
++		return ret;
++	}
++
++	return 0;
++}
++
++static int __init acpi_parse_madt(struct acpi_table_header *table)
++{
++	struct acpi_table_madt *madt = NULL;
++
++	madt = (struct acpi_table_madt *)table;
++	if (!madt) {
++		printk(KERN_WARNING PREFIX "Unable to map MADT\n");
++		return -ENODEV;
++	}
++
++	if (madt->address) {
++		acpi_liointc_addr = (u64) madt->address;
++		printk(KERN_DEBUG PREFIX "Local I/O int controller address 0x%08x\n", madt->address);
++	}
++
++	return 0;
++}
++
++
++static int __init
++acpi_parse_pch_pic(union acpi_subtable_headers *header, const unsigned long end)
++{
++	struct acpi_madt_io_apic *pch_pic = NULL;
++
++	pch_pic = (struct acpi_madt_io_apic *)header;
++
++	if (BAD_MADT_ENTRY(pch_pic, end))
++		return -EINVAL;
++
++	acpi_table_print_madt_entry(&header->common);
++
++	/* FIXME: register_pch_pic(pch_pic->id, pch_pic->address, pch_pic->global_irq_base); */
++
++	return 0;
++}
++
++/*
++ * Parse PCH_PIC related entries in MADT
++ * returns 0 on success, < 0 on error
++ */
++static int __init acpi_parse_madt_pch_pic_entries(void)
++{
++	int count;
++
++	/*
++	 * ACPI interpreter is required to complete interrupt setup,
++	 * so if it is off, don't enumerate the io-apics with ACPI.
++	 * If MPS is present, it will handle them,
++	 * otherwise the system will stay in PIC mode
++	 */
++	if (acpi_disabled || acpi_noirq)
++		return -ENODEV;
++
++	count = acpi_table_parse_madt(ACPI_MADT_TYPE_IO_APIC, acpi_parse_pch_pic, MAX_PCH_PICS);
++	if (!count) {
++		printk(KERN_ERR PREFIX "No PCH_PIC entries present\n");
++		return -ENODEV;
++	} else if (count < 0) {
++		printk(KERN_ERR PREFIX "Error parsing PCH_PIC entry\n");
++		return count;
++	}
++
++	return 0;
++}
++
++static void __init acpi_process_madt(void)
++{
++	int i, error;
++
++	for (i = 0; i < NR_CPUS; i++) {
++		__cpu_number_map[i] = -1;
++		__cpu_logical_map[i] = -1;
++	}
++	loongson_sysconf.reserved_cpus_mask = 0xFFFF;
++
++	if (acpi_table_parse(ACPI_SIG_MADT, acpi_parse_madt))
++		return;
++	/*
++	 * Parse MADT LAPIC entries
++	 */
++	error = acpi_parse_madt_lapic_entries();
++	if (!error) {
++		/*
++		 * Parse MADT IO-APIC entries
++		 */
++
++		acpi_parse_madt_pch_pic_entries();
++		acpi_irq_model = ACPI_IRQ_MODEL_IOAPIC;
++	}
++	if (error == -EINVAL) {
++		printk(KERN_ERR PREFIX "Invalid BIOS MADT, disabling ACPI\n");
++		disable_acpi();
++	}
++
++	loongson_sysconf.nr_cpus = num_processors;
++
++	return;
++}
++
++int __init acpi_boot_init(void)
++{
++	/*
++	 * If acpi_disabled, bail out
++	 */
++	if (acpi_disabled)
++		return 1;
++
++	arch_acpi_wakeup_start = (u64)wakeup_start;
++	loongson_sysconf.boot_cpu_id = get_ebase_cpunum();
++
++	/*
++	 * Process the Multiple APIC Description Table (MADT), if present
++	 */
++	acpi_process_madt();
++
++	return 0;
++}
++
++static int __init parse_acpi(char *arg)
++{
++	if (!arg)
++		return -EINVAL;
++
++	/* "acpi=off" disables both ACPI table parsing and interpreter */
++	if (strcmp(arg, "off") == 0) {
++		disable_acpi();
++	} else {
++		/* Core will printk when we return error. */
++		return -EINVAL;
++	}
++
++	return 0;
++}
++early_param("acpi", parse_acpi);
++
++/*
++ * MIPS has no SMM, and bios will not acquire the
++ * global lock to do something when kernel running, so
++ * don't have to implement global lock.
++ *
++ * __acpi_acquire_global_lock will always return -1
++ * indicating owning the lock.
++ *
++ * __acpi_release_global_lock will always return 0
++ * indicating no acquring request pending.
++ *
++ * */
++int __acpi_acquire_global_lock(unsigned int *lock)
++{
++	return -1;
++}
++
++int __acpi_release_global_lock(unsigned int *lock)
++{
++	return 0;
++}
++
++void __init arch_reserve_mem_area(acpi_physical_address addr, size_t size)
++{
++	int map_count = loongsonlist_memmap->map_count;
++
++	loongsonlist_memmap->map[map_count].mem_start = addr;
++	loongsonlist_memmap->map[map_count].mem_size = size;
++	loongsonlist_memmap->map[map_count].mem_type = SYSTEM_RAM_RESERVED;
++	loongsonlist_memmap->map_count++;
++}
++
++#ifdef CONFIG_ACPI_NUMA
++
++static __init int setup_node(int pxm)
++{
++	return acpi_map_pxm_to_node(pxm);
++}
++
++/*
++ * Callback for SLIT parsing.  pxm_to_node() returns NUMA_NO_NODE for
++ * I/O localities since SRAT does not list them.  I/O localities are
++ * not supported at this point.
++ */
++extern unsigned char __node_distances[MAX_NUMNODES][MAX_NUMNODES];
++unsigned int numa_distance_cnt;
++
++static inline unsigned int get_numa_distances_cnt(struct acpi_table_slit *slit)
++{
++	return slit->locality_count;
++}
++
++void __init numa_set_distance(int from, int to, int distance)
++{
++	unsigned char *numa_distance = (unsigned char *)__node_distances;
++	printk("run ACPI SLIT\n");
++	if ((u8)distance != distance ||
++			(from == to && distance != LOCAL_DISTANCE)) {
++		pr_warn_once("Warning: invalid distance parameter, from=%d to=%d distance=%d\n",
++				from, to, distance);
++		return;
++	}
++
++	numa_distance[from * numa_distance_cnt + to] = distance;
++}
++
++void __init acpi_numa_slit_init(struct acpi_table_slit *slit)
++{
++	int i, j;
++
++	numa_distance_cnt = get_numa_distances_cnt(slit);
++
++	for (i = 0; i < slit->locality_count; i++) {
++		const int from_node = pxm_to_node(i);
++
++		if (from_node == NUMA_NO_NODE)
++			continue;
++
++		for (j = 0; j < slit->locality_count; j++) {
++			const int to_node = pxm_to_node(j);
++
++			if (to_node == NUMA_NO_NODE)
++				continue;
++
++			numa_set_distance(from_node, to_node,
++					slit->entry[slit->locality_count * i + j]);
++		}
++	}
++}
++
++/* Callback for Proximity Domain -> CPUID mapping */
++void __init
++acpi_numa_processor_affinity_init(struct acpi_srat_cpu_affinity *pa)
++{
++	int pxm, node;
++
++	if (srat_disabled())
++		return;
++	if (pa->header.length != sizeof(struct acpi_srat_cpu_affinity)) {
++		bad_srat();
++		return;
++	}
++	if ((pa->flags & ACPI_SRAT_CPU_ENABLED) == 0)
++		return;
++	pxm = pa->proximity_domain_lo;
++	if (acpi_srat_revision >= 2) {
++		pxm |= (pa->proximity_domain_hi[0] << 8);
++		pxm |= (pa->proximity_domain_hi[1] << 16);
++		pxm |= (pa->proximity_domain_hi[2] << 24);
++	}
++	node = setup_node(pxm);
++	if (node < 0) {
++		printk(KERN_ERR "SRAT: Too many proximity domains %x\n", pxm);
++		bad_srat();
++		return;
++	}
++
++	if (pa->apic_id >= CONFIG_NR_CPUS) {
++		printk(KERN_INFO "SRAT: PXM %u -> CPU 0x%02x -> Node %u skipped apicid that is too big\n", pxm, pa->apic_id, node);
++		return;
++	}
++
++	numa_add_cpu(__cpu_number_map[pa->apic_id], node);
++	set_cpuid_to_node(pa->apic_id, node);
++	node_set(node, numa_nodes_parsed);
++	acpi_numa = 1;
++	printk(KERN_INFO "SRAT: PXM %u -> CPU 0x%02x -> Node %u\n",
++		pxm, pa->apic_id, node);
++}
++
++#ifdef CONFIG_MEMORY_HOTPLUG
++static inline int save_add_info(void) {return 1;}
++#else
++static inline int save_add_info(void) {return 0;}
++#endif
++
++/* Callback for parsing of the Proximity Domain <-> Memory Area mappings */
++int __init
++acpi_numa_memory_affinity_init(struct acpi_srat_mem_affinity *ma)
++{
++	u64 start, end;
++	u32 hotpluggable;
++	int node, pxm;
++
++	if (srat_disabled())
++		goto out_err;
++	if (ma->header.length != sizeof(struct acpi_srat_mem_affinity))
++		goto out_err_bad_srat;
++	if ((ma->flags & ACPI_SRAT_MEM_ENABLED) == 0)
++		goto out_err;
++	hotpluggable = ma->flags & ACPI_SRAT_MEM_HOT_PLUGGABLE;
++	if (hotpluggable && !save_add_info())
++		goto out_err;
++
++	start = ma->base_address;
++	end = start + ma->length;
++	pxm = ma->proximity_domain;
++	if (acpi_srat_revision <= 1)
++		pxm &= 0xff;
++
++	node = setup_node(pxm);
++	if (node < 0) {
++		printk(KERN_ERR "SRAT: Too many proximity domains.\n");
++		goto out_err_bad_srat;
++	}
++	if (numa_add_memblk(node, start, end) < 0)
++		goto out_err_bad_srat;
++
++	node_set(node, numa_nodes_parsed);
++
++	pr_info("SRAT: Node %u PXM %u [mem %#010Lx-%#010Lx]%s%s\n",
++		node, pxm,
++		(unsigned long long) start, (unsigned long long) end - 1,
++		hotpluggable ? " hotplug" : "",
++		ma->flags & ACPI_SRAT_MEM_NON_VOLATILE ? " non-volatile" : "");
++
++	/* Mark hotplug range in memblock. */
++	if (hotpluggable && memblock_mark_hotplug(start, ma->length))
++		pr_warn("SRAT: Failed to mark hotplug range [mem %#010Lx-%#010Lx] in memblock\n",
++			(unsigned long long)start, (unsigned long long)end - 1);
++
++	max_possible_pfn = max(max_possible_pfn, PFN_UP(end - 1));
++
++	return 0;
++
++out_err_bad_srat:
++	bad_srat();
++out_err:
++	return -1;
++}
++
++void __init acpi_numa_arch_fixup(void) {}
++
++#endif
+diff --git a/arch/mips/kernel/process.c b/arch/mips/kernel/process.c
+index ab6a40c77292..958faa51dfba 100644
+--- a/arch/mips/kernel/process.c
++++ b/arch/mips/kernel/process.c
+@@ -81,6 +81,12 @@ void start_thread(struct pt_regs * regs, unsigned long pc, unsigned long sp)
+ 	regs->regs[29] = sp;
+ }
+ 
++/*
++ * Idle related variables and functions
++ */
++unsigned long boot_option_idle_override = IDLE_NO_OVERRIDE;
++EXPORT_SYMBOL(boot_option_idle_override);
++
+ void exit_thread(struct task_struct *tsk)
+ {
+ 	/*
+diff --git a/arch/mips/kernel/setup.c b/arch/mips/kernel/setup.c
+index 3a3c96f621b7..00a941b2ce74 100644
+--- a/arch/mips/kernel/setup.c
++++ b/arch/mips/kernel/setup.c
+@@ -69,6 +69,7 @@ unsigned long mips_machtype __read_mostly = MACH_UNKNOWN;
+ 
+ EXPORT_SYMBOL(mips_machtype);
+ 
++static char **command_line_p;
+ static char __initdata command_line[COMMAND_LINE_SIZE];
+ char __initdata arcs_cmdline[COMMAND_LINE_SIZE];
+ 
+@@ -623,25 +624,8 @@ static void reserve_oldmem_region(int node, unsigned long s0, unsigned long e0)
+  * breaking plat_setup was just renamed to plat_mem_setup and a second platform
+  * initialization hook for anything else was introduced.
+  */
+-static void __init arch_mem_init(char **cmdline_p)
++void __init parse_cmdline(void)
+ {
+-	unsigned int node;
+-	unsigned long start_pfn, end_pfn;
+-	extern void plat_mem_setup(void);
+-
+-	/*
+-	 * Initialize boot_command_line to an innocuous but non-empty string in
+-	 * order to prevent early_init_dt_scan_chosen() from copying
+-	 * CONFIG_CMDLINE into it without our knowledge. We handle
+-	 * CONFIG_CMDLINE ourselves below & don't want to duplicate its
+-	 * content because repeating arguments can be problematic.
+-	 */
+-	strlcpy(boot_command_line, " ", COMMAND_LINE_SIZE);
+-
+-	/* call board setup routine */
+-	plat_mem_setup();
+-	memblock_set_bottom_up(true);
+-
+ #if defined(CONFIG_CMDLINE_BOOL) && defined(CONFIG_CMDLINE_OVERRIDE)
+ 	strlcpy(boot_command_line, builtin_cmdline, COMMAND_LINE_SIZE);
+ #else
+@@ -671,13 +655,31 @@ static void __init arch_mem_init(char **cmdline_p)
+ #endif
+ 	strlcpy(command_line, boot_command_line, COMMAND_LINE_SIZE);
+ 
+-	*cmdline_p = command_line;
++	*command_line_p = command_line;
+ 
+ 	parse_early_param();
+ 
+ 	if (usermem)
+ 		pr_info("User-defined physical RAM map overwrite\n");
+ 
++#ifdef CONFIG_ACPI
++	init_initrd();
++#endif
++}
++
++static void __init arch_mem_init(void)
++{
++	unsigned int node;
++	unsigned long start_pfn, end_pfn;
++	extern void plat_mem_setup(void);
++
++	/* call board setup routine */
++	plat_mem_setup();
++	memblock_set_bottom_up(true);
++
++#ifndef CONFIG_ACPI
++	parse_cmdline();
++#endif
+ 	check_kernel_sections_mem();
+ 
+ 	early_init_fdt_reserve_self();
+@@ -806,10 +808,22 @@ static void __init prefill_possible_map(void)
+ static inline void prefill_possible_map(void) {}
+ #endif
+ 
++extern void plat_early_init(void);
++
+ void __init setup_arch(char **cmdline_p)
+ {
+ 	cpu_probe();
+ 	mips_cm_probe();
++
++	/*
++	 * Initialize boot_command_line to an innocuous but non-empty string in
++	 * order to prevent early_init_dt_scan_chosen() from copying
++	 * CONFIG_CMDLINE into it without our knowledge. We handle
++	 * CONFIG_CMDLINE ourselves below & don't want to duplicate its
++	 * content because repeating arguments can be problematic.
++	 */
++	strlcpy(boot_command_line, " ", COMMAND_LINE_SIZE);
++	command_line_p = cmdline_p;
+ 	prom_init();
+ 
+ 	setup_early_fdc_console();
+@@ -827,9 +841,10 @@ void __init setup_arch(char **cmdline_p)
+ #endif
+ #endif
+ 
+-	arch_mem_init(cmdline_p);
++	arch_mem_init();
++#ifndef CONFIG_ACPI
+ 	dmi_setup();
+-
++#endif
+ 	resource_init();
+ 	plat_smp_setup();
+ 	prefill_possible_map();
+diff --git a/arch/mips/loongson64/common/efi.c b/arch/mips/loongson64/common/efi.c
+index 52e45726e136..c9692d01b0ed 100644
+--- a/arch/mips/loongson64/common/efi.c
++++ b/arch/mips/loongson64/common/efi.c
+@@ -5,7 +5,6 @@
+ #include <linux/proc_fs.h>
+ #include <linux/seq_file.h>
+ 
+-static struct kobject *efi_kobj;
+ struct proc_dir_entry *proc_efi;
+ extern unsigned int has_systab;
+ extern unsigned long systab_addr;
+@@ -61,9 +60,6 @@ static const struct file_operations proc_systab_operations = {
+   */
+ int __init efi_init_kernfs(void)
+ {
+-	efi_kobj = kobject_create_and_add("efi", firmware_kobj);
+-	if (!efi_kobj)
+-		return -ENOMEM;
+ 
+ 	proc_efi = proc_mkdir("efi", NULL);
+ 	if (!proc_efi)
+@@ -82,7 +78,6 @@ void __exit efi_exit_kernfs(void)
+ {
+ 	remove_proc_entry("systab", proc_efi);
+ 	remove_proc_entry("efi", NULL);
+-	kobject_put(efi_kobj);
+ }
+ 
+ static int __init init_efi(void)
+diff --git a/arch/mips/loongson64/common/env.c b/arch/mips/loongson64/common/env.c
+index 29203764eb26..635f38e67eb8 100644
+--- a/arch/mips/loongson64/common/env.c
++++ b/arch/mips/loongson64/common/env.c
+@@ -14,18 +14,22 @@
+  * Author: Wu Zhangjin, wuzhangjin@gmail.com
+  */
+ #include <linux/export.h>
++#include <linux/acpi.h>
+ #include <asm/time.h>
+ #include <asm/bootinfo.h>
+ #include <asm/dma-coherence.h>
+-#include <loongson.h>
+ #include <boot_param.h>
++#include <loongson.h>
+ #include <loongson-pch.h>
++#include <pci.h>
+ #include <workarounds.h>
+ 
+ u32 cpu_clock_freq;
+ EXPORT_SYMBOL(cpu_clock_freq);
++bool acpiboot;
+ char cpu_full_name[64];
+ struct efi_memory_map_loongson *loongson_memmap;
++struct loongsonlist_mem_map *loongsonlist_memmap;
+ struct loongson_system_configuration loongson_sysconf;
+ 
+ u64 loongson_chipcfg[MAX_PACKAGES] = {0xffffffffbfc00180};
+@@ -35,6 +39,7 @@ u64 loongson_freqctrl[MAX_PACKAGES];
+ unsigned long long smp_group[4];
+ unsigned int has_systab = 0;
+ unsigned long systab_addr;
++struct bootparamsinterface *efi_bp;
+ 
+ void *loongson_fdt_blob;
+ struct platform_controller_hub dummy_pch;
+@@ -49,10 +54,9 @@ do {									\
+ 		tmp = kstrtou32((char *)p + strlen(option"="), 10, &res); \
+ } while (0)
+ 
+-void __init prom_init_env(void)
++void __init prom_init_env_noacpi(void)
+ {
+ 	/* pmon passes arguments in 32bit pointers */
+-	char freq[12];
+ 	unsigned int processor_id;
+ 
+ #ifndef CONFIG_LEFI_FIRMWARE_INTERFACE
+@@ -259,9 +263,120 @@ void __init prom_init_env(void)
+ 	}
+ 	mips_cpu_frequency = cpu_clock_freq;
+ 	pr_info("CpuClock = %u\n", cpu_clock_freq);
++}
++
++u8 ext_listhdr_checksum(u8 *buffer, u32 length)
++{
++	u8 sum = 0;
++	u8 *end = buffer + length;
++
++	while (buffer < end) {
++		sum = (u8)(sum + *(buffer++));
++	}
++
++	return (sum);
++}
++int parse_mem(struct _extention_list_hdr *head)
++{
++	loongsonlist_memmap = (struct loongsonlist_mem_map *)head;
++
++	if (ext_listhdr_checksum((u8 *)loongsonlist_memmap, head->length))
++		return -EPERM;
++
++	return 0;
++}
++
++
++int parse_vbios(struct _extention_list_hdr *head)
++{
++	struct loongsonlist_vbios *pvbios = (struct loongsonlist_vbios *)head;
++
++	if (ext_listhdr_checksum((u8 *)pvbios, head->length))
++		return -EPERM;
++
++	loongson_sysconf.vgabios_addr = (u64)pvbios;
++
++	return 0;
++}
++
++static int parse_screeninfo(struct _extention_list_hdr *head)
++{
++	struct loongsonlist_screeninfo *pscreeninfo;
++
++	pscreeninfo = (struct loongsonlist_screeninfo *)head;
++	if (ext_listhdr_checksum((u8 *)pscreeninfo, head->length)) {
++		return -EPERM;
++	}
++
++	memcpy(&screen_info, &pscreeninfo->si, sizeof(screen_info));
++	return 0;
++}
++
++static int list_find(struct _extention_list_hdr *head)
++{
++	struct _extention_list_hdr *fhead = head;
++
++	if (fhead == NULL)
++		return -1;
++
++	while(fhead != NULL) {
++		if (memcmp(&(fhead->signature), LOONGSON_MEM_LINKLIST, 3) == 0) {
++			if (parse_mem(fhead) !=0)
++				return -EPERM;
++		} else if (memcmp(&(fhead->signature), LOONGSON_VBIOS_LINKLIST, 5) == 0) {
++			if (parse_vbios(fhead) != 0)
++				return -EPERM;
++		} else if (memcmp(&(fhead->signature), LOONGSON_SCREENINFO_LINKLIST, 5) == 0) {
++			if (parse_screeninfo(fhead) != 0) {
++				return -EPERM;
++			}
++		}
++		fhead = fhead->next;
++	}
++	return 0;
++
++}
++
++void __init prom_init_env(void)
++{
++	efi_bp = (struct bootparamsinterface *)fw_arg2;
++
++	if (memcmp(&(efi_bp->signature), LOONGSON_EFIBOOT_SIGNATURE, 3) != 0) {
++		disable_acpi();
++		prom_init_env_noacpi();
++		return;
++	}
++
++	smp_group[0] = 0x900000003ff01000;
++	smp_group[1] = 0x900010003ff01000;
++	smp_group[2] = 0x900020003ff01000;
++	smp_group[3] = 0x900030003ff01000;
++
++	loongson_chipcfg[0] = 0x900000001fe00180;
++	loongson_chipcfg[1] = 0x900010001fe00180;
++	loongson_chipcfg[2] = 0x900020001fe00180;
++	loongson_chipcfg[3] = 0x900030001fe00180;
++	loongson_chiptemp[0] = 0x900000001fe0019c;
++	loongson_chiptemp[1] = 0x900010001fe0019c;
++	loongson_chiptemp[2] = 0x900020001fe0019c;
++	loongson_chiptemp[3] = 0x900030001fe0019c;
++	loongson_freqctrl[0] = 0x900000001fe001d0;
++	loongson_freqctrl[1] = 0x900010001fe001d0;
++	loongson_freqctrl[2] = 0x900020001fe001d0;
++	loongson_freqctrl[3] = 0x900030001fe001d0;
++
++	acpiboot = 1;
++	loongson_sysconf.nr_uarts = 1;
++	loongson_sysconf.ec_sci_irq = 0x7b;
++	loongson_sysconf.dma_mask_bits = 64;
++	loongson_sysconf.ht_control_base = 0x90000EFDFB000000;
++	loongson_sysconf.pci_mem_start_addr = LOONGSON_ACPI_PCI_MEM_START;
++	loongson_sysconf.pci_mem_end_addr = LOONGSON_ACPI_PCI_MEM_END;
++	loongson_sysconf.pci_io_base = LOONGSON_ACPI_PCI_IOBASE;
++	loongson_sysconf.workarounds = WORKAROUND_CPUFREQ;
++	list_find(efi_bp->extlist);
+ 
+-	/* Append default cpu frequency with round-off */
+-	sprintf(freq, " @ %uMHz", (cpu_clock_freq + 500000) / 1000000);
+-	strncat(cpu_full_name, freq, sizeof(cpu_full_name));
+-	__cpu_full_name[0] = cpu_full_name;
++	hw_coherentio = 1;
++	loongson_pch = &ls7a_pch;
++	loongson_fdt_blob = __dtb_loongson3_acpi_begin;
+ }
+diff --git a/arch/mips/loongson64/common/init.c b/arch/mips/loongson64/common/init.c
+index 70a18c971962..a79f541d7d14 100644
+--- a/arch/mips/loongson64/common/init.c
++++ b/arch/mips/loongson64/common/init.c
+@@ -12,10 +12,37 @@
+ 
+ #include <loongson.h>
+ #include <loongson-pch.h>
+-
++#include <asm/time.h>
++#include <linux/memblock.h>
++#include <linux/dmi.h>
++#include <asm/uasm.h>
++#include <asm/efi.h>
++#include <workarounds.h>
++#include <boot_param.h>
++#include <linux/acpi.h>
+ /* Loongson CPU address windows config space base address */
+ unsigned long __maybe_unused _loongson_addrwincfg_base;
+ 
++extern u32 cpu_clock_freq;
++extern char cpu_full_name[64];
++static char *product_name;
++
++char *bios_vendor;
++char *bios_release_date;
++char *board_manufacturer;
++struct board_devices eboard_smbios;
++struct interface_info einter_smbios;
++
++static const char dmi_empty_string[] = "        ";
++
++#define SMBIOS_BIOSSIZE_OFFSET		5
++#define SMBIOS_BOISEXTERN_OFFSET 	15
++#define SMBIOS_FREQLOW_OFFSET		18
++#define SMBIOS_FREQHIGH_OFFSET		19
++#define SMBIOS_FREQLOW_MASK		0xFF
++#define SMBIOS_CORE_PACKAGE_OFFSET	31
++#define LOONGSON_EFI_ENABLE     	(1 << 3)
++
+ static void __init mips_ebase_setup(void)
+ {
+ 	ebase = CKSEG0;
+@@ -36,8 +63,102 @@ static void __init mips_nmi_setup(void)
+ 	flush_icache_range((unsigned long)base, (unsigned long)base + 0x80);
+ }
+ 
++const char *dmi_string_parse(const struct dmi_header *dm, u8 s)
++{
++	const u8 *bp = ((u8 *) dm) + dm->length;
++
++	if (s) {
++		s--;
++		while (s > 0 && *bp) {
++			bp += strlen(bp) + 1;
++			s--;
++		}
++
++		if (*bp != 0) {
++			size_t len = strlen(bp)+1;
++			size_t cmp_len = len > 8 ? 8 : len;
++
++			if (!memcmp(bp, dmi_empty_string, cmp_len))
++				return dmi_empty_string;
++		return bp;
++		}
++	}
++
++	return "";
++
++}
++
++static void __init parse_cpu_table(const struct dmi_header *dm)
++{
++	int freq_temp = 0;
++	const char *cpuname;
++	char *dmi_data = (char *)(dm + 1);
++
++	freq_temp = ((*(dmi_data + SMBIOS_FREQHIGH_OFFSET) << 8) + \
++			((*(dmi_data + SMBIOS_FREQLOW_OFFSET)) & SMBIOS_FREQLOW_MASK));
++	cpu_clock_freq = freq_temp * 1000000;
++	cpuname = dmi_string_parse(dm, dmi_data[12]);
++	if (!strncmp(cpuname, "Loongson", 8))
++		strncpy(cpu_full_name, cpuname, sizeof(cpu_full_name));
++	if (cpu_full_name[0] == 0)
++		strncpy(cpu_full_name, __cpu_full_name[0], sizeof(cpu_full_name));
++	loongson_sysconf.cores_per_package = *(dmi_data + SMBIOS_CORE_PACKAGE_OFFSET);
++
++	mips_cpu_frequency = cpu_clock_freq;
++	pr_info("CpuClock = %u\n", cpu_clock_freq);
++
++}
++
++static void __init parse_bios_table(const struct dmi_header *dm)
++{
++	int bios_extern;
++	char *dmi_data = (char *)(dm + 1);
++
++	bios_extern = *(dmi_data + SMBIOS_BOISEXTERN_OFFSET);
++
++	if (bios_extern & LOONGSON_EFI_ENABLE)
++		set_bit(EFI_BOOT, &efi.flags);
++	else
++		clear_bit(EFI_BOOT, &efi.flags);
++
++	einter_smbios.size = *(dmi_data + SMBIOS_BIOSSIZE_OFFSET);
++}
++
++
++static void __init find_tokens(const struct dmi_header *dm, void *dummy)
++{
++	switch (dm->type) {
++	case 0x0: /* Extern BIOS */
++		parse_bios_table(dm);
++		break;
++	case 0x4: /* Calling interface */
++		parse_cpu_table(dm);
++		break;
++	}
++}
++
++static void __init smbios_parse(void)
++{
++	bios_vendor = (void *)dmi_get_system_info(DMI_BIOS_VENDOR);
++	strcpy(einter_smbios.description,dmi_get_system_info(DMI_BIOS_VERSION));
++	bios_release_date = (void *)dmi_get_system_info(DMI_BIOS_DATE);
++	board_manufacturer = (void *)dmi_get_system_info(DMI_BOARD_VENDOR);
++	strcpy(eboard_smbios.name, dmi_get_system_info(DMI_BOARD_NAME));
++	dmi_walk(find_tokens, NULL);
++	product_name = (void *)dmi_get_system_info(DMI_PRODUCT_NAME);
++	strsep(&product_name,"-");
++	strsep(&product_name,"-");
++	product_name = strsep(&product_name,"-");
++}
++
++unsigned long max_low_pfn_mapped;
++extern void __init parse_cmdline(void);
++extern void __init early_memblock_init(void);
++
+ void __init prom_init(void)
+ {
++	char freq[12];
++
+ #ifdef CONFIG_CPU_SUPPORTS_ADDRWINCFG
+ 	_loongson_addrwincfg_base = (unsigned long)
+ 		ioremap(LOONGSON_ADDRWINCFG_BASE, LOONGSON_ADDRWINCFG_SIZE);
+@@ -46,21 +167,58 @@ void __init prom_init(void)
+ 	prom_init_cmdline();
+ 	prom_init_env();
+ 
++	/*init the uart base address */
++	prom_init_uart_base();
++
++#ifdef CONFIG_ACPI
++	if (acpiboot)
++		early_memblock_init();
++	parse_cmdline();
++#endif
++
+ 	/* init base address of io space */
+ 	set_io_port_base((unsigned long)
+ 		ioremap(LOONGSON_PCIIO_BASE, LOONGSON_PCIIO_SIZE));
+ 
+-	if (loongson_pch->early_config)
+-		loongson_pch->early_config();
++
++#ifdef CONFIG_ACPI
++	if (acpiboot) {
++#ifdef CONFIG_EFI
++		efi_init();
++#endif
++#ifdef CONFIG_ACPI_TABLE_UPGRADE
++		acpi_table_upgrade();
++#endif
++		acpi_gbl_use_default_register_widths = false;
++		acpi_boot_table_init();
++		acpi_boot_init();
++	}
++#endif
+ 
+ #ifdef CONFIG_NUMA
+ 	prom_init_numa_memory();
+ #else
+-	prom_init_memory();
++	if (acpiboot)
++		prom_init_memory_new();
++	else
++		prom_init_memory_old();
+ #endif
+ 
+-	/*init the uart base address */
+-	prom_init_uart_base();
++#ifdef CONFIG_ACPI
++ 	dmi_setup();
++
++	if (acpiboot)
++		smbios_parse();
++#endif
++
++	/* Append default cpu frequency with round-off */
++	sprintf(freq, " @ %uMHz", (cpu_clock_freq + 500000) / 1000000);
++	strncat(cpu_full_name, freq, sizeof(cpu_full_name));
++	__cpu_full_name[0] = cpu_full_name;
++
++	if (loongson_pch->early_config)
++		loongson_pch->early_config();
++
+ 	register_smp_ops(&loongson3_smp_ops);
+ 	board_ebase_setup = mips_ebase_setup;
+ 	board_nmi_handler_setup = mips_nmi_setup;
+diff --git a/arch/mips/loongson64/common/mem.c b/arch/mips/loongson64/common/mem.c
+index 281decdee25e..7cb65a84ba33 100644
+--- a/arch/mips/loongson64/common/mem.c
++++ b/arch/mips/loongson64/common/mem.c
+@@ -17,7 +17,7 @@
+ 
+ u32 memsize, highmemsize;
+ 
+-void __init prom_init_memory(void)
++void __init prom_init_memory_old(void)
+ {
+ 	add_memory_region(0x0, (memsize << 20), BOOT_MEM_RAM);
+ 
+@@ -57,7 +57,35 @@ void __init prom_init_memory(void)
+ extern unsigned int has_systab;
+ extern unsigned long systab_addr;
+ 
+-void __init prom_init_memory(void)
++void __init early_memblock_init(void)
++{
++#ifdef CONFIG_ACPI_TABLE_UPGRADE
++	int i;
++	u32 mem_type;
++	u64 mem_start, mem_end, mem_size;
++
++	/* parse memory information */
++	for (i = 0; i < loongsonlist_memmap->map_count; i++){
++		mem_type = loongsonlist_memmap->map[i].mem_type;
++		mem_start = loongsonlist_memmap->map[i].mem_start;
++		mem_size = loongsonlist_memmap->map[i].mem_size;
++		mem_end = mem_start + mem_size;
++		switch (mem_type) {
++		case SYSTEM_RAM_LOW:
++			max_low_pfn_mapped = mem_end >> PAGE_SHIFT;
++			/* fall through */
++		case SYSTEM_RAM_HIGH:
++			memblock_add(mem_start, mem_size);
++			if (max_low_pfn < (mem_end >> PAGE_SHIFT))
++				max_low_pfn = mem_end >> PAGE_SHIFT;
++			break;
++		}
++	}
++	memblock_set_current_limit(PFN_PHYS(max_low_pfn));
++#endif
++}
++
++void __init prom_init_memory_old(void)
+ {
+ 	int i;
+ 	u32 node_id;
+@@ -113,6 +141,67 @@ void __init prom_init_memory(void)
+ 
+ #endif /* CONFIG_LEFI_FIRMWARE_INTERFACE */
+ 
++void __init prom_init_memory_new(void)
++{
++	int i;
++	u32 mem_type;
++	u64 mem_start, mem_end, mem_size;
++
++	/* parse memory information */
++	for (i = 0; i < loongsonlist_memmap->map_count; i++){
++		mem_type = loongsonlist_memmap->map[i].mem_type;
++		mem_start = loongsonlist_memmap->map[i].mem_start;
++		mem_size = loongsonlist_memmap->map[i].mem_size;
++		mem_end = mem_start + mem_size;
++		switch (mem_type) {
++		case SYSTEM_RAM_LOW:
++			mem_start = PFN_ALIGN(mem_start);
++			mem_end = PFN_ALIGN(mem_end - PAGE_SIZE + 1);
++			if (mem_start >= mem_end)
++				break;
++			loongson_sysconf.low_physmem_start =
++				loongsonlist_memmap->map[i].mem_start;
++			memblock_add(loongsonlist_memmap->map[i].mem_start,
++				loongsonlist_memmap->map[i].mem_size);
++			break;
++		case SYSTEM_RAM_HIGH:
++			mem_start = PFN_ALIGN(mem_start);
++			mem_end = PFN_ALIGN(mem_end - PAGE_SIZE + 1);
++			if (mem_start >= mem_end)
++				break;
++			loongson_sysconf.high_physmem_start =
++				loongsonlist_memmap->map[i].mem_start;
++			memblock_add(loongsonlist_memmap->map[i].mem_start,
++				loongsonlist_memmap->map[i].mem_size);
++			break;
++		case SYSTEM_RAM_RESERVED:
++			memblock_reserve(loongsonlist_memmap->map[i].mem_start,
++				loongsonlist_memmap->map[i].mem_size);
++			break;
++		case SMBIOS_TABLE:
++			has_systab = 1;
++			systab_addr = loongsonlist_memmap->map[i].mem_start;
++			memblock_reserve(loongsonlist_memmap->map[i].mem_start,
++				loongsonlist_memmap->map[i].mem_size);
++			break;
++		case UMA_VIDEO_RAM:
++			loongson_sysconf.vram_type = VRAM_TYPE_UMA;
++			loongson_sysconf.uma_vram_addr = loongsonlist_memmap->map[i].mem_start;
++			loongson_sysconf.uma_vram_size = loongsonlist_memmap->map[i].mem_size;
++			memblock_add(loongsonlist_memmap->map[i].mem_start,
++				loongsonlist_memmap->map[i].mem_size);
++			break;
++		case VUMA_VIDEO_RAM:
++			loongson_sysconf.vram_type = VRAM_TYPE_UMA;
++			loongson_sysconf.vuma_vram_addr = loongsonlist_memmap->map[i].mem_start;
++			loongson_sysconf.vuma_vram_size = loongsonlist_memmap->map[i].mem_size;
++			memblock_reserve(loongsonlist_memmap->map[i].mem_start,
++				loongsonlist_memmap->map[i].mem_size);
++			break;
++		}
++	}
++}
++
+ /* override of arch/mips/mm/cache.c: __uncached_access */
+ int __uncached_access(struct file *file, unsigned long addr)
+ {
+diff --git a/arch/mips/loongson64/common/reset.c b/arch/mips/loongson64/common/reset.c
+index 8ba98ce8c4ab..9b4b3107d826 100644
+--- a/arch/mips/loongson64/common/reset.c
++++ b/arch/mips/loongson64/common/reset.c
+@@ -12,9 +12,11 @@
+ #include <linux/kexec.h>
+ #include <linux/pm.h>
+ #include <linux/slab.h>
+-
++#include <linux/acpi.h>
++#include <linux/efi.h>
+ #include <asm/bootinfo.h>
+ #include <asm/idle.h>
++#include <asm/delay.h>
+ #include <asm/reboot.h>
+ 
+ #include <loongson.h>
+@@ -47,9 +49,14 @@ static void loongson_restart(char *command)
+ 	/* reboot via jumping to boot base address */
+ 	loongson_reboot();
+ #else
+-	void (*fw_restart)(void) = (void *)loongson_sysconf.restart_addr;
+-
+-	fw_restart();
++	if (acpiboot) {
++#ifdef CONFIG_EFI
++		efi.reset_system(EFI_RESET_WARM, EFI_SUCCESS, 0, NULL);
++#endif
++	} else {
++		void (*fw_restart)(void) = (void *)loongson_sysconf.restart_addr;
++		fw_restart();
++	}
+ 	while (1) {
+ 		if (cpu_wait)
+ 			cpu_wait();
+@@ -68,9 +75,14 @@ static void loongson_poweroff(void)
+ 	 */
+ 	return;
+ #else
+-	void (*fw_poweroff)(void) = (void *)loongson_sysconf.poweroff_addr;
+-
+-	fw_poweroff();
++	if (acpiboot) {
++#ifdef CONFIG_EFI
++		efi.reset_system(EFI_RESET_SHUTDOWN, EFI_SUCCESS, 0, NULL);
++#endif
++	} else {
++		void (*fw_poweroff)(void) = (void *)loongson_sysconf.poweroff_addr;
++		fw_poweroff();
++	}
+ 	while (1) {
+ 		if (cpu_wait)
+ 			cpu_wait();
+diff --git a/arch/mips/loongson64/common/serial.c b/arch/mips/loongson64/common/serial.c
+index 98c3a7feb10f..f5b7be27e2f8 100644
+--- a/arch/mips/loongson64/common/serial.c
++++ b/arch/mips/loongson64/common/serial.c
+@@ -13,7 +13,7 @@
+ #include <linux/io.h>
+ #include <linux/module.h>
+ #include <linux/serial_8250.h>
+-
++#include <linux/acpi.h>
+ #include <asm/bootinfo.h>
+ 
+ #include <loongson.h>
+@@ -56,26 +56,36 @@ static struct platform_device uart8250_device = {
+ 	.id = PLAT8250_DEV_PLATFORM,
+ };
+ 
++static int __init check_pnp_uart0(void)
++{
++	return acpi_dev_present("PNP0501", "0", -1);
++}
++
+ static int __init serial_init(void)
+ {
+ 	int i;
+ 	unsigned char iotype;
+ 
+-	iotype = uart8250_data[mips_machtype][0].iotype;
++	if (!check_pnp_uart0()) {
++		iotype = uart8250_data[mips_machtype][0].iotype;
+ 
+-	if (UPIO_MEM == iotype) {
+-		uart8250_data[mips_machtype][0].mapbase =
+-			loongson_uart_base[0];
+-		uart8250_data[mips_machtype][0].membase =
+-			(void __iomem *)_loongson_uart_base[0];
++		if (UPIO_MEM == iotype) {
++			uart8250_data[mips_machtype][0].mapbase =
++				loongson_uart_base[0];
++			uart8250_data[mips_machtype][0].membase =
++				(void __iomem *)_loongson_uart_base[0];
++		}
++		else if (UPIO_PORT == iotype)
++			uart8250_data[mips_machtype][0].iobase =
++				loongson_uart_base[0] - LOONGSON_PCIIO_BASE;
++
++		if (loongson_sysconf.uarts[0].uartclk)
++			uart8250_data[mips_machtype][0].uartclk =
++				loongson_sysconf.uarts[0].uartclk;
++	} else {
++		memset(&uart8250_data[mips_machtype][0],
++			0, sizeof(struct plat_serial8250_port));
+ 	}
+-	else if (UPIO_PORT == iotype)
+-		uart8250_data[mips_machtype][0].iobase =
+-			loongson_uart_base[0] - LOONGSON_PCIIO_BASE;
+-
+-	if (loongson_sysconf.uarts[0].uartclk)
+-		uart8250_data[mips_machtype][0].uartclk =
+-			loongson_sysconf.uarts[0].uartclk;
+ 
+ 	for (i = 1; i < loongson_sysconf.nr_uarts; i++) {
+ 		iotype = loongson_sysconf.uarts[i].iotype;
+diff --git a/arch/mips/loongson64/common/setup.c b/arch/mips/loongson64/common/setup.c
+index f40eb7195153..dde4df2db211 100644
+--- a/arch/mips/loongson64/common/setup.c
++++ b/arch/mips/loongson64/common/setup.c
+@@ -17,6 +17,7 @@
+ #ifdef CONFIG_VT
+ #include <linux/console.h>
+ #include <linux/screen_info.h>
++#include <linux/platform_device.h>
+ #endif
+ 
+ static void wbflush_loongson(void)
+@@ -55,6 +56,17 @@ void __init plat_mem_setup(void)
+ 		__dt_setup_arch(loongson_fdt_blob);
+ }
+ 
++static int __init register_gop_device(void)
++{
++	void *pd;
++	if (screen_info.orig_video_isVGA != VIDEO_TYPE_EFI)
++		return 0;
++	pd = platform_device_register_data(NULL, "efi-framebuffer", 0,
++			&screen_info, sizeof(screen_info));
++	return PTR_ERR_OR_ZERO(pd);
++}
++subsys_initcall(register_gop_device);
++
+ #define NR_CELLS 6
+ 
+ void __init device_tree_init(void)
+diff --git a/arch/mips/loongson64/common/uart_base.c b/arch/mips/loongson64/common/uart_base.c
+index e88d937f10fe..688b48a36add 100644
+--- a/arch/mips/loongson64/common/uart_base.c
++++ b/arch/mips/loongson64/common/uart_base.c
+@@ -20,10 +20,6 @@ EXPORT_SYMBOL(_loongson_uart_base);
+ void prom_init_loongson_uart_base(void)
+ {
+ 	switch (mips_machtype) {
+-	case MACH_LOONGSON_GENERIC:
+-		/* The CPU provided serial port (CPU) */
+-		loongson_uart_base[0] = LOONGSON_REG_BASE + 0x1e0;
+-		break;
+ 	case MACH_LEMOTE_FL2E:
+ 		loongson_uart_base[0] = LOONGSON_PCIIO_BASE + 0x3f8;
+ 		break;
+@@ -35,10 +31,14 @@ void prom_init_loongson_uart_base(void)
+ 	case MACH_LEMOTE_YL2F89:
+ 	case MACH_DEXXON_GDIUM2F10:
+ 	case MACH_LEMOTE_NAS:
+-	default:
+ 		/* The CPU provided serial port (LPC) */
+ 		loongson_uart_base[0] = LOONGSON_LIO1_BASE + 0x3f8;
+ 		break;
++	case MACH_LOONGSON_GENERIC:
++	default:
++		/* The CPU provided serial port (CPU) */
++		loongson_uart_base[0] = LOONGSON_REG_BASE + 0x1e0;
++		break;
+ 	}
+ 
+ 	_loongson_uart_base[0] =
+diff --git a/arch/mips/loongson64/loongson-3/acpi_init.c b/arch/mips/loongson64/loongson-3/acpi_init.c
+index 8f263ca7ec8a..3706bc065b3a 100644
+--- a/arch/mips/loongson64/loongson-3/acpi_init.c
++++ b/arch/mips/loongson64/loongson-3/acpi_init.c
+@@ -1,10 +1,12 @@
+ // SPDX-License-Identifier: GPL-2.0
+ #include <linux/io.h>
++#include <linux/acpi.h>
+ #include <linux/init.h>
+ #include <linux/input.h>
+ #include <linux/ioport.h>
+ #include <linux/export.h>
+ #include <linux/interrupt.h>
++#include <linux/pm_wakeirq.h>
+ #include <loongson-pch.h>
+ 
+ static int acpi_irq;
+@@ -124,6 +126,9 @@ static int __init power_button_init(void)
+ {
+ 	int ret;
+ 
++	if (!acpi_disabled)
++		return -EINVAL;
++
+ 	if (!acpi_irq)
+ 		return -ENODEV;
+ 
+@@ -149,6 +154,9 @@ static int __init power_button_init(void)
+ 		return ret;
+ 	}
+ 
++	dev_pm_set_wake_irq(&button->dev, acpi_irq);
++	device_set_wakeup_capable(&button->dev, true);
++	device_set_wakeup_enable(&button->dev, true);
+ 	pr_info("ACPI Power Button Driver: Init successful!\n");
+ 
+ 	return 0;
+diff --git a/arch/mips/loongson64/loongson-3/ls2h-platform.c b/arch/mips/loongson64/loongson-3/ls2h-platform.c
+index e3a14360ec18..27a875d688b2 100644
+--- a/arch/mips/loongson64/loongson-3/ls2h-platform.c
++++ b/arch/mips/loongson64/loongson-3/ls2h-platform.c
+@@ -8,6 +8,7 @@
+ #include <linux/device.h>
+ #include <linux/platform_device.h>
+ #include <linux/i2c.h>
++#include <linux/acpi.h>
+ #include <linux/types.h>
+ #include <linux/pci.h>
+ #include <linux/delay.h>
+@@ -178,6 +179,10 @@ static void __init ls2h_arch_initcall(void)
+ 		loongson_sysconf.pci_mem_end_addr = LOONGSON_PCI_MEM_START + 0x40000000UL - 1;
+ 	pci_mem_size = loongson_sysconf.pci_mem_end_addr - loongson_sysconf.pci_mem_start_addr + 1;
+ 
++#ifdef CONFIG_ACPI
++	if(!acpi_pci_disabled)
++		return;
++#endif
+ 	ioport_resource.end = 0xffffffff;
+ 	for (i = 0; i < nr_pci_ports; i++) {
+ 		pci_io_resource[i].start = 0x400000*i + 0x100000;
+diff --git a/arch/mips/loongson64/loongson-3/ls7a-platform.c b/arch/mips/loongson64/loongson-3/ls7a-platform.c
+index a8732eba9442..9ba911466dcd 100644
+--- a/arch/mips/loongson64/loongson-3/ls7a-platform.c
++++ b/arch/mips/loongson64/loongson-3/ls7a-platform.c
+@@ -21,6 +21,7 @@
+ #include <linux/platform_device.h>
+ 
+ #include <linux/i2c.h>
++#include <linux/acpi.h>
+ #include <linux/platform_data/i2c-gpio.h>
+ 
+ u32 node_id_offset;
+@@ -63,6 +64,14 @@ static void __init ls7a_arch_initcall(void)
+ 	pci_io_resource.end    = 0x3ffff;
+ 	ioport_resource.end    = 0xfffff;
+ 	ls7a_pci_controller.io_map_base = mips_io_port_base;
++#ifdef CONFIG_ACPI
++	if(!acpi_pci_disabled) {
++		acpi_controller = &ls7a_pci_controller;
++		acpi_mem_resource = &pci_mem_resource;
++		acpi_io_resource = &pci_io_resource;
++		return;
++	}
++#endif
+ 	register_pci_controller(&ls7a_pci_controller);
+ }
+ 
+diff --git a/arch/mips/loongson64/loongson-3/numa.c b/arch/mips/loongson64/loongson-3/numa.c
+index 176ad77a44b7..33a8c7eca7cf 100644
+--- a/arch/mips/loongson64/loongson-3/numa.c
++++ b/arch/mips/loongson64/loongson-3/numa.c
+@@ -11,19 +11,22 @@
+ #include <linux/mm.h>
+ #include <linux/mmzone.h>
+ #include <linux/export.h>
++#include <linux/acpi.h>
+ #include <linux/nodemask.h>
+ #include <linux/swap.h>
+ #include <linux/memblock.h>
++#include <linux/irq.h>
+ #include <linux/pfn.h>
+ #include <linux/highmem.h>
+ #include <asm/page.h>
+ #include <asm/pgalloc.h>
+ #include <asm/sections.h>
+-#include <linux/irq.h>
+ #include <asm/bootinfo.h>
+ #include <asm/mc146818-time.h>
++#include <asm/numa.h>
+ #include <asm/time.h>
+ #include <asm/wbflush.h>
++#include <loongson.h>
+ #include <boot_param.h>
+ 
+ static struct node_data prealloc__node_data[MAX_NUMNODES];
+@@ -32,6 +35,67 @@ EXPORT_SYMBOL(__node_distances);
+ struct node_data *__node_data[MAX_NUMNODES];
+ EXPORT_SYMBOL(__node_data);
+ 
++int numa_off;
++static struct numa_meminfo numa_meminfo;
++static cpumask_t cpus_on_node[MAX_NUMNODES];
++
++/*
++ * apicid, cpu, node mappings
++ */
++s16 __cpuid_to_node[CONFIG_NR_CPUS] = {
++	[0 ... CONFIG_NR_CPUS - 1] = NUMA_NO_NODE
++};
++
++nodemask_t numa_nodes_parsed __initdata;
++
++void __init numa_add_cpu(int cpuid, s16 node)
++{
++	cpumask_set_cpu(cpuid, &cpus_on_node[node]);
++}
++
++static int __init numa_add_memblk_to(int nid, u64 start, u64 end,
++				     struct numa_meminfo *mi)
++{
++	/* ignore zero length blks */
++	if (start == end)
++		return 0;
++
++	/* whine about and ignore invalid blks */
++	if (start > end || nid < 0 || nid >= MAX_NUMNODES) {
++		pr_warning("NUMA: Warning: invalid memblk node %d [mem %#010Lx-%#010Lx]\n",
++			   nid, start, end - 1);
++		return 0;
++	}
++
++	if (mi->nr_blks >= NR_NODE_MEMBLKS) {
++		pr_err("NUMA: too many memblk ranges\n");
++		return -EINVAL;
++	}
++
++	mi->blk[mi->nr_blks].start = PFN_ALIGN(start);
++	mi->blk[mi->nr_blks].end = PFN_ALIGN(end - PAGE_SIZE + 1);
++	mi->blk[mi->nr_blks].nid = nid;
++	mi->nr_blks++;
++
++	return 0;
++}
++
++/**
++ * numa_add_memblk - Add one numa_memblk to numa_meminfo
++ * @nid: NUMA node ID of the new memblk
++ * @start: Start address of the new memblk
++ * @end: End address of the new memblk
++ *
++ * Add a new memblk to the default numa_meminfo.
++ *
++ * RETURNS:
++ * 0 on success, -errno on failure.
++ */
++int __init numa_add_memblk(int nid, u64 start, u64 end)
++{
++	return numa_add_memblk_to(nid, start, end, &numa_meminfo);
++}
++
+ static void enable_lpa(void)
+ {
+ 	unsigned long value;
+@@ -265,6 +329,182 @@ static __init void prom_meminit(void)
+ 	}
+ }
+ 
++#ifdef CONFIG_ACPI_NUMA
++
++/*
++ * Sanity check to catch more bad NUMA configurations (they are amazingly
++ * common).  Make sure the nodes cover all memory.
++ */
++static bool __init numa_meminfo_cover_memory(const struct numa_meminfo *mi)
++{
++	int i;
++	u64 numaram, biosram;
++
++	numaram = 0;
++	for (i = 0; i < mi->nr_blks; i++) {
++		u64 s = mi->blk[i].start >> PAGE_SHIFT;
++		u64 e = mi->blk[i].end >> PAGE_SHIFT;
++		numaram += e - s;
++		numaram -= __absent_pages_in_range(mi->blk[i].nid, s, e);
++		if ((s64)numaram < 0)
++			numaram = 0;
++	}
++	max_pfn = max_low_pfn;
++	biosram = max_pfn - absent_pages_in_range(0, max_pfn);
++
++	BUG_ON((s64)(biosram - numaram) >= (1 << (20 - PAGE_SHIFT)));
++	return true;
++}
++
++static void add_node_intersection(u32 node, u64 start, u64 size)
++{
++	static unsigned long num_physpages = 0;
++
++	num_physpages += (size >> PAGE_SHIFT);
++	pr_info("Node%d: mem_start:0x%llx, mem_size:0x%llx Bytes\n",
++		node, start, size);
++	pr_info("       start_pfn:0x%llx, end_pfn:0x%llx, num_physpages:0x%lx\n",
++		start >> PAGE_SHIFT, (start + size) >> PAGE_SHIFT, num_physpages);
++	memblock_add_node(start, size, node);
++}
++
++/*
++ * add_numamem_region
++ *
++ * Add a uasable memory region described by BIOS. The
++ * routine gets each intersection between BIOS's region
++ * and node's region, and adds them into node's memblock
++ * pool.
++ *
++ * */
++static void __init add_numamem_region(u64 start, u64 end)
++{
++	u32 i;
++	u64 tmp = start;
++
++	for (i = 0; i < numa_meminfo.nr_blks; i++) {
++		struct numa_memblk *mb = &numa_meminfo.blk[i];
++
++		if (tmp > mb->end)
++			continue;
++
++		if (end > mb->end) {
++			add_node_intersection(mb->nid, tmp, mb->end - tmp);
++			tmp = mb->end;
++		} else {
++			add_node_intersection(mb->nid, tmp, end - tmp);
++			break;
++		}
++	}
++}
++
++static void __init init_node_memblock(void)
++{
++	u32 i, mem_type;
++	u64 mem_end, mem_start, mem_size;
++
++	/* Parse memory information and activate */
++	for (i = 0; i < loongsonlist_memmap->map_count; i++) {
++		mem_type = loongsonlist_memmap->map[i].mem_type;
++		mem_start = loongsonlist_memmap->map[i].mem_start;
++		mem_size = loongsonlist_memmap->map[i].mem_size;
++		mem_end = loongsonlist_memmap->map[i].mem_start + mem_size;
++		switch (mem_type) {
++		case SYSTEM_RAM_LOW:
++		case SYSTEM_RAM_HIGH:
++#ifdef CONFIG_ACPI_TABLE_UPGRADE
++			memblock_remove(mem_start, mem_size);
++#endif
++			mem_start = PFN_ALIGN(mem_start);
++			mem_end = PFN_ALIGN(mem_end - PAGE_SIZE + 1);
++			add_numamem_region(mem_start, mem_end);
++			break;
++		case SYSTEM_RAM_RESERVED:
++			pr_info("Reserved: mem_type:%d, mem_start:0x%llx, mem_size:0x%llx Bytes\n",
++					mem_type, mem_start, mem_size);
++			memblock_reserve(mem_start, mem_size);
++			break;
++		case SMBIOS_TABLE:
++			has_systab = 1;
++			systab_addr = mem_start;
++			memblock_reserve(mem_start, mem_size);
++			break;
++		case UMA_VIDEO_RAM:
++			loongson_sysconf.vram_type = VRAM_TYPE_UMA;
++			loongson_sysconf.uma_vram_addr = mem_start;
++			loongson_sysconf.uma_vram_size = mem_size;
++			mem_start = PFN_ALIGN(mem_start);
++			mem_end = PFN_ALIGN(mem_end - PAGE_SIZE + 1);
++			add_numamem_region(mem_start, mem_end);
++			break;
++		case VUMA_VIDEO_RAM:
++			loongson_sysconf.vram_type = VRAM_TYPE_UMA;
++			loongson_sysconf.vuma_vram_addr = mem_start;
++			loongson_sysconf.vuma_vram_size = mem_size;
++			memblock_reserve(mem_start, mem_size);
++			break;
++		}
++	}
++
++	memblocks_present();
++}
++
++static void __init numa_default_distance(void)
++{
++	int row, col;
++
++	for (row = 0; row < MAX_NUMNODES; row++)
++		for (col = 0; col < MAX_NUMNODES; col++) {
++
++			if (col == row)
++				__node_distances[row][col] = 0;
++			else
++				/* We assume that one node per package here!
++				 *
++				 * A SLIT should be used for multiple nodes per
++				 * package to override default setting.
++				 * */
++				__node_distances[row][col] = 200;
++	}
++}
++
++static int __init numa_mem_init(int (*init_func)(void))
++{
++	int i;
++	int ret;
++	int node;
++
++	for (i = 0; i < NR_CPUS; i++)
++		set_cpuid_to_node(i, NUMA_NO_NODE);
++
++	nodes_clear(node_online_map);
++	nodes_clear(node_possible_map);
++	nodes_clear(numa_nodes_parsed);
++	memset(&numa_meminfo, 0, sizeof(numa_meminfo));
++	numa_default_distance();
++
++	/* Parse SRAT and SLIT if provided by firmware. */
++	ret = init_func();
++	if (ret < 0)
++		return ret;
++	node_possible_map = numa_nodes_parsed;
++	if (WARN_ON(nodes_empty(node_possible_map)))
++		return -EINVAL;
++	init_node_memblock();
++	if (!numa_meminfo_cover_memory(&numa_meminfo))
++		return -EINVAL;
++
++	for_each_node_mask(node, node_possible_map) {
++		node_mem_init(node);
++		node_set_online(node);
++		__node_data[(node)]->cpumask = cpus_on_node[node];
++	}
++	max_low_pfn = PHYS_PFN(memblock_end_of_DRAM());
++
++	return 0;
++}
++#endif
++
+ void __init paging_init(void)
+ {
+ 	unsigned long zones_size[MAX_NR_ZONES] = {0, };
+@@ -295,6 +535,18 @@ EXPORT_SYMBOL(pcibus_to_node);
+ void __init prom_init_numa_memory(void)
+ {
+ 	enable_lpa();
++
++#ifndef CONFIG_ACPI_NUMA
+ 	prom_meminit();
++#else
++	if (!acpiboot)
++		prom_meminit();
++	else {
++		numa_mem_init(acpi_numa_init);
++		setup_nr_node_ids();
++		loongson_sysconf.nr_nodes = nr_node_ids;
++		loongson_sysconf.cores_per_node = cpumask_weight(&cpus_on_node[0]);
++	}
++#endif
+ }
+ EXPORT_SYMBOL(prom_init_numa_memory);
+diff --git a/arch/mips/loongson64/loongson-3/platform.c b/arch/mips/loongson64/loongson-3/platform.c
+index 533973d76bf7..ef3e13f825db 100644
+--- a/arch/mips/loongson64/loongson-3/platform.c
++++ b/arch/mips/loongson64/loongson-3/platform.c
+@@ -16,6 +16,7 @@
+ #include <loongson-pch.h>
+ #include <loongson_hwmon.h>
+ #include <workarounds.h>
++#include <linux/acpi.h>
+ 
+ /*
+  * Kernel helper policy
+@@ -77,6 +78,11 @@ struct loongson_fan_policy constant_speed_policy = {
+ #define GPIO_LCD_CNTL		5
+ #define GPIO_BACKLIGHIT_CNTL	7
+ 
++static struct platform_device loongson_laptop_device = {
++	.name			= "loongson-laptop",
++	.id   			= 4,
++};
++
+ static int __init loongson3_platform_init(void)
+ {
+ 	int i;
+@@ -106,13 +112,31 @@ static int __init loongson3_platform_init(void)
+ 		gpio_request(GPIO_BACKLIGHIT_CNTL, "gpio_bl_cntl");
+ 	}
+ 
++	platform_device_register(&loongson_laptop_device);
++
+ 	return 0;
+ }
+ 
++static void get_suspend_addr(void)
++{
++	acpi_status status;
++	unsigned long long suspend_addr = 0;
++
++	status = acpi_evaluate_integer(NULL, "\\SADR", NULL, &suspend_addr);
++	if (ACPI_FAILURE(status) || !suspend_addr) {
++		pr_err("ACPI S3 is not support!\n");
++		return;
++	}
++	loongson_sysconf.suspend_addr = suspend_addr;
++}
++
+ static int __init loongson3_device_init(void)
+ {
+ 	loongson_pch->pch_device_initcall();
+ 
++	if (!acpi_disabled)
++		get_suspend_addr();
++
+ 	return 0;
+ }
+ 
+diff --git a/arch/mips/loongson64/loongson-3/pm.c b/arch/mips/loongson64/loongson-3/pm.c
+index 988b4fe35f82..351ef2b7045e 100644
+--- a/arch/mips/loongson64/loongson-3/pm.c
++++ b/arch/mips/loongson64/loongson-3/pm.c
+@@ -72,11 +72,8 @@ void cmos_write64(uint64_t data, unsigned long addr)
+ 	for (i=0; i<8; i++)
+ 		CMOS_WRITE(bytes[i], addr + i);
+ }
+-
+-void mach_suspend(void)
++void mach_common_suspend(void)
+ {
+-	acpi_sleep_prepare();
+-
+ 	if (cpu_has_ftlb) {
+ 		loongson_regs.config4 = read_c0_config4();
+ 		loongson_regs.config6 = read_c0_config6();
+@@ -106,11 +103,9 @@ void mach_suspend(void)
+ 	loongson_scache_linesz = cpu_data[0].scache.linesz;
+ }
+ 
+-void mach_resume(void)
++void mach_common_resume(void)
+ {
+ 	local_flush_tlb_all();
+-	cmos_write64(0x0, 0x40);  /* clear pc in cmos */
+-	cmos_write64(0x0, 0x48);  /* clear sp in cmos */
+ 
+ 	if (cpu_has_ftlb) {
+ 		write_c0_config4(loongson_regs.config4);
+@@ -133,6 +128,20 @@ void mach_resume(void)
+ 
+ 	loongson_pch->early_config();
+ 	loongson_pch->init_irq();
++}
++
++void mach_suspend(void)
++{
++	acpi_sleep_prepare();
++	mach_common_suspend();
++}
++
++void mach_resume(void)
++{
++	cmos_write64(0x0, 0x40);  /* clear pc in cmos */
++	cmos_write64(0x0, 0x48);  /* clear sp in cmos */
++
++	mach_common_resume();
+ 	acpi_registers_setup();
+ 	acpi_sleep_complete();
+ }
+diff --git a/arch/mips/loongson64/loongson-3/rs780-platform.c b/arch/mips/loongson64/loongson-3/rs780-platform.c
+index 92a8bacc6258..91912b6776aa 100644
+--- a/arch/mips/loongson64/loongson-3/rs780-platform.c
++++ b/arch/mips/loongson64/loongson-3/rs780-platform.c
+@@ -4,6 +4,7 @@
+  *  Copyright (C) 2014-2017, Lemote, Inc.
+  */
+ #include <linux/init.h>
++#include <linux/acpi.h>
+ #include <asm/io.h>
+ #include <pci.h>
+ #include <boot_param.h>
+@@ -45,6 +46,14 @@ static void __init rs780_arch_initcall(void)
+ 	pci_io_resource.end    = 0x3ffff;
+ 	ioport_resource.end    = 0xfffff;
+ 	rs780_pci_controller.io_map_base = mips_io_port_base;
++#ifdef CONFIG_ACPI
++	if(!acpi_pci_disabled) {
++		acpi_controller = &rs780_pci_controller;
++		acpi_mem_resource = &pci_mem_resource;
++		acpi_io_resource = &pci_io_resource;
++		return;
++	}
++#endif
+ 	register_pci_controller(&rs780_pci_controller);
+ }
+ 
+diff --git a/arch/mips/loongson64/loongson-3/sleep.S b/arch/mips/loongson64/loongson-3/sleep.S
+index 62e7566e8b5a..faac3f51ec22 100644
+--- a/arch/mips/loongson64/loongson-3/sleep.S
++++ b/arch/mips/loongson64/loongson-3/sleep.S
+@@ -78,6 +78,8 @@
+ 	dla	a0, wakeup_start	/* resume path */
+ 	li      a1, 0x40
+ 	jal     cmos_write64
++	PTR_LA  k0, acpi_saved_sp
++	sd	sp, (k0)
+ .endm
+ 
+ /* Sleep code for Loongson-3 */
+@@ -131,10 +133,7 @@ flushL2_node:
+ 	nop
+ END(loongson_suspend_enter)
+ 
+-	/* This is where we return upon wakeup.
+-	 * Reload all of the registers and return.
+-	 */
+-LEAF(wakeup_start)
++.macro  SETUP_WAKEUP
+ 	lw	k0, PT_R8(sp)
+ 	mtc0	k0, CP0_EBASE
+ 	lw	k0, PT_R9(sp)
+@@ -171,9 +170,16 @@ LEAF(wakeup_start)
+ 	ld	$28, PT_R28(sp)
+ 	ld	$30, PT_R30(sp)
+ 	ld	$31, PT_R31(sp)
++.endm
+ 
++	/* This is where we return upon wakeup.
++	 * Reload all of the registers and return.
++	 */
++LEAF(wakeup_start)
++	PTR_LA  k0, acpi_saved_sp
++	ld	sp, (k0)
++	SETUP_WAKEUP
+ 	daddiu	sp, PT_SIZE
+ 	jr	ra
+ END(wakeup_start)
+-
+ 	.set pop
+diff --git a/arch/mips/pci/Makefile b/arch/mips/pci/Makefile
+index e2f1b8d97735..35ab3a21917d 100644
+--- a/arch/mips/pci/Makefile
++++ b/arch/mips/pci/Makefile
+@@ -27,6 +27,7 @@ obj-$(CONFIG_SOC_AR71XX)	+= pci-ar71xx.o
+ obj-$(CONFIG_PCI_AR724X)	+= pci-ar724x.o
+ obj-$(CONFIG_MIPS_PCI_VIRTIO)	+= pci-virtio-guest.o
+ obj-$(CONFIG_PCI_XTALK_BRIDGE)	+= pci-xtalk-bridge.o
++obj-$(CONFIG_ACPI)		+= acpi.o
+ #
+ # These are still pretty much in the old state, watch, go blind.
+ #
+diff --git a/arch/mips/pci/acpi.c b/arch/mips/pci/acpi.c
+new file mode 100644
+index 000000000000..e9f8c3fa9f23
+--- /dev/null
++++ b/arch/mips/pci/acpi.c
+@@ -0,0 +1,133 @@
++/*
++ * This file is subject to the terms and conditions of the GNU General Public
++ * License.  See the file "COPYING" in the main directory of this archive
++ * for more details.
++ *
++ * Copyright (C) 2019 Loongson Technology Corp.
++ * Author: Jianmin Lv, lvjianmin@loongson.cn
++ *
++ */
++
++#include <linux/pci.h>
++#include <linux/acpi.h>
++#include <linux/init.h>
++#include <linux/irq.h>
++#include <linux/dmi.h>
++#include <linux/slab.h>
++#include <linux/pci-acpi.h>
++#include <pci.h>
++
++struct resource *acpi_io_resource;
++struct resource *acpi_mem_resource;
++struct pci_controller *acpi_controller;
++
++struct pci_root_info {
++	struct acpi_pci_root_info common;
++	struct pci_controller pc;
++};
++
++void pcibios_add_bus(struct pci_bus *bus)
++{
++	acpi_pci_add_bus(bus);
++}
++
++int pcibios_root_bridge_prepare(struct pci_host_bridge *bridge)
++{
++	struct pci_controller *pc = bridge->bus->sysdata;
++
++	ACPI_COMPANION_SET(&bridge->dev, pc->companion);
++	return 0;
++}
++
++static void acpi_release_root_info(struct acpi_pci_root_info *info)
++{
++	kfree(container_of(info, struct pci_root_info, common));
++}
++
++static int acpi_prepare_root_resources(struct acpi_pci_root_info *ci)
++{
++	int status;
++	struct acpi_device *device = ci->bridge;
++	struct resource_entry *entry, *tmp;
++
++	acpi_io_resource->start = LOONGSON_PCI_IO_START;
++
++	status = acpi_pci_probe_root_resources(ci);
++	if (status > 0)
++		return status;
++
++	resource_list_for_each_entry_safe(entry, tmp, &ci->resources) {
++		dev_printk(KERN_DEBUG, &device->dev,
++			   "host bridge window %pR (ignored)\n", entry->res);
++		resource_list_destroy_entry(entry);
++	}
++	pci_add_resource(&ci->resources, acpi_mem_resource);
++	pci_add_resource(&ci->resources, acpi_io_resource);
++
++	return 0;
++}
++
++static struct acpi_pci_root_ops acpi_pci_root_ops = {
++	.release_info = acpi_release_root_info,
++	.prepare_resources = acpi_prepare_root_resources,
++};
++
++struct pci_bus *pci_acpi_scan_root(struct acpi_pci_root *root)
++{
++	struct pci_bus *bus;
++	struct pci_root_info *info;
++	struct pci_controller *controller;
++	int domain = root->segment;
++	int busnum = root->secondary.start;
++	static int need_domain_info;
++	struct acpi_device *device = root->device;
++
++	info = kzalloc(sizeof(*info), GFP_KERNEL);
++	if (!info) {
++		printk(KERN_WARNING "pci_bus %04x:%02x: "
++				"ignored (out of memory)\n", domain, busnum);
++		return NULL;
++	}
++
++	controller = &info->pc;
++	controller = acpi_controller;
++	controller->companion = device;
++	controller->index = domain;
++	bus = pci_find_bus(domain, busnum);
++	if (bus) {
++		/*
++		 * If the desired bus has been scanned already, replace
++		 * its bus->sysdata.
++		 */
++		memcpy(bus->sysdata, controller, sizeof(*controller));
++		kfree(info);
++	} else {
++		acpi_pci_root_ops.pci_ops = controller->pci_ops;
++		bus = acpi_pci_root_create(root, &acpi_pci_root_ops,
++					   &info->common, controller);
++		if (bus) {
++
++			need_domain_info = need_domain_info || pci_domain_nr(bus);
++			set_pci_need_domain_info(controller, need_domain_info);
++
++			/*
++			 * We insert PCI resources into the iomem_resource and
++			 * ioport_resource trees in either pci_bus_claim_resources()
++			 * or pci_bus_assign_resources().
++			 */
++			if (pci_has_flag(PCI_PROBE_ONLY)) {
++				pci_bus_claim_resources(bus);
++			} else {
++				struct pci_bus *child;
++
++				pci_bus_size_bridges(bus);
++				pci_bus_assign_resources(bus);
++				list_for_each_entry(child, &bus->children, node)
++					pcie_bus_configure_settings(child);
++			}
++		} else {
++			kfree(info);
++		}
++	}
++	return bus;
++}
+diff --git a/arch/mips/pci/fixup-loongson3.c b/arch/mips/pci/fixup-loongson3.c
+index a97e0469f6c7..fc7df3cac5ea 100644
+--- a/arch/mips/pci/fixup-loongson3.c
++++ b/arch/mips/pci/fixup-loongson3.c
+@@ -24,6 +24,7 @@
+  */
+ 
+ #include <linux/pci.h>
++#include <linux/acpi.h>
+ #include <asm/irq.h>
+ #include <boot_param.h>
+ #include <loongson-pch.h>
+@@ -79,6 +80,15 @@ static void pci_fixup_radeon(struct pci_dev *pdev)
+ DECLARE_PCI_FIXUP_CLASS_FINAL(PCI_VENDOR_ID_ATI, 0x9615,
+ 				PCI_CLASS_DISPLAY_VGA, 8, pci_fixup_radeon);
+ 
++static void loongson_fixup_pci_pin(struct pci_dev *dev)
++{
++	if (dev->vendor == PCI_VENDOR_ID_LOONGSON
++			&& (dev->device & 0xff00) == 0x7a00) {
++		u8 fun = dev->devfn & 7;
++		dev->pin = 1 + (fun & 3);
++	}
++}
++
+ /* Do platform specific device initialization at pci_enable_device() time */
+ int pcibios_plat_dev_init(struct pci_dev *dev)
+ {
+@@ -86,5 +96,11 @@ int pcibios_plat_dev_init(struct pci_dev *dev)
+ 	if (loongson_sysconf.workarounds & WORKAROUND_PCIE_DMA)
+ 		dev->dev.dma_attrs = DMA_ATTR_FORCE_SWIOTLB;
+ 
++	if (!acpi_disabled && !pci_dev_msi_enabled(dev)) {
++		if (dev->multifunction)
++			loongson_fixup_pci_pin(dev);
++		return acpi_pci_irq_enable(dev);
++	}
++
+ 	return 0;
+ }
+diff --git a/arch/mips/pci/pci.c b/arch/mips/pci/pci.c
+index feebc6eeee5b..adcb06d105bd 100644
+--- a/arch/mips/pci/pci.c
++++ b/arch/mips/pci/pci.c
+@@ -23,6 +23,23 @@ EXPORT_SYMBOL(PCIBIOS_MIN_IO);
+ unsigned long PCIBIOS_MIN_MEM;
+ EXPORT_SYMBOL(PCIBIOS_MIN_MEM);
+ 
++int raw_pci_read(unsigned int domain, unsigned int bus, unsigned int devfn,int reg, int len, u32 *val)
++{
++	struct pci_bus * bus_tmp = pci_find_bus(domain, bus);
++	if (bus_tmp)
++		return bus_tmp->ops->read(bus_tmp, devfn, reg, len, val);
++	return -EINVAL;
++}
++
++int raw_pci_write(unsigned int domain, unsigned int bus, unsigned int devfn,
++						int reg, int len, u32 val)
++{
++	struct pci_bus * bus_tmp = pci_find_bus(domain, bus);
++	if (bus_tmp)
++		return bus_tmp->ops->write(bus_tmp, devfn, reg, len, val);
++	return -EINVAL;
++}
++
+ static int __init pcibios_set_cache_line_size(void)
+ {
+ 	unsigned int lsize;
+diff --git a/arch/mips/platform/Makefile b/arch/mips/platform/Makefile
+new file mode 100644
+index 000000000000..058b1a94547f
+--- /dev/null
++++ b/arch/mips/platform/Makefile
+@@ -0,0 +1,2 @@
++# Platform specific code goes here
++obj-y	+= efi/
+diff --git a/arch/mips/platform/efi/Makefile b/arch/mips/platform/efi/Makefile
+new file mode 100644
+index 000000000000..2f6fa81c620e
+--- /dev/null
++++ b/arch/mips/platform/efi/Makefile
+@@ -0,0 +1 @@
++obj-$(CONFIG_EFI) 		+= efi.o
+diff --git a/arch/mips/platform/efi/efi.c b/arch/mips/platform/efi/efi.c
+new file mode 100644
+index 000000000000..76acc7b566ed
+--- /dev/null
++++ b/arch/mips/platform/efi/efi.c
+@@ -0,0 +1,85 @@
++/*
++ * EFI partition
++ *
++ * Just for ACPI here, complete it when implementing EFI runtime.
++ *
++ * lvjianmin: <lvjianmin@loongson.cn>
++ */
++
++#include <linux/kernel.h>
++#include <linux/init.h>
++#include <linux/efi.h>
++#include <linux/efi-bgrt.h>
++#include <linux/export.h>
++#include <linux/acpi.h>
++#include <linux/slab.h>
++#include <linux/memblock.h>
++#include <linux/spinlock.h>
++#include <linux/uaccess.h>
++#include <linux/time.h>
++#include <linux/io.h>
++#include <linux/reboot.h>
++#include <linux/bcd.h>
++
++#include <asm/efi.h>
++#include <boot_param.h>
++
++extern unsigned int has_systab;
++extern unsigned long systab_addr;
++extern struct bootparamsinterface *efi_bp;
++
++static efi_config_table_type_t arch_tables[] __initdata = {
++	{NULL_GUID, NULL, NULL},
++};
++
++static int __init efi_runtime_init(void)
++{
++	if (efi_runtime_disabled()) {
++		pr_info("EFI runtime services will be disabled.\n");
++		return -1;
++	}
++
++	efi_native_runtime_setup();
++	set_bit(EFI_RUNTIME_SERVICES, &efi.flags);
++
++	return 0;
++}
++
++static int __init efi_systab_init(void)
++{
++	efi.systab = (efi_system_table_t *)efi_bp->systemtable;
++	if (efi.systab == NULL) {
++		panic("Can't find EFI system table.\n");
++		return -1;
++	}
++
++	set_bit(EFI_64BIT, &efi.flags);
++	efi.config_table = (unsigned long)efi.systab->tables;
++	efi.runtime	= (unsigned long)efi.systab->runtime;
++	efi.runtime_version = (unsigned int)efi.systab->runtime->hdr.revision;
++
++	if (efi_config_init(arch_tables))
++		return -1;
++
++	if (efi.smbios3 != EFI_INVALID_TABLE_ADDR)
++		systab_addr =  efi.smbios3;
++	else if (efi.smbios != EFI_INVALID_TABLE_ADDR)
++		systab_addr =  efi.smbios;
++	else {
++		pr_err("%s : ERROR: smbios addr invaild\n",__func__);
++		return -1;
++	}
++	has_systab = 1;
++
++	set_bit(EFI_CONFIG_TABLES, &efi.flags);
++
++	if (efi_runtime_init())
++		return -1;
++
++	return 0;
++}
++
++void __init efi_init(void)
++{
++	efi_systab_init();
++}
+diff --git a/drivers/acpi/Kconfig b/drivers/acpi/Kconfig
+index ebe1e9e5fd81..87ef1f15826a 100644
+--- a/drivers/acpi/Kconfig
++++ b/drivers/acpi/Kconfig
+@@ -192,7 +192,7 @@ config ACPI_BUTTON
+ 
+ config ACPI_VIDEO
+ 	tristate "Video"
+-	depends on X86 && BACKLIGHT_CLASS_DEVICE
++	depends on (X86 || MIPS) && BACKLIGHT_CLASS_DEVICE
+ 	depends on INPUT
+ 	select THERMAL
+ 	help
+@@ -265,9 +265,9 @@ config ACPI_CPPC_LIB
+ 
+ config ACPI_PROCESSOR
+ 	tristate "Processor"
+-	depends on X86 || IA64 || ARM64
++	depends on X86 || IA64 || ARM64 || MIPS
+ 	select ACPI_PROCESSOR_IDLE
+-	select ACPI_CPU_FREQ_PSS if X86 || IA64
++	select ACPI_CPU_FREQ_PSS if X86 || IA64 || MIPS
+ 	default y
+ 	help
+ 	  This driver adds support for the ACPI Processor package. It is required
+@@ -322,7 +322,7 @@ config ACPI_THERMAL
+ config ACPI_NUMA
+ 	bool "NUMA support"
+ 	depends on NUMA
+-	depends on (X86 || IA64 || ARM64)
++	depends on (X86 || IA64 || ARM64 || MIPS)
+ 	default y if IA64 || ARM64
+ 
+ config ACPI_CUSTOM_DSDT_FILE
+diff --git a/drivers/i2c/busses/i2c-gpio.c b/drivers/i2c/busses/i2c-gpio.c
+index a4a6825c8758..69dfd78a4764 100644
+--- a/drivers/i2c/busses/i2c-gpio.c
++++ b/drivers/i2c/busses/i2c-gpio.c
+@@ -13,6 +13,7 @@
+ #include <linux/init.h>
+ #include <linux/interrupt.h>
+ #include <linux/module.h>
++#include <linux/acpi.h>
+ #include <linux/of.h>
+ #include <linux/platform_data/i2c-gpio.h>
+ #include <linux/platform_device.h>
+@@ -318,6 +319,24 @@ static void of_i2c_gpio_get_props(struct device_node *np,
+ 		of_property_read_bool(np, "i2c-gpio,scl-output-only");
+ }
+ 
++static void acpi_i2c_gpio_get_props(struct device *dev,
++				  struct i2c_gpio_platform_data *pdata)
++{
++	u32 reg;
++
++	device_property_read_u32(dev, "delay-us", &pdata->udelay);
++
++	if (!device_property_read_u32(dev, "timeout-ms", &reg))
++		pdata->timeout = msecs_to_jiffies(reg);
++
++	pdata->sda_is_open_drain =
++		device_property_read_bool(dev, "sda-open-drain");
++	pdata->scl_is_open_drain =
++		device_property_read_bool(dev, "scl-open-drain");
++	pdata->scl_is_output_only =
++		device_property_read_bool(dev, "scl-output-only");
++}
++
+ static struct gpio_desc *i2c_gpio_get_desc(struct device *dev,
+ 					   const char *con_id,
+ 					   unsigned int index,
+@@ -363,6 +382,8 @@ static int i2c_gpio_probe(struct platform_device *pdev)
+ 	struct device *dev = &pdev->dev;
+ 	struct device_node *np = dev->of_node;
+ 	enum gpiod_flags gflags;
++	acpi_status status;
++	unsigned long long id;
+ 	int ret;
+ 
+ 	priv = devm_kzalloc(dev, sizeof(*priv), GFP_KERNEL);
+@@ -375,6 +396,8 @@ static int i2c_gpio_probe(struct platform_device *pdev)
+ 
+ 	if (np) {
+ 		of_i2c_gpio_get_props(np, pdata);
++	} else if(ACPI_COMPANION(dev)){
++		acpi_i2c_gpio_get_props(dev, pdata);
+ 	} else {
+ 		/*
+ 		 * If all platform data settings are zero it is OK
+@@ -445,7 +468,13 @@ static int i2c_gpio_probe(struct platform_device *pdev)
+ 	adap->dev.parent = dev;
+ 	adap->dev.of_node = np;
+ 
+-	adap->nr = pdev->id;
++	if(ACPI_COMPANION(dev)) {
++		status = acpi_evaluate_integer(ACPI_HANDLE(dev), "_UID", NULL, &id);
++		if (ACPI_SUCCESS(status) && (id >= 0)) {
++			adap->nr = id;
++		}
++	} else
++		adap->nr = pdev->id;
+ 	ret = i2c_bit_add_numbered_bus(adap);
+ 	if (ret)
+ 		return ret;
+@@ -491,10 +520,18 @@ static const struct of_device_id i2c_gpio_dt_ids[] = {
+ MODULE_DEVICE_TABLE(of, i2c_gpio_dt_ids);
+ #endif
+ 
++
++static const struct acpi_device_id i2c_gpio_acpi_match[] = {
++	{"LOON0005"},
++	{}
++};
++MODULE_DEVICE_TABLE(acpi, i2c_gpio_acpi_match);
++
+ static struct platform_driver i2c_gpio_driver = {
+ 	.driver		= {
+ 		.name	= "i2c-gpio",
+ 		.of_match_table	= of_match_ptr(i2c_gpio_dt_ids),
++		.acpi_match_table = ACPI_PTR(i2c_gpio_acpi_match),
+ 	},
+ 	.probe		= i2c_gpio_probe,
+ 	.remove		= i2c_gpio_remove,
+diff --git a/drivers/i2c/busses/i2c-ls2x.c b/drivers/i2c/busses/i2c-ls2x.c
+index 7ec414c6524d..95b2c002cb80 100644
+--- a/drivers/i2c/busses/i2c-ls2x.c
++++ b/drivers/i2c/busses/i2c-ls2x.c
+@@ -8,6 +8,7 @@
+  * Originally written by liushaozong
+  */
+ 
++#include <linux/acpi.h>
+ #include <linux/module.h>
+ #include <linux/delay.h>
+ #include <linux/i2c.h>
+@@ -203,8 +204,8 @@ static int ls2x_i2c_probe(struct platform_device *pdev)
+ {
+ 	struct ls2x_i2c_dev	*dev;
+ 	struct i2c_adapter	*adap;
+-	struct resource		*mem, *irq, *ioarea;
+-	int r;
++	struct resource		*mem, *ioarea;
++	int r, irq;
+ 
+ 	/* NOTE: driver uses the static register mapping */
+ 	mem = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+@@ -212,8 +213,8 @@ static int ls2x_i2c_probe(struct platform_device *pdev)
+ 		dev_err(&pdev->dev, "no mem resource?\n");
+ 		return -ENODEV;
+ 	}
+-	irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
+-	if (!irq) {
++	irq = platform_get_irq(pdev, 0);
++	if (irq <= 0) {
+ 		dev_err(&pdev->dev, "no irq resource?\n");
+ 		return -ENODEV;
+ 	}
+@@ -233,7 +234,7 @@ static int ls2x_i2c_probe(struct platform_device *pdev)
+ 
+ 	spin_lock_init(&dev->lock);
+ 	dev->dev = &pdev->dev;
+-	dev->irq = irq->start;
++	dev->irq = irq;
+ 	dev->base = ioremap(mem->start, resource_size(mem));
+ 	if (!dev->base) {
+ 		r = -ENOMEM;
+@@ -247,19 +248,16 @@ static int ls2x_i2c_probe(struct platform_device *pdev)
+ 	adap = &dev->adapter;
+ 	i2c_set_adapdata(adap, dev);
+ 	adap->nr = pdev->id;
++	strlcpy(adap->name, pdev->name, sizeof(adap->name));
+ 	adap->owner = THIS_MODULE;
+ 	adap->class = I2C_CLASS_HWMON;
+ 	adap->retries = 5;
+ 	adap->algo = &ls2x_i2c_algo;
+ 	adap->dev.parent = &pdev->dev;
+-#ifdef CONFIG_OF
+ 	adap->dev.of_node = pdev->dev.of_node;
+-	adap->nr = of_alias_get_id(adap->dev.of_node, "i2c");
+-#endif
+-	sprintf(adap->name, "LS2X I2C%d adapter", adap->nr);
+ 
+ 	/* i2c device drivers may be active on return from add_adapter() */
+-	r = i2c_add_numbered_adapter(adap);
++	r = i2c_add_adapter(adap);
+ 	if (r) {
+ 		dev_err(dev->dev, "failure adding adapter\n");
+ 		goto err_iounmap;
+@@ -332,6 +330,11 @@ static struct of_device_id ls2x_i2c_id_table[] = {
+ 	{},
+ };
+ #endif
++static const struct acpi_device_id ls2x_i2c_acpi_match[] = {
++	{"LOON0004"},
++	{}
++};
++MODULE_DEVICE_TABLE(acpi, ls2x_i2c_acpi_match);
+ 
+ static struct platform_driver ls2x_i2c_driver = {
+ 	.probe		= ls2x_i2c_probe,
+@@ -343,6 +346,7 @@ static struct platform_driver ls2x_i2c_driver = {
+ #ifdef CONFIG_OF
+ 		.of_match_table = of_match_ptr(ls2x_i2c_id_table),
+ #endif
++		.acpi_match_table = ACPI_PTR(ls2x_i2c_acpi_match),
+ 	},
+ };
+ 
+diff --git a/drivers/i2c/i2c-core-base.c b/drivers/i2c/i2c-core-base.c
+index 2dfe2ffcf882..d3afa8f4c9e3 100644
+--- a/drivers/i2c/i2c-core-base.c
++++ b/drivers/i2c/i2c-core-base.c
+@@ -1446,7 +1446,8 @@ static int __i2c_add_numbered_adapter(struct i2c_adapter *adap)
+ int i2c_add_adapter(struct i2c_adapter *adapter)
+ {
+ 	struct device *dev = &adapter->dev;
+-	int id;
++	acpi_status status;
++	unsigned long long id;
+ 
+ 	if (dev->of_node) {
+ 		id = of_alias_get_id(dev->of_node, "i2c");
+@@ -1454,6 +1455,12 @@ int i2c_add_adapter(struct i2c_adapter *adapter)
+ 			adapter->nr = id;
+ 			return __i2c_add_numbered_adapter(adapter);
+ 		}
++	} else if (dev->parent->fwnode) {
++		status = acpi_evaluate_integer(ACPI_HANDLE(dev->parent), "_UID", NULL, &id);
++		if (ACPI_SUCCESS(status) && (id >= 0)) {
++			adapter->nr = id;
++			return __i2c_add_numbered_adapter(adapter);
++		}
+ 	}
+ 
+ 	mutex_lock(&core_lock);
+diff --git a/drivers/input/serio/i8042-mipsio.h b/drivers/input/serio/i8042-mipsio.h
+new file mode 100644
+index 000000000000..f627bda29d75
+--- /dev/null
++++ b/drivers/input/serio/i8042-mipsio.h
+@@ -0,0 +1,325 @@
++#ifndef _I8042_MIPSIO_H
++#define _I8042_MIPSIO_H
++
++/*
++ * i8042-mipsio.h
++ *
++ * Lvjianmin <lvjianmin@loongson.cn>
++ *
++ * This program is free software; you can redistribute it and/or modify it
++ * under the terms of the GNU General Public License version 2 as published by
++ * the Free Software Foundation.
++ */
++
++/*
++ * Names.
++ */
++
++#define I8042_KBD_PHYS_DESC "isa0060/serio0"
++#define I8042_AUX_PHYS_DESC "isa0060/serio1"
++#define I8042_MUX_PHYS_DESC "isa0060/serio%d"
++
++/*
++ * IRQs.
++ */
++#define I8042_MAP_IRQ(x)	(x)
++
++#define I8042_KBD_IRQ	i8042_kbd_irq
++#define I8042_AUX_IRQ	i8042_aux_irq
++
++static int i8042_kbd_irq;
++static int i8042_aux_irq;
++
++/*
++ * Register numbers.
++ */
++
++#define I8042_COMMAND_REG	i8042_command_reg
++#define I8042_STATUS_REG	i8042_command_reg
++#define I8042_DATA_REG		i8042_data_reg
++
++static int i8042_command_reg = 0x64;
++static int i8042_data_reg = 0x60;
++
++
++static inline int i8042_read_data(void)
++{
++	return inb(I8042_DATA_REG);
++}
++
++static inline int i8042_read_status(void)
++{
++	return inb(I8042_STATUS_REG);
++}
++
++static inline void i8042_write_data(int val)
++{
++	outb(val, I8042_DATA_REG);
++}
++
++static inline void i8042_write_command(int val)
++{
++	outb(val, I8042_COMMAND_REG);
++}
++
++#ifdef CONFIG_PNP
++#include <linux/pnp.h>
++
++static bool i8042_pnp_kbd_registered;
++static unsigned int i8042_pnp_kbd_devices;
++static bool i8042_pnp_aux_registered;
++static unsigned int i8042_pnp_aux_devices;
++
++static int i8042_pnp_command_reg;
++static int i8042_pnp_data_reg;
++static int i8042_pnp_kbd_irq;
++static int i8042_pnp_aux_irq;
++
++static char i8042_pnp_kbd_name[32];
++static char i8042_pnp_aux_name[32];
++
++static void i8042_pnp_id_to_string(struct pnp_id *id, char *dst, int dst_size)
++{
++	strlcpy(dst, "PNP:", dst_size);
++
++	while (id) {
++		strlcat(dst, " ", dst_size);
++		strlcat(dst, id->id, dst_size);
++		id = id->next;
++	}
++}
++
++static int i8042_pnp_kbd_probe(struct pnp_dev *dev, const struct pnp_device_id *did)
++{
++	if (pnp_port_valid(dev, 0) && pnp_port_len(dev, 0) == 1)
++		i8042_pnp_data_reg = pnp_port_start(dev,0);
++
++	if (pnp_port_valid(dev, 1) && pnp_port_len(dev, 1) == 1)
++		i8042_pnp_command_reg = pnp_port_start(dev, 1);
++
++	if (pnp_irq_valid(dev,0))
++		i8042_pnp_kbd_irq = pnp_irq(dev, 0);
++
++	strlcpy(i8042_pnp_kbd_name, did->id, sizeof(i8042_pnp_kbd_name));
++	if (strlen(pnp_dev_name(dev))) {
++		strlcat(i8042_pnp_kbd_name, ":", sizeof(i8042_pnp_kbd_name));
++		strlcat(i8042_pnp_kbd_name, pnp_dev_name(dev), sizeof(i8042_pnp_kbd_name));
++	}
++	i8042_pnp_id_to_string(dev->id, i8042_kbd_firmware_id,
++			       sizeof(i8042_kbd_firmware_id));
++
++	/* Keyboard ports are always supposed to be wakeup-enabled */
++	device_set_wakeup_enable(&dev->dev, true);
++
++	i8042_pnp_kbd_devices++;
++	return 0;
++}
++
++static int i8042_pnp_aux_probe(struct pnp_dev *dev, const struct pnp_device_id *did)
++{
++	if (pnp_port_valid(dev, 0) && pnp_port_len(dev, 0) == 1)
++		i8042_pnp_data_reg = pnp_port_start(dev,0);
++
++	if (pnp_port_valid(dev, 1) && pnp_port_len(dev, 1) == 1)
++		i8042_pnp_command_reg = pnp_port_start(dev, 1);
++
++	if (pnp_irq_valid(dev, 0))
++		i8042_pnp_aux_irq = pnp_irq(dev, 0);
++
++	strlcpy(i8042_pnp_aux_name, did->id, sizeof(i8042_pnp_aux_name));
++	if (strlen(pnp_dev_name(dev))) {
++		strlcat(i8042_pnp_aux_name, ":", sizeof(i8042_pnp_aux_name));
++		strlcat(i8042_pnp_aux_name, pnp_dev_name(dev), sizeof(i8042_pnp_aux_name));
++	}
++	i8042_pnp_id_to_string(dev->id, i8042_aux_firmware_id,
++			       sizeof(i8042_aux_firmware_id));
++
++	i8042_pnp_aux_devices++;
++	return 0;
++}
++
++static const struct pnp_device_id pnp_kbd_devids[] = {
++	{ .id = "PNP0300", .driver_data = 0 },
++	{ .id = "PNP0301", .driver_data = 0 },
++	{ .id = "PNP0302", .driver_data = 0 },
++	{ .id = "PNP0303", .driver_data = 0 },
++	{ .id = "PNP0304", .driver_data = 0 },
++	{ .id = "PNP0305", .driver_data = 0 },
++	{ .id = "PNP0306", .driver_data = 0 },
++	{ .id = "PNP0309", .driver_data = 0 },
++	{ .id = "PNP030a", .driver_data = 0 },
++	{ .id = "PNP030b", .driver_data = 0 },
++	{ .id = "PNP0320", .driver_data = 0 },
++	{ .id = "PNP0343", .driver_data = 0 },
++	{ .id = "PNP0344", .driver_data = 0 },
++	{ .id = "PNP0345", .driver_data = 0 },
++	{ .id = "CPQA0D7", .driver_data = 0 },
++	{ .id = "", },
++};
++MODULE_DEVICE_TABLE(pnp, pnp_kbd_devids);
++
++static struct pnp_driver i8042_pnp_kbd_driver = {
++	.name           = "i8042 kbd",
++	.id_table       = pnp_kbd_devids,
++	.probe          = i8042_pnp_kbd_probe,
++	.driver         = {
++		.probe_type = PROBE_FORCE_SYNCHRONOUS,
++		.suppress_bind_attrs = true,
++	},
++};
++
++static const struct pnp_device_id pnp_aux_devids[] = {
++	{ .id = "AUI0200", .driver_data = 0 },
++	{ .id = "FJC6000", .driver_data = 0 },
++	{ .id = "FJC6001", .driver_data = 0 },
++	{ .id = "PNP0f03", .driver_data = 0 },
++	{ .id = "PNP0f0b", .driver_data = 0 },
++	{ .id = "PNP0f0e", .driver_data = 0 },
++	{ .id = "PNP0f12", .driver_data = 0 },
++	{ .id = "PNP0f13", .driver_data = 0 },
++	{ .id = "PNP0f19", .driver_data = 0 },
++	{ .id = "PNP0f1c", .driver_data = 0 },
++	{ .id = "SYN0801", .driver_data = 0 },
++	{ .id = "", },
++};
++MODULE_DEVICE_TABLE(pnp, pnp_aux_devids);
++
++static struct pnp_driver i8042_pnp_aux_driver = {
++	.name           = "i8042 aux",
++	.id_table       = pnp_aux_devids,
++	.probe          = i8042_pnp_aux_probe,
++	.driver         = {
++		.probe_type = PROBE_FORCE_SYNCHRONOUS,
++		.suppress_bind_attrs = true,
++	},
++};
++
++static void i8042_pnp_exit(void)
++{
++	if (i8042_pnp_kbd_registered) {
++		i8042_pnp_kbd_registered = false;
++		pnp_unregister_driver(&i8042_pnp_kbd_driver);
++	}
++
++	if (i8042_pnp_aux_registered) {
++		i8042_pnp_aux_registered = false;
++		pnp_unregister_driver(&i8042_pnp_aux_driver);
++	}
++}
++#ifdef CONFIG_ACPI
++#include <linux/acpi.h>
++#endif
++static int __init i8042_pnp_init(void)
++{
++	char kbd_irq_str[4] = { 0 }, aux_irq_str[4] = { 0 };
++	bool pnp_data_busted = false;
++	int err;
++
++	if (i8042_nopnp) {
++		pr_info("PNP detection disabled\n");
++		return 0;
++	}
++
++	err = pnp_register_driver(&i8042_pnp_kbd_driver);
++	if (!err)
++		i8042_pnp_kbd_registered = true;
++
++	err = pnp_register_driver(&i8042_pnp_aux_driver);
++	if (!err)
++		i8042_pnp_aux_registered = true;
++
++	if (!i8042_pnp_kbd_devices && !i8042_pnp_aux_devices) {
++		i8042_pnp_exit();
++		pr_info("PNP: No PS/2 controller found.\n");
++#ifdef CONFIG_ACPI
++		if (acpi_disabled == 0)
++			return -ENODEV;
++#endif
++		pr_info("Probing ports directly.\n");
++		return 0;
++	}
++
++	if (i8042_pnp_kbd_devices)
++		snprintf(kbd_irq_str, sizeof(kbd_irq_str),
++			"%d", i8042_pnp_kbd_irq);
++	if (i8042_pnp_aux_devices)
++		snprintf(aux_irq_str, sizeof(aux_irq_str),
++			"%d", i8042_pnp_aux_irq);
++
++	pr_info("PNP: PS/2 Controller [%s%s%s] at %#x,%#x irq %s%s%s\n",
++		i8042_pnp_kbd_name, (i8042_pnp_kbd_devices && i8042_pnp_aux_devices) ? "," : "",
++		i8042_pnp_aux_name,
++		i8042_pnp_data_reg, i8042_pnp_command_reg,
++		kbd_irq_str, (i8042_pnp_kbd_devices && i8042_pnp_aux_devices) ? "," : "",
++		aux_irq_str);
++
++	if (((i8042_pnp_data_reg & ~0xf) == (i8042_data_reg & ~0xf) &&
++	      i8042_pnp_data_reg != i8042_data_reg) ||
++	    !i8042_pnp_data_reg) {
++		pr_warn("PNP: PS/2 controller has invalid data port %#x; using default %#x\n",
++			i8042_pnp_data_reg, i8042_data_reg);
++		i8042_pnp_data_reg = i8042_data_reg;
++		pnp_data_busted = true;
++	}
++
++	if (((i8042_pnp_command_reg & ~0xf) == (i8042_command_reg & ~0xf) &&
++	      i8042_pnp_command_reg != i8042_command_reg) ||
++	    !i8042_pnp_command_reg) {
++		pr_warn("PNP: PS/2 controller has invalid command port %#x; using default %#x\n",
++			i8042_pnp_command_reg, i8042_command_reg);
++		i8042_pnp_command_reg = i8042_command_reg;
++		pnp_data_busted = true;
++	}
++
++	if (!i8042_nokbd && !i8042_pnp_kbd_irq) {
++		pr_warn("PNP: PS/2 controller doesn't have KBD irq; using default %d\n",
++			i8042_kbd_irq);
++		i8042_pnp_kbd_irq = i8042_kbd_irq;
++		pnp_data_busted = true;
++	}
++
++	if (!i8042_noaux && !i8042_pnp_aux_irq) {
++		if (!pnp_data_busted && i8042_pnp_kbd_irq) {
++			pr_warn("PNP: PS/2 appears to have AUX port disabled, "
++				"if this is incorrect please boot with i8042.nopnp\n");
++			i8042_noaux = true;
++		} else {
++			pr_warn("PNP: PS/2 controller doesn't have AUX irq; using default %d\n",
++				i8042_aux_irq);
++			i8042_pnp_aux_irq = i8042_aux_irq;
++		}
++	}
++
++	i8042_data_reg = i8042_pnp_data_reg;
++	i8042_command_reg = i8042_pnp_command_reg;
++	i8042_kbd_irq = i8042_pnp_kbd_irq;
++	i8042_aux_irq = i8042_pnp_aux_irq;
++
++	return 0;
++}
++
++#else  /* !CONFIG_PNP */
++static inline int i8042_pnp_init(void) { return 0; }
++static inline void i8042_pnp_exit(void) { }
++#endif /* CONFIG_PNP */
++
++static int __init i8042_platform_init(void)
++{
++	int retval;
++
++	i8042_kbd_irq = I8042_MAP_IRQ(1);
++	i8042_aux_irq = I8042_MAP_IRQ(12);
++
++	retval = i8042_pnp_init();
++	if (retval)
++		return retval;
++
++	return retval;
++}
++
++static inline void i8042_platform_exit(void)
++{
++	i8042_pnp_exit();
++}
++
++#endif /* _I8042_MIPSIO_H */
+diff --git a/drivers/input/serio/i8042.h b/drivers/input/serio/i8042.h
+index eb376700dfff..bcb374e0b2e1 100644
+--- a/drivers/input/serio/i8042.h
++++ b/drivers/input/serio/i8042.h
+@@ -23,6 +23,8 @@
+ #include "i8042-x86ia64io.h"
+ #elif defined(CONFIG_UNICORE32)
+ #include "i8042-unicore32io.h"
++#elif defined(CONFIG_MIPS)
++#include "i8042-mipsio.h"
+ #else
+ #include "i8042-io.h"
+ #endif
+diff --git a/drivers/platform/mips/Kconfig b/drivers/platform/mips/Kconfig
+index 171560d0d113..0dedcb59937a 100644
+--- a/drivers/platform/mips/Kconfig
++++ b/drivers/platform/mips/Kconfig
+@@ -39,6 +39,24 @@ config LEMOTE3A_LAPTOP
+ 	depends on INPUT
+ 	default y
+ 	help
+-	  Lemote Loongson-3A/2Gq family laptops driver.
++	  Lemote Loongson-3A family laptops driver.
++
++config GENERIC_LAPTOP
++	tristate "Generic Loongson-3A Laptop Driver"
++	depends on LOONGSON_MACH3X
++	select BACKLIGHT_LCD_SUPPORT
++	select LCD_CLASS_DEVICE
++	select BACKLIGHT_CLASS_DEVICE
++	select POWER_SUPPLY
++	select HWMON
++	select VIDEO_OUTPUT_CONTROL
++	select INPUT_SPARSEKMAP
++	select INPUT_EVDEV
++	select LEDS_CLASS
++	depends on INPUT
++	depends on ACPI
++	default y
++	help
++	  Generic Loongson-3A family laptops driver.
+ 
+ endif # MIPS_PLATFORM_DEVICES
+diff --git a/drivers/platform/mips/Makefile b/drivers/platform/mips/Makefile
+index 954e4575a7c2..9c78c49277a4 100644
+--- a/drivers/platform/mips/Makefile
++++ b/drivers/platform/mips/Makefile
+@@ -2,6 +2,7 @@
+ obj-$(CONFIG_CPU_HWMON) += cpu_hwmon.o
+ obj-$(CONFIG_I2C_PIIX4) += emc1412.o sd5075.o tmp75.o
+ obj-$(CONFIG_CPU_HWMON) += wpce_fan.o ls7a_fan.o sbx00_fan.o
++obj-$(CONFIG_GENERIC_LAPTOP) += generic-laptop.o
+ obj-$(CONFIG_LEMOTE3A_LAPTOP) += lemote3a-laptop.o
+ obj-m += ec_rom.o at24c04.o
+ 
+diff --git a/drivers/platform/mips/generic-laptop.c b/drivers/platform/mips/generic-laptop.c
+new file mode 100644
+index 000000000000..5c75c815fca5
+--- /dev/null
++++ b/drivers/platform/mips/generic-laptop.c
+@@ -0,0 +1,585 @@
++/*
++ *  Generic Loongson processor based LAPTOP/ALL-IN-ONE driver
++ *
++ *  lvjianmin <lvjianmin@loongson.cn>
++ *
++ *  This program is free software; you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation; either version 2 of the License, or
++ *  (at your option) any later version.
++ *
++ *  This program is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ */
++
++#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
++
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/init.h>
++#include <linux/types.h>
++#include <linux/string.h>
++#include <linux/platform_device.h>
++#include <linux/input.h>
++#include <linux/acpi.h>
++#include <acpi/video.h>
++#include <linux/pci.h>
++#include <linux/uaccess.h>
++#include <linux/input/sparse-keymap.h>
++
++/* ACPI HIDs */
++#define LOONGSON_ACPI_HKEY_HID	"LOON0000"
++#define LOONGSON_ACPI_EC_HID	"PNP0C09"
++
++/****************************************************************************
++ * Main driver
++ */
++
++#define ACPI_LAPTOP_VERSION "1.0"
++#define ACPI_LAPTOP_NAME "loongson-laptop"
++#define ACPI_LAPTOP_DESC "Loongson Laptop/all-in-one ACPI Driver"
++#define ACPI_LAPTOP_FILE ACPI_LAPTOP_NAME "_acpi"
++#define ACPI_LAPTOP_DRVR_NAME ACPI_LAPTOP_FILE
++#define ACPI_LAPTOP_ACPI_EVENT_PREFIX "loongson"
++/****************************************************************************
++ * Driver-wide structs and misc. variables
++ */
++
++struct generic_struct;
++
++struct generic_acpi_drv_struct {
++	const struct acpi_device_id *hid;
++	struct acpi_driver *driver;
++
++	void (*notify) (struct generic_struct *, u32);
++	acpi_handle *handle;
++	u32 type;
++	struct acpi_device *device;
++};
++
++struct generic_struct {
++	char *name;
++
++	int (*init) (struct generic_struct *);
++
++	struct generic_acpi_drv_struct *acpi;
++
++	struct {
++		u8 acpi_driver_registered;
++		u8 acpi_notify_installed;
++	} flags;
++};
++
++
++static struct {
++	u32 input_device_registered:1;
++} generic_features;
++
++/****************************************************************************
++ ****************************************************************************
++ *
++ * ACPI Helpers and device model
++ *
++ ****************************************************************************
++ ****************************************************************************/
++
++/*************************************************************************
++ * ACPI basic handles
++ */
++
++static int acpi_evalf(acpi_handle handle,
++		      int *res, char *method, char *fmt, ...);
++static acpi_handle ec_handle;
++
++#define GENERIC_HANDLE(object, parent, paths...)			\
++	static acpi_handle  object##_handle;			\
++	static const acpi_handle * const object##_parent __initconst =	\
++						&parent##_handle; \
++	static char *object##_paths[] __initdata = { paths }
++
++GENERIC_HANDLE(hkey, ec, "\\_SB.HKEY",
++	   "^HKEY",
++	   "HKEY",
++	   );
++
++/*************************************************************************
++ * ACPI device model
++ */
++
++#define GENERIC_ACPIHANDLE_INIT(object) \
++	drv_acpi_handle_init(#object, &object##_handle, *object##_parent, \
++		object##_paths, ARRAY_SIZE(object##_paths))
++
++static void __init drv_acpi_handle_init(const char *name,
++			   acpi_handle *handle, const acpi_handle parent,
++			   char **paths, const int num_paths)
++{
++	int i;
++	acpi_status status;
++
++	for (i = 0; i < num_paths; i++) {
++		status = acpi_get_handle(parent, paths[i], handle);
++		if (ACPI_SUCCESS(status)) {
++			return;
++		}
++	}
++
++	*handle = NULL;
++}
++static acpi_status __init generic_acpi_handle_locate_callback(acpi_handle handle,
++			u32 level, void *context, void **return_value)
++{
++	*(acpi_handle *)return_value = handle;
++
++	return AE_CTRL_TERMINATE;
++}
++
++static void __init generic_acpi_handle_locate(const char *name,
++		const char *hid,
++		acpi_handle *handle)
++{
++	acpi_status status;
++	acpi_handle device_found;
++
++	BUG_ON(!name || !hid || !handle);
++
++	memset(&device_found, 0, sizeof(device_found));
++	status = acpi_get_devices(hid, generic_acpi_handle_locate_callback,
++				  (void *)name, &device_found);
++
++	*handle = NULL;
++
++	if (ACPI_SUCCESS(status)) {
++		*handle = device_found;
++	}
++}
++
++static void dispatch_acpi_notify(acpi_handle handle, u32 event, void *data)
++{
++	struct generic_struct *sub_driver = data;
++	if (!sub_driver || !sub_driver->acpi || !sub_driver->acpi->notify)
++		return;
++	sub_driver->acpi->notify(sub_driver, event);
++}
++
++static int __init setup_acpi_notify(struct generic_struct *sub_driver)
++{
++	acpi_status status;
++	int rc;
++
++	BUG_ON(!sub_driver->acpi);
++
++	if (!*sub_driver->acpi->handle)
++		return 0;
++
++	rc = acpi_bus_get_device(*sub_driver->acpi->handle, &sub_driver->acpi->device);
++	if (rc < 0) {
++		pr_err("acpi_bus_get_device(%s) failed: %d\n", sub_driver->name, rc);
++		return -ENODEV;
++	}
++
++	sub_driver->acpi->device->driver_data = sub_driver;
++	sprintf(acpi_device_class(sub_driver->acpi->device), "%s/%s",
++		ACPI_LAPTOP_ACPI_EVENT_PREFIX,
++		sub_driver->name);
++
++	status = acpi_install_notify_handler(*sub_driver->acpi->handle,
++			sub_driver->acpi->type, dispatch_acpi_notify, sub_driver);
++	if (ACPI_FAILURE(status)) {
++		if (status == AE_ALREADY_EXISTS) {
++			pr_notice("another device driver is already "
++				  "handling %s events\n", sub_driver->name);
++		} else {
++			pr_err("acpi_install_notify_handler(%s) failed: %s\n",
++			       sub_driver->name, acpi_format_exception(status));
++		}
++		return -ENODEV;
++	}
++	sub_driver->flags.acpi_notify_installed = 1;
++	return 0;
++}
++
++static int __init tpacpi_device_add(struct acpi_device *device)
++{
++	return 0;
++}
++
++static int __init register_generic_subdriver(struct generic_struct *sub_driver)
++{
++	int rc;
++
++	BUG_ON(!sub_driver->acpi);
++
++	sub_driver->acpi->driver = kzalloc(sizeof(struct acpi_driver), GFP_KERNEL);
++	if (!sub_driver->acpi->driver) {
++		pr_err("failed to allocate memory for ibm->acpi->driver\n");
++		return -ENOMEM;
++	}
++
++	sprintf(sub_driver->acpi->driver->name, "%s_%s", ACPI_LAPTOP_NAME, sub_driver->name);
++	sub_driver->acpi->driver->ids = sub_driver->acpi->hid;
++	sub_driver->acpi->driver->ops.add = &tpacpi_device_add;
++	rc = acpi_bus_register_driver(sub_driver->acpi->driver);
++	if (rc < 0) {
++		pr_err("acpi_bus_register_driver(%s) failed: %d\n",
++		       sub_driver->name, rc);
++		kfree(sub_driver->acpi->driver);
++		sub_driver->acpi->driver = NULL;
++	} else if (!rc)
++		sub_driver->flags.acpi_driver_registered = 1;
++
++	return rc;
++}
++
++static struct input_dev *generic_inputdev;
++
++/*
++ * Loongson generic laptop firmware event model
++ *
++ */
++
++#define GENERIC_HOTKEY_MAP_MAX	64
++#define METHOD_NAME__KMAP	"KMAP"
++static struct key_entry hotkey_keycode_map[GENERIC_HOTKEY_MAP_MAX];
++static int hkey_map(void)
++{
++	struct acpi_buffer buf;
++	union acpi_object *pack;
++	acpi_status status;
++	u32 index;
++
++	buf.length = ACPI_ALLOCATE_BUFFER;
++	status = acpi_evaluate_object_typed(hkey_handle, METHOD_NAME__KMAP, NULL, &buf, ACPI_TYPE_PACKAGE);
++	if (status != AE_OK) {
++		printk(KERN_ERR ": ACPI exception: %s\n",
++				acpi_format_exception(status));
++		return -1;
++	}
++	pack = buf.pointer;
++	for (index = 0; index < pack->package.count; index++) {
++		union acpi_object *sub_pack = &pack->package.elements[index];
++		union acpi_object *element = &sub_pack->package.elements[0];
++		hotkey_keycode_map[index].type = element->integer.value;
++		element = &sub_pack->package.elements[1];
++		hotkey_keycode_map[index].code = element->integer.value;
++		element = &sub_pack->package.elements[2];
++		hotkey_keycode_map[index].keycode = element->integer.value;
++	}
++	return 0;
++}
++
++static int hotkey_backlight_set(bool enable)
++{
++	if (!acpi_evalf(hkey_handle, NULL, "VCBL", "vd", enable ? 1 : 0))
++		return -EIO;
++
++	return 0;
++}
++
++static int __init event_init(struct generic_struct *sub_driver)
++{
++	int ret;
++
++	GENERIC_ACPIHANDLE_INIT(hkey);
++	ret = hkey_map();
++	if (ret) {
++		printk(KERN_ERR "Fail to parse keymap from DSDT.\n");
++		return ret;
++	}
++
++	ret = sparse_keymap_setup(generic_inputdev, hotkey_keycode_map, NULL);
++	if(ret)
++	{
++		printk(KERN_ERR "Fail to setup input device keymap\n");
++		input_free_device(generic_inputdev);
++
++		return ret;
++	}
++
++	/*
++	 * This hotkey driver handle backlight event when
++	 * acpi_video_get_backlight_type() gets acpi_backlight_vendor
++	 * */
++	if (acpi_video_get_backlight_type() != acpi_backlight_vendor)
++		hotkey_backlight_set(false);
++	else
++		hotkey_backlight_set(true);
++
++	printk("ACPI:enabling firmware HKEY event interface...\n");
++	return ret;
++
++}
++
++#define GENERIC_EVENT_TYPE_OFF		12
++#define GENERIC_EVENT_MASK		0xFFF
++#define TPACPI_MAX_ACPI_ARGS 3
++static int acpi_evalf(acpi_handle handle,
++		      int *res, char *method, char *fmt, ...)
++{
++	char *fmt0 = fmt;
++	struct acpi_object_list params;
++	union acpi_object in_objs[TPACPI_MAX_ACPI_ARGS];
++	struct acpi_buffer result, *resultp;
++	union acpi_object out_obj;
++	acpi_status status;
++	va_list ap;
++	char res_type;
++	int success;
++	int quiet;
++
++	if (!*fmt) {
++		pr_err("acpi_evalf() called with empty format\n");
++		return 0;
++	}
++
++	if (*fmt == 'q') {
++		quiet = 1;
++		fmt++;
++	} else
++		quiet = 0;
++
++	res_type = *(fmt++);
++
++	params.count = 0;
++	params.pointer = &in_objs[0];
++
++	va_start(ap, fmt);
++	while (*fmt) {
++		char c = *(fmt++);
++		switch (c) {
++		case 'd':	/* int */
++			in_objs[params.count].integer.value = va_arg(ap, int);
++			in_objs[params.count++].type = ACPI_TYPE_INTEGER;
++			break;
++			/* add more types as needed */
++		default:
++			pr_err("acpi_evalf() called with invalid format character '%c'\n",
++			       c);
++			va_end(ap);
++			return 0;
++		}
++	}
++	va_end(ap);
++
++	if (res_type != 'v') {
++		result.length = sizeof(out_obj);
++		result.pointer = &out_obj;
++		resultp = &result;
++	} else
++		resultp = NULL;
++
++	status = acpi_evaluate_object(handle, method, &params, resultp);
++
++	switch (res_type) {
++	case 'd':		/* int */
++		success = (status == AE_OK &&
++			   out_obj.type == ACPI_TYPE_INTEGER);
++		if (success && res)
++			*res = out_obj.integer.value;
++		break;
++	case 'v':		/* void */
++		success = status == AE_OK;
++		break;
++		/* add more types as needed */
++	default:
++		pr_err("acpi_evalf() called with invalid format character '%c'\n",
++		       res_type);
++		return 0;
++	}
++
++	if (!success && !quiet)
++		pr_err("acpi_evalf(%s, %s, ...) failed: %s\n",
++		       method, fmt0, acpi_format_exception(status));
++
++	return success;
++}
++
++static int hotkey_status_get(int *status)
++{
++	if (!acpi_evalf(hkey_handle, status, "GSWS", "d"))
++		return -EIO;
++
++	return 0;
++}
++
++static void event_notify(struct generic_struct *sub_driver, u32 event)
++{
++	struct key_entry * ke = NULL;
++	int scan_code = event & GENERIC_EVENT_MASK;
++	int type = (event >> GENERIC_EVENT_TYPE_OFF) & 0xF;
++
++	ke = sparse_keymap_entry_from_scancode(generic_inputdev, scan_code);
++	if(ke) {
++		if (type == KE_SW) {
++			int status = 0;
++			if (hotkey_status_get(&status))
++				return;
++			ke->sw.value = (u8)status;
++		}
++		sparse_keymap_report_entry(generic_inputdev, ke, 1, true);
++	}
++}
++
++static const struct acpi_device_id loongson_htk_device_ids[] = {
++	{LOONGSON_ACPI_HKEY_HID, 0},
++	{"", 0},
++};
++
++static struct generic_acpi_drv_struct ec_event_acpidriver = {
++	.hid = loongson_htk_device_ids,
++	.notify = event_notify,
++	.handle = &hkey_handle,
++	.type = ACPI_DEVICE_NOTIFY,
++};
++
++/****************************************************************************
++ ****************************************************************************
++ *
++ * Infrastructure
++ *
++ ****************************************************************************
++ ****************************************************************************/
++static void generic_exit(struct generic_struct *sub_driver)
++{
++
++	if (sub_driver->flags.acpi_notify_installed) {
++		BUG_ON(!sub_driver->acpi);
++		acpi_remove_notify_handler(*sub_driver->acpi->handle,
++					   sub_driver->acpi->type,
++					   dispatch_acpi_notify);
++		sub_driver->flags.acpi_notify_installed = 0;
++	}
++
++	if (sub_driver->flags.acpi_driver_registered) {
++		BUG_ON(!sub_driver->acpi);
++		acpi_bus_unregister_driver(sub_driver->acpi->driver);
++		kfree(sub_driver->acpi->driver);
++		sub_driver->acpi->driver = NULL;
++		sub_driver->flags.acpi_driver_registered = 0;
++	}
++
++}
++
++static int __init probe_for_generic(void)
++{
++	if (acpi_disabled)
++		return -ENODEV;
++
++	/* The EC handler is required */
++	generic_acpi_handle_locate("ec", LOONGSON_ACPI_EC_HID, &ec_handle);
++	if (!ec_handle) {
++		pr_err("Not yet supported Loongson Generic Laptop/All-in-one detected!\n");
++		return -ENODEV;
++	}
++
++	return 0;
++}
++static int __init generic_subdriver_init(struct generic_struct *sub_driver)
++{
++	int ret;
++
++	BUG_ON(sub_driver == NULL);
++
++	if (sub_driver->init) {
++		sub_driver->init(sub_driver);
++	}
++
++	if (sub_driver->acpi) {
++		if (sub_driver->acpi->hid) {
++			ret = register_generic_subdriver(sub_driver);
++			if (ret)
++				goto err_out;
++		}
++
++		if (sub_driver->acpi->notify) {
++			ret = setup_acpi_notify(sub_driver);
++			if (ret == -ENODEV) {
++				ret = 0;
++				goto err_out;
++			}
++			if (ret < 0)
++				goto err_out;
++		}
++	}
++
++	return 0;
++
++err_out:
++	generic_exit(sub_driver);
++	return (ret < 0)? ret : 0;
++}
++
++/* Module init, exit, parameters */
++static struct generic_struct generic_sub_drivers[] = {
++	{
++		.name = "EC Event",
++		.init = event_init,
++		.acpi = &ec_event_acpidriver,
++	},
++};
++
++static void generic_acpi_laptop_exit(void);
++
++static int __init generic_acpi_laptop_init(void)
++{
++	int ret, i;
++
++	ret = probe_for_generic();
++	if (ret) {
++		generic_acpi_laptop_exit();
++		return ret;
++	}
++	generic_inputdev = input_allocate_device();
++	if (!generic_inputdev) {
++		pr_err("unable to allocate input device\n");
++		generic_acpi_laptop_exit();
++		return -ENOMEM;
++	} else {
++		/* Prepare input device, but don't register */
++		generic_inputdev->name = "Loongson Generic Laptop/All-in-one Extra Buttons";
++		generic_inputdev->phys = ACPI_LAPTOP_DRVR_NAME "/input0";
++		generic_inputdev->id.bustype = BUS_HOST;
++		generic_inputdev->dev.parent = NULL;
++	}
++
++	/* Init subdrivers */
++	for (i = 0; i < ARRAY_SIZE(generic_sub_drivers); i++) {
++		ret = generic_subdriver_init(&generic_sub_drivers[i]);
++		if (ret < 0) {
++			generic_acpi_laptop_exit();
++			return ret;
++		}
++	}
++
++	ret = input_register_device(generic_inputdev);
++	if (ret < 0) {
++		pr_err("unable to register input device\n");
++		generic_acpi_laptop_exit();
++		return ret;
++	} else {
++		generic_features.input_device_registered = 1;
++	}
++
++	return 0;
++}
++
++static void generic_acpi_laptop_exit(void)
++{
++	if (generic_inputdev) {
++		if (generic_features.input_device_registered)
++			input_unregister_device(generic_inputdev);
++		else
++			input_free_device(generic_inputdev);
++	}
++}
++
++module_init(generic_acpi_laptop_init);
++module_exit(generic_acpi_laptop_exit);
++
++MODULE_ALIAS("platform:acpi-laptop");
++MODULE_AUTHOR("lvjianmin <lvjianmin@loongson.cn>");
++MODULE_DESCRIPTION(ACPI_LAPTOP_DESC);
++MODULE_VERSION(ACPI_LAPTOP_VERSION);
++MODULE_LICENSE("GPL");
+diff --git a/drivers/rtc/rtc-ls2x.c b/drivers/rtc/rtc-ls2x.c
+index 8325d24a9c16..a9b30ca0fc39 100644
+--- a/drivers/rtc/rtc-ls2x.c
++++ b/drivers/rtc/rtc-ls2x.c
+@@ -7,6 +7,7 @@
+  *
+  */
+ 
++#include <linux/acpi.h>
+ #include <linux/kernel.h>
+ #include <linux/slab.h>
+ #include <linux/init.h>
+@@ -287,6 +288,12 @@ static struct of_device_id ls2x_rtc_id_table[] = {
+ };
+ #endif
+ 
++static const struct acpi_device_id ls2x_rtc_acpi_match[] = {
++	{"LOON0001"},
++	{}
++};
++MODULE_DEVICE_TABLE(acpi, ls2x_rtc_acpi_match);
++
+ static struct platform_driver ls2x_rtc_driver = {
+ 	.probe		= ls2x_rtc_probe,
+ 	.remove		= ls2x_rtc_remove,
+@@ -296,6 +303,7 @@ static struct platform_driver ls2x_rtc_driver = {
+ #ifdef CONFIG_OF
+ 		.of_match_table = of_match_ptr(ls2x_rtc_id_table),
+ #endif
++		.acpi_match_table = ACPI_PTR(ls2x_rtc_acpi_match),
+ 	},
+ };
+ 
+diff --git a/drivers/tty/serial/8250/8250_pnp.c b/drivers/tty/serial/8250/8250_pnp.c
+index de90d681b64c..e51421f97281 100644
+--- a/drivers/tty/serial/8250/8250_pnp.c
++++ b/drivers/tty/serial/8250/8250_pnp.c
+@@ -474,7 +474,9 @@ serial_pnp_probe(struct pnp_dev *dev, const struct pnp_device_id *dev_id)
+ 	uart.port.flags |= UPF_SKIP_TEST | UPF_BOOT_AUTOCONF;
+ 	if (pnp_irq_flags(dev, 0) & IORESOURCE_IRQ_SHAREABLE)
+ 		uart.port.flags |= UPF_SHARE_IRQ;
+-	uart.port.uartclk = 1843200;
++	if (device_property_read_u32(&dev->dev, "clock-frequency", &uart.port.uartclk)) {
++		uart.port.uartclk = 1843200;
++	}
+ 	uart.port.dev = &dev->dev;
+ 
+ 	line = serial8250_register_8250_port(&uart);
+diff --git a/include/acpi/actypes.h b/include/acpi/actypes.h
+index 9373662cdb44..629ec288032b 100644
+--- a/include/acpi/actypes.h
++++ b/include/acpi/actypes.h
+@@ -144,7 +144,8 @@ typedef u64 acpi_physical_address;
+  * Note: EM64T and other X86-64 processors support misaligned transfers,
+  * so there is no need to define this flag.
+  */
+-#if defined (__IA64__) || defined (__ia64__)
++
++#if defined (__IA64__) || defined (__ia64__) || defined (CONFIG_CPU_LOONGSON3)
+ #define ACPI_MISALIGNMENT_NOT_SUPPORTED
+ #endif
+ 
+diff --git a/include/acpi/pdc_loongson.h b/include/acpi/pdc_loongson.h
+new file mode 100644
+index 000000000000..60a028f25a7b
+--- /dev/null
++++ b/include/acpi/pdc_loongson.h
+@@ -0,0 +1,44 @@
++/*
++ * _PDC bit definition for Loongson processors
++ *
++ * This file is subject to the terms and conditions of the GNU General Public
++ * License.  See the file "COPYING" in the main directory of this archive
++ * for more details.
++ *
++ * Copyright (C) 2019 Loongson Technology Corp.
++ * Author: Jianmin Lv, lvjianmin@loongson.cn
++ *
++ */
++
++#ifndef __PDC_LOONGSON_H__
++#define __PDC_LOONGSON_H__
++
++#define ACPI_PDC_P_FFH			(0x0001)
++#define ACPI_PDC_C_C1_HALT		(0x0002)
++#define ACPI_PDC_T_FFH			(0x0004)
++#define ACPI_PDC_SMP_C1PT		(0x0008)
++#define ACPI_PDC_SMP_C2C3		(0x0010)
++#define ACPI_PDC_SMP_P_SWCOORD		(0x0020)
++#define ACPI_PDC_SMP_C_SWCOORD		(0x0040)
++#define ACPI_PDC_SMP_T_SWCOORD		(0x0080)
++#define ACPI_PDC_C_C1_FFH		(0x0100)
++#define ACPI_PDC_C_C2C3_FFH		(0x0200)
++#define ACPI_PDC_SMP_P_HWCOORD		(0x0800)
++
++#define ACPI_PDC_EST_CAPABILITY_SMP	(ACPI_PDC_SMP_C1PT | \
++					 ACPI_PDC_C_C1_HALT | \
++					 ACPI_PDC_P_FFH)
++
++#define ACPI_PDC_EST_CAPABILITY_SWSMP	(ACPI_PDC_SMP_C1PT | \
++					 ACPI_PDC_C_C1_HALT | \
++					 ACPI_PDC_SMP_P_SWCOORD | \
++					 ACPI_PDC_SMP_P_HWCOORD | \
++					 ACPI_PDC_P_FFH)
++
++#define ACPI_PDC_C_CAPABILITY_SMP	(ACPI_PDC_SMP_C2C3  | \
++					 ACPI_PDC_SMP_C1PT  | \
++					 ACPI_PDC_C_C1_HALT | \
++					 ACPI_PDC_C_C1_FFH  | \
++					 ACPI_PDC_C_C2C3_FFH)
++
++#endif				/* __PDC_LOONGSON_H__ */
+diff --git a/include/linux/acpi.h b/include/linux/acpi.h
+index dd6170357ec7..17667f77d4e6 100644
+--- a/include/linux/acpi.h
++++ b/include/linux/acpi.h
+@@ -244,7 +244,7 @@ void acpi_table_print_madt_entry (struct acpi_subtable_header *madt);
+ /* the following numa functions are architecture-dependent */
+ void acpi_numa_slit_init (struct acpi_table_slit *slit);
+ 
+-#if defined(CONFIG_X86) || defined(CONFIG_IA64)
++#if defined(CONFIG_X86) || defined(CONFIG_IA64) || defined(CONFIG_CPU_LOONGSON3)
+ void acpi_numa_processor_affinity_init (struct acpi_srat_cpu_affinity *pa);
+ #else
+ static inline void
+@@ -912,7 +912,7 @@ void acpi_os_set_prepare_extended_sleep(int (*func)(u8 sleep_state,
+ acpi_status acpi_os_prepare_extended_sleep(u8 sleep_state,
+ 					   u32 val_a, u32 val_b);
+ 
+-#ifdef CONFIG_X86
++#if defined(CONFIG_X86) || defined(CONFIG_CPU_LOONGSON3)
+ void arch_reserve_mem_area(acpi_physical_address addr, size_t size);
+ #else
+ static inline void arch_reserve_mem_area(acpi_physical_address addr,
+-- 
+2.31.1
+

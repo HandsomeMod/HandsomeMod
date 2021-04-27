@@ -1,0 +1,196 @@
+From a6dd94eeed7e17cc952381e435210e9bd84fc680 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Wed, 1 Aug 2018 14:31:19 +0800
+Subject: [PATCH 079/131] drm/radeon: Reintroduce radeon_gart_restore()
+
+This revert commit a3eb06dbca08e3fdad7039021ae0 ("drm/radeon: Remove
+radeon_gart_restore()") and update code for the latest kernel. We do
+this because kexec/kdump need to do this, otherwise it boot fails.
+
+Cc: stable@vger.kernel.org
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/gpu/drm/radeon/cik.c         |  1 +
+ drivers/gpu/drm/radeon/evergreen.c   |  1 +
+ drivers/gpu/drm/radeon/ni.c          |  1 +
+ drivers/gpu/drm/radeon/r100.c        |  1 +
+ drivers/gpu/drm/radeon/r300.c        |  1 +
+ drivers/gpu/drm/radeon/r600.c        |  1 +
+ drivers/gpu/drm/radeon/radeon.h      |  1 +
+ drivers/gpu/drm/radeon/radeon_gart.c | 24 ++++++++++++++++++++++++
+ drivers/gpu/drm/radeon/rs400.c       |  1 +
+ drivers/gpu/drm/radeon/rs600.c       |  1 +
+ drivers/gpu/drm/radeon/rv770.c       |  1 +
+ drivers/gpu/drm/radeon/si.c          |  1 +
+ 12 files changed, 35 insertions(+)
+
+diff --git a/drivers/gpu/drm/radeon/cik.c b/drivers/gpu/drm/radeon/cik.c
+index 897442754fd0..ca2049acac75 100644
+--- a/drivers/gpu/drm/radeon/cik.c
++++ b/drivers/gpu/drm/radeon/cik.c
+@@ -5441,6 +5441,7 @@ static int cik_pcie_gart_enable(struct radeon_device *rdev)
+ 	r = radeon_gart_table_vram_pin(rdev);
+ 	if (r)
+ 		return r;
++	radeon_gart_restore(rdev);
+ 	/* Setup TLB control */
+ 	WREG32(MC_VM_MX_L1_TLB_CNTL,
+ 	       (0xA << 7) |
+diff --git a/drivers/gpu/drm/radeon/evergreen.c b/drivers/gpu/drm/radeon/evergreen.c
+index 3f1d086a56c3..789e60ee7fd1 100644
+--- a/drivers/gpu/drm/radeon/evergreen.c
++++ b/drivers/gpu/drm/radeon/evergreen.c
+@@ -2409,6 +2409,7 @@ static int evergreen_pcie_gart_enable(struct radeon_device *rdev)
+ 	r = radeon_gart_table_vram_pin(rdev);
+ 	if (r)
+ 		return r;
++	radeon_gart_restore(rdev);
+ 	/* Setup L2 cache */
+ 	WREG32(VM_L2_CNTL, ENABLE_L2_CACHE | ENABLE_L2_FRAGMENT_PROCESSING |
+ 				ENABLE_L2_PTE_CACHE_LRU_UPDATE_BY_WRITE |
+diff --git a/drivers/gpu/drm/radeon/ni.c b/drivers/gpu/drm/radeon/ni.c
+index 410f626a39d4..6065aa4a15ef 100644
+--- a/drivers/gpu/drm/radeon/ni.c
++++ b/drivers/gpu/drm/radeon/ni.c
+@@ -1282,6 +1282,7 @@ static int cayman_pcie_gart_enable(struct radeon_device *rdev)
+ 	r = radeon_gart_table_vram_pin(rdev);
+ 	if (r)
+ 		return r;
++	radeon_gart_restore(rdev);
+ 	/* Setup TLB control */
+ 	WREG32(MC_VM_MX_L1_TLB_CNTL,
+ 	       (0xA << 7) |
+diff --git a/drivers/gpu/drm/radeon/r100.c b/drivers/gpu/drm/radeon/r100.c
+index 110fb38004b1..f91d8e8ffb08 100644
+--- a/drivers/gpu/drm/radeon/r100.c
++++ b/drivers/gpu/drm/radeon/r100.c
+@@ -661,6 +661,7 @@ int r100_pci_gart_enable(struct radeon_device *rdev)
+ {
+ 	uint32_t tmp;
+ 
++	radeon_gart_restore(rdev);
+ 	/* discard memory request outside of configured range */
+ 	tmp = RREG32(RADEON_AIC_CNTL) | RADEON_DIS_OUT_OF_PCI_GART_ACCESS;
+ 	WREG32(RADEON_AIC_CNTL, tmp);
+diff --git a/drivers/gpu/drm/radeon/r300.c b/drivers/gpu/drm/radeon/r300.c
+index 44856e3a7108..e77f5db8f8c1 100644
+--- a/drivers/gpu/drm/radeon/r300.c
++++ b/drivers/gpu/drm/radeon/r300.c
+@@ -163,6 +163,7 @@ int rv370_pcie_gart_enable(struct radeon_device *rdev)
+ 	r = radeon_gart_table_vram_pin(rdev);
+ 	if (r)
+ 		return r;
++	radeon_gart_restore(rdev);
+ 	/* discard memory request outside of configured range */
+ 	tmp = RADEON_PCIE_TX_GART_UNMAPPED_ACCESS_DISCARD;
+ 	WREG32_PCIE(RADEON_PCIE_TX_GART_CNTL, tmp);
+diff --git a/drivers/gpu/drm/radeon/r600.c b/drivers/gpu/drm/radeon/r600.c
+index 033bc466a862..c5aad734e81d 100644
+--- a/drivers/gpu/drm/radeon/r600.c
++++ b/drivers/gpu/drm/radeon/r600.c
+@@ -1138,6 +1138,7 @@ static int r600_pcie_gart_enable(struct radeon_device *rdev)
+ 	r = radeon_gart_table_vram_pin(rdev);
+ 	if (r)
+ 		return r;
++	radeon_gart_restore(rdev);
+ 
+ 	/* Setup L2 cache */
+ 	WREG32(VM_L2_CNTL, ENABLE_L2_CACHE | ENABLE_L2_FRAGMENT_PROCESSING |
+diff --git a/drivers/gpu/drm/radeon/radeon.h b/drivers/gpu/drm/radeon/radeon.h
+index d9d3ebc78064..1d6e41be63af 100644
+--- a/drivers/gpu/drm/radeon/radeon.h
++++ b/drivers/gpu/drm/radeon/radeon.h
+@@ -668,6 +668,7 @@ void radeon_gart_unbind(struct radeon_device *rdev, unsigned offset,
+ int radeon_gart_bind(struct radeon_device *rdev, unsigned offset,
+ 		     int pages, struct page **pagelist,
+ 		     dma_addr_t *dma_addr, uint32_t flags);
++void radeon_gart_restore(struct radeon_device *rdev);
+ 
+ 
+ /*
+diff --git a/drivers/gpu/drm/radeon/radeon_gart.c b/drivers/gpu/drm/radeon/radeon_gart.c
+index d4d3778d0a98..5d3680a07dfe 100644
+--- a/drivers/gpu/drm/radeon/radeon_gart.c
++++ b/drivers/gpu/drm/radeon/radeon_gart.c
+@@ -321,6 +321,30 @@ int radeon_gart_bind(struct radeon_device *rdev, unsigned offset,
+ 	return 0;
+ }
+ 
++/**
++ * radeon_gart_restore - bind all pages in the gart page table
++ *
++ * @rdev: radeon_device pointer
++ *
++ * Binds all pages in the gart page table (all asics).
++ * Used to rebuild the gart table on device startup or resume.
++ */
++void radeon_gart_restore(struct radeon_device *rdev)
++{
++	int i;
++	uint64_t page_entry;
++
++	if (!rdev->gart.ptr)
++		return;
++
++	for (i = 0; i < rdev->gart.num_gpu_pages; i++) {
++		page_entry = rdev->gart.pages_entry[i];
++		radeon_gart_set_page(rdev, i, page_entry);
++	}
++	mb();
++	radeon_gart_tlb_flush(rdev);
++}
++
+ /**
+  * radeon_gart_init - init the driver info for managing the gart
+  *
+diff --git a/drivers/gpu/drm/radeon/rs400.c b/drivers/gpu/drm/radeon/rs400.c
+index 117f60af1ee4..94363b4a1106 100644
+--- a/drivers/gpu/drm/radeon/rs400.c
++++ b/drivers/gpu/drm/radeon/rs400.c
+@@ -114,6 +114,7 @@ int rs400_gart_enable(struct radeon_device *rdev)
+ 	uint32_t size_reg;
+ 	uint32_t tmp;
+ 
++	radeon_gart_restore(rdev);
+ 	tmp = RREG32_MC(RS690_AIC_CTRL_SCRATCH);
+ 	tmp |= RS690_DIS_OUT_OF_PCI_GART_ACCESS;
+ 	WREG32_MC(RS690_AIC_CTRL_SCRATCH, tmp);
+diff --git a/drivers/gpu/drm/radeon/rs600.c b/drivers/gpu/drm/radeon/rs600.c
+index 2f8ff089f7b1..9fbbe95266fc 100644
+--- a/drivers/gpu/drm/radeon/rs600.c
++++ b/drivers/gpu/drm/radeon/rs600.c
+@@ -565,6 +565,7 @@ static int rs600_gart_enable(struct radeon_device *rdev)
+ 	r = radeon_gart_table_vram_pin(rdev);
+ 	if (r)
+ 		return r;
++	radeon_gart_restore(rdev);
+ 	/* Enable bus master */
+ 	tmp = RREG32(RADEON_BUS_CNTL) & ~RS600_BUS_MASTER_DIS;
+ 	WREG32(RADEON_BUS_CNTL, tmp);
+diff --git a/drivers/gpu/drm/radeon/rv770.c b/drivers/gpu/drm/radeon/rv770.c
+index 7a6fc66d6a40..2e9be6d9076a 100644
+--- a/drivers/gpu/drm/radeon/rv770.c
++++ b/drivers/gpu/drm/radeon/rv770.c
+@@ -906,6 +906,7 @@ static int rv770_pcie_gart_enable(struct radeon_device *rdev)
+ 	r = radeon_gart_table_vram_pin(rdev);
+ 	if (r)
+ 		return r;
++	radeon_gart_restore(rdev);
+ 	/* Setup L2 cache */
+ 	WREG32(VM_L2_CNTL, ENABLE_L2_CACHE | ENABLE_L2_FRAGMENT_PROCESSING |
+ 				ENABLE_L2_PTE_CACHE_LRU_UPDATE_BY_WRITE |
+diff --git a/drivers/gpu/drm/radeon/si.c b/drivers/gpu/drm/radeon/si.c
+index 1d8efb0eefdb..5a92e3d4ec50 100644
+--- a/drivers/gpu/drm/radeon/si.c
++++ b/drivers/gpu/drm/radeon/si.c
+@@ -4293,6 +4293,7 @@ static int si_pcie_gart_enable(struct radeon_device *rdev)
+ 	r = radeon_gart_table_vram_pin(rdev);
+ 	if (r)
+ 		return r;
++	radeon_gart_restore(rdev);
+ 	/* Setup TLB control */
+ 	WREG32(MC_VM_MX_L1_TLB_CNTL,
+ 	       (0xA << 7) |
+-- 
+2.31.1
+

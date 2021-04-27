@@ -1,0 +1,60 @@
+From e89e991c767747b5823d8afe97459a3729f6f807 Mon Sep 17 00:00:00 2001
+From: chenj <chenj@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 061/131] snd-hda-codec: new symbol snd_hda_codec_exec_verb
+
+snd_hda_codec_exec_verb() wraps&exports codec_exec_verb()
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+Signed-off-by: Hongliang Tao <taohl@lemote.com>
+Signed-off-by: Hua Yan <yanh@lemote.com>
+---
+ include/sound/hda_codec.h |  2 ++
+ sound/pci/hda/hda_codec.c | 18 ++++++++++++++++++
+ 2 files changed, 20 insertions(+)
+
+diff --git a/include/sound/hda_codec.h b/include/sound/hda_codec.h
+index 8341e2c48982..16da1a68bbc1 100644
+--- a/include/sound/hda_codec.h
++++ b/include/sound/hda_codec.h
+@@ -360,6 +360,8 @@ struct hda_verb {
+ 	u32 param;
+ };
+ 
++int snd_hda_codec_exec_verb(struct hda_codec *codec, unsigned int cmd,
++			    unsigned int *res);
+ void snd_hda_sequence_write(struct hda_codec *codec,
+ 			    const struct hda_verb *seq);
+ 
+diff --git a/sound/pci/hda/hda_codec.c b/sound/pci/hda/hda_codec.c
+index 326f95ce5ceb..a6c355f38777 100644
+--- a/sound/pci/hda/hda_codec.c
++++ b/sound/pci/hda/hda_codec.c
+@@ -68,6 +68,24 @@ static int codec_exec_verb(struct hdac_device *dev, unsigned int cmd,
+ 	return err;
+ }
+ 
++int snd_hda_codec_exec_verb(struct hda_codec *codec, unsigned int raw_cmd,
++			   unsigned int *res)
++{
++	unsigned cmd;
++	unsigned int _res;
++	int r;
++
++	cmd = (u32)codec->addr << 28;
++	cmd |= raw_cmd;
++
++	r = codec_exec_verb(&codec->core, cmd, 0, (res || codec->bus->core.sync_write) ? &_res : NULL);
++	if (res)
++		*res = _res;
++
++	return r;
++}
++EXPORT_SYMBOL_GPL(snd_hda_codec_exec_verb);
++
+ /**
+  * snd_hda_sequence_write - sequence writes
+  * @codec: the HDA codec
+-- 
+2.31.1
+

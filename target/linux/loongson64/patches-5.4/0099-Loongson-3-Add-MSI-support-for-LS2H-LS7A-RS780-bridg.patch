@@ -1,0 +1,899 @@
+From bcc4159b9ad36a56e877f786115640a2f0ad0e33 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Sat, 22 Sep 2018 11:42:04 +0800
+Subject: [PATCH 099/131] Loongson-3: Add MSI support for LS2H/LS7A/RS780
+ bridges
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ arch/mips/configs/loongson3_defconfig         |   1 +
+ arch/mips/configs/loongson3_hpcconfig         |   1 +
+ arch/mips/include/asm/irq.h                   |   2 +
+ arch/mips/include/asm/mach-loongson64/irq.h   |   1 +
+ .../asm/mach-loongson64/loongson-pch.h        |  16 +-
+ arch/mips/loongson64/Kconfig                  |   1 +
+ arch/mips/loongson64/common/platform.c        |  21 +++
+ arch/mips/loongson64/loongson-3/Makefile      |   2 +
+ arch/mips/loongson64/loongson-3/irq.c         |   6 +
+ arch/mips/loongson64/loongson-3/ls2h-irq.c    |  85 +++++++--
+ .../loongson64/loongson-3/ls2h-platform.c     |   9 +
+ arch/mips/loongson64/loongson-3/ls7a-irq.c    | 177 +++++++++++++++---
+ .../loongson64/loongson-3/ls7a-platform.c     |   9 +
+ arch/mips/loongson64/loongson-3/pci_msi.c     |  72 +++++++
+ arch/mips/loongson64/loongson-3/rs780-irq.c   | 134 +++++++++++--
+ .../loongson64/loongson-3/rs780-platform.c    |   9 +
+ 16 files changed, 485 insertions(+), 61 deletions(-)
+ create mode 100644 arch/mips/loongson64/loongson-3/pci_msi.c
+
+diff --git a/arch/mips/configs/loongson3_defconfig b/arch/mips/configs/loongson3_defconfig
+index ff31ded36a0c..dfa0a85ac9a9 100644
+--- a/arch/mips/configs/loongson3_defconfig
++++ b/arch/mips/configs/loongson3_defconfig
+@@ -67,6 +67,7 @@ CONFIG_HT_PCI=y
+ CONFIG_PCIEPORTBUS=y
+ # CONFIG_PCIEAER is not set
+ # CONFIG_PCIEASPM is not set
++CONFIG_PCI_MSI=y
+ CONFIG_HOTPLUG_PCI=y
+ CONFIG_HOTPLUG_PCI_SHPC=m
+ CONFIG_PCCARD=m
+diff --git a/arch/mips/configs/loongson3_hpcconfig b/arch/mips/configs/loongson3_hpcconfig
+index 6a9dcf142948..e3a6e002eb2b 100644
+--- a/arch/mips/configs/loongson3_hpcconfig
++++ b/arch/mips/configs/loongson3_hpcconfig
+@@ -67,6 +67,7 @@ CONFIG_HT_PCI=y
+ CONFIG_PCIEPORTBUS=y
+ # CONFIG_PCIEAER is not set
+ # CONFIG_PCIEASPM is not set
++CONFIG_PCI_MSI=y
+ CONFIG_HOTPLUG_PCI=y
+ CONFIG_HOTPLUG_PCI_SHPC=m
+ CONFIG_PCCARD=m
+diff --git a/arch/mips/include/asm/irq.h b/arch/mips/include/asm/irq.h
+index 4e3a7c3c4cad..23af3fc1db81 100644
+--- a/arch/mips/include/asm/irq.h
++++ b/arch/mips/include/asm/irq.h
+@@ -67,6 +67,8 @@ extern void free_irqno(unsigned int irq);
+ extern int plat_set_irq_affinity(struct irq_data *d,
+ 				 const struct cpumask *affinity, bool force);
+ 
++#define NR_IRQS_LEGACY 16
++
+ /*
+  * Before R2 the timer and performance counter interrupts were both fixed to
+  * IE7.	 Since R2 their number has to be read from the c0_intctl register.
+diff --git a/arch/mips/include/asm/mach-loongson64/irq.h b/arch/mips/include/asm/mach-loongson64/irq.h
+index ded2df802346..927c92917ac4 100644
+--- a/arch/mips/include/asm/mach-loongson64/irq.h
++++ b/arch/mips/include/asm/mach-loongson64/irq.h
+@@ -165,6 +165,7 @@
+ 
+ #endif
+ 
++extern struct irq_chip loongson_msi_irq_chip;
+ extern unsigned int loongson_ipi_irq2pos[NR_IRQS];
+ extern unsigned int loongson_ipi_pos2irq[NR_DIRQS];
+ 
+diff --git a/arch/mips/include/asm/mach-loongson64/loongson-pch.h b/arch/mips/include/asm/mach-loongson64/loongson-pch.h
+index 5a4f62070b0d..62cf7e54ad66 100644
+--- a/arch/mips/include/asm/mach-loongson64/loongson-pch.h
++++ b/arch/mips/include/asm/mach-loongson64/loongson-pch.h
+@@ -6,8 +6,9 @@
+ #ifndef _LOONGSON_PCH_H
+ #define _LOONGSON_PCH_H
+ 
+-#include <linux/types.h>
++#include <linux/msi.h>
+ #include <linux/pci.h>
++#include <linux/types.h>
+ #include <asm/addrspace.h>
+ 
+ /* ============== LS2H registers =============== */
+@@ -206,6 +207,10 @@ struct platform_controller_hub {
+ 	int	(*pcibios_dev_init)(struct pci_dev *dev);
+ 	void	(*pch_arch_initcall)(void);
+ 	void	(*pch_device_initcall)(void);
++#ifdef CONFIG_PCI_MSI
++	int	(*setup_msi_irq)(struct pci_dev *pdev, struct msi_desc *desc);
++	void	(*teardown_msi_irq)(unsigned int irq);
++#endif
+ };
+ 
+ extern struct platform_controller_hub ls2h_pch;
+@@ -213,19 +218,28 @@ extern struct platform_controller_hub ls7a_pch;
+ extern struct platform_controller_hub rs780_pch;
+ extern struct platform_controller_hub *loongson_pch;
+ 
++extern int msi_groups;
++extern bool cpu_support_msi(void);
++
+ extern struct pci_ops ls2h_pci_ops[4];
+ extern void ls2h_init_irq(void);
+ extern void ls2h_irq_dispatch(void);
+ extern int ls2h_pcibios_map_irq(const struct pci_dev *dev, u8 slot, u8 pin);
++extern int ls2h_setup_msi_irq(struct pci_dev *pdev, struct msi_desc *desc);
++extern void ls2h_teardown_msi_irq(unsigned int irq);
+ 
+ extern struct pci_ops ls7a_pci_ops;
+ extern void ls7a_init_irq(void);
+ extern void ls7a_irq_dispatch(void);
+ extern int ls7a_pcibios_map_irq(const struct pci_dev *dev, u8 slot, u8 pin);
++extern int ls7a_setup_msi_irq(struct pci_dev *pdev, struct msi_desc *desc);
++extern void ls7a_teardown_msi_irq(unsigned int irq);
+ 
+ extern struct pci_ops rs780_pci_ops;
+ extern void rs780_init_irq(void);
+ extern void rs780_irq_dispatch(void);
+ extern int rs780_pcibios_map_irq(const struct pci_dev *dev, u8 slot, u8 pin);
++extern int rs780_setup_msi_irq(struct pci_dev *pdev, struct msi_desc *desc);
++extern void rs780_teardown_msi_irq(unsigned int irq);
+ 
+ #endif
+diff --git a/arch/mips/loongson64/Kconfig b/arch/mips/loongson64/Kconfig
+index 5ce3b50685af..a7575326288a 100644
+--- a/arch/mips/loongson64/Kconfig
++++ b/arch/mips/loongson64/Kconfig
+@@ -80,6 +80,7 @@ config LOONGSON_MACH3X
+ 	select I8259
+ 	select IRQ_MIPS_CPU
+ 	select NR_CPUS_DEFAULT_4
++	select SPARSE_IRQ
+ 	select SYS_HAS_CPU_LOONGSON3
+ 	select SYS_HAS_EARLY_PRINTK
+ 	select SYS_SUPPORTS_SMP
+diff --git a/arch/mips/loongson64/common/platform.c b/arch/mips/loongson64/common/platform.c
+index 64575f16b5f3..b73d4439346d 100644
+--- a/arch/mips/loongson64/common/platform.c
++++ b/arch/mips/loongson64/common/platform.c
+@@ -8,6 +8,27 @@
+ #include <linux/smp.h>
+ #include <linux/platform_device.h>
+ 
++#include <loongson-pch.h>
++
++int msi_groups;
++
++bool cpu_support_msi(void)
++{
++	struct cpuinfo_mips *c = &boot_cpu_data;
++
++	if ((c->processor_id & PRID_IMP_MASK) == PRID_IMP_LOONGSON_64G) {
++		msi_groups = 8;
++		return true;
++	}
++
++	if ((c->processor_id & PRID_REV_MASK) >= PRID_REV_LOONGSON3A_R2_1) {
++		msi_groups = 4;
++		return true;
++	}
++
++	return false;
++}
++
+ static struct platform_device loongson2_cpufreq_device = {
+ 	.name = "loongson2_cpufreq",
+ 	.id = -1,
+diff --git a/arch/mips/loongson64/loongson-3/Makefile b/arch/mips/loongson64/loongson-3/Makefile
+index 1dba39134c8f..14e91323f518 100644
+--- a/arch/mips/loongson64/loongson-3/Makefile
++++ b/arch/mips/loongson64/loongson-3/Makefile
+@@ -14,6 +14,8 @@ obj-$(CONFIG_SUSPEND)	+= pm.o sleep.o
+ 
+ obj-$(CONFIG_LOONGSON_HPET) += hpet.o
+ 
++obj-$(CONFIG_PCI_MSI)  += pci_msi.o
++
+ obj-$(CONFIG_LOONGSON3_CPUAUTOPLUG) += loongson3_cpuautoplug.o
+ 
+ obj-$(CONFIG_I2C_GPIO)	+= ls7a-gpio.o
+diff --git a/arch/mips/loongson64/loongson-3/irq.c b/arch/mips/loongson64/loongson-3/irq.c
+index 1dc689171e2b..819f3b6ebc5e 100644
+--- a/arch/mips/loongson64/loongson-3/irq.c
++++ b/arch/mips/loongson64/loongson-3/irq.c
+@@ -99,8 +99,14 @@ static struct irq_chip loongson_irq_chip = {
+ 
+ void __init mach_init_irq(void)
+ {
++	int i;
++
+ 	clear_c0_status(ST0_IM | ST0_BEV);
+ 
++	irq_alloc_descs(-1, MIPS_CPU_IRQ_BASE, 8, 0);
++	for (i = MIPS_CPU_IRQ_BASE; i < MIPS_CPU_IRQ_BASE + 8; i++)
++		irq_set_noprobe(i);
++
+ 	irqchip_init();
+ 	loongson_pch->init_irq();
+ 
+diff --git a/arch/mips/loongson64/loongson-3/ls2h-irq.c b/arch/mips/loongson64/loongson-3/ls2h-irq.c
+index ee73bea2b2a4..8dd5eae89875 100644
+--- a/arch/mips/loongson64/loongson-3/ls2h-irq.c
++++ b/arch/mips/loongson64/loongson-3/ls2h-irq.c
+@@ -107,7 +107,7 @@ void ls2h_irq_dispatch(void)
+ 	struct cpumask affinity;
+ 	unsigned int i, irq, inten, intstatus;
+ 
+-	for (i = 0; i < 3; i++) {
++	for (i = 0; i < 4; i++) {
+ 		raw_spin_lock_irqsave(&pch_irq_lock, flags);
+ 		inten = (int_ctrl_regs + i)->int_en;
+ 		intstatus = (int_ctrl_regs + i)->int_isr;
+@@ -151,6 +151,47 @@ void ls2h_irq_dispatch(void)
+ 	}
+ }
+ 
++#define MSI_IRQ_BASE 160
++#define MSI_LAST_IRQ 192
++
++static DEFINE_SPINLOCK(bitmap_lock);
++
++int ls2h_setup_msi_irq(struct pci_dev *pdev, struct msi_desc *desc)
++{
++	int irq = irq_alloc_desc_from(MSI_IRQ_BASE, 0);
++	struct msi_msg msg;
++
++	if (irq < 0)
++		return irq;
++
++	if (irq >= MSI_LAST_IRQ) {
++		irq_free_desc(irq);
++		return -ENOSPC;
++	}
++
++	spin_lock(&bitmap_lock);
++	create_ipi_dirq(irq);
++	spin_unlock(&bitmap_lock);
++	irq_set_msi_desc(irq, desc);
++
++	msg.data = irq;
++	msg.address_hi = 0;
++	msg.address_lo = 0;
++
++	pci_write_msi_msg(irq, &msg);
++	irq_set_chip_and_handler(irq, &loongson_msi_irq_chip, handle_edge_irq);
++
++	return 0;
++}
++
++void ls2h_teardown_msi_irq(unsigned int irq)
++{
++	irq_free_desc(irq);
++	spin_lock(&bitmap_lock);
++	destroy_ipi_dirq(irq);
++	spin_unlock(&bitmap_lock);
++}
++
+ void ls2h_init_irq(void)
+ {
+ 	int i;
+@@ -181,32 +222,40 @@ void ls2h_init_irq(void)
+ 	(int_ctrl_regs + 2)->int_en	= 0x00000000;
+ 	(int_ctrl_regs + 2)->int_clr	= 0xffffffff;
+ 
++	(int_ctrl_regs + 3)->int_edge	= 0xffffffff;
++	(int_ctrl_regs + 3)->int_pol	= 0xffffffff;
++	(int_ctrl_regs + 3)->int_en	= 0x00000000;
++	(int_ctrl_regs + 3)->int_clr	= 0xffffffff;
++
+ 	/* Enable the LPC interrupt */
+ 	writel(0x80000000, LS2H_LPC_INT_CTL);
+ 	/* Clear all 18-bit interrupt bits */
+ 	writel(0x3ffff, LS2H_LPC_INT_CLR);
+ 
+-	for (i = 0; i < NR_IRQS; i++)
+-		loongson_ipi_irq2pos[i] = -1;
+-	for (i = 0; i < NR_DIRQS; i++)
+-		loongson_ipi_pos2irq[i] = -1;
+-	create_ipi_dirq(LS2H_PCH_SATA_IRQ);
+-	create_ipi_dirq(LS2H_PCH_GMAC0_IRQ);
+-	create_ipi_dirq(LS2H_PCH_GMAC1_IRQ);
+-	create_ipi_dirq(LS2H_PCH_PCIE_PORT0_IRQ);
+-	create_ipi_dirq(LS2H_PCH_PCIE_PORT1_IRQ);
+-	create_ipi_dirq(LS2H_PCH_PCIE_PORT2_IRQ);
+-	create_ipi_dirq(LS2H_PCH_PCIE_PORT3_IRQ);
+-	create_ipi_dirq(LS2H_PCH_OTG_IRQ);
+-	create_ipi_dirq(LS2H_PCH_EHCI_IRQ);
+-	create_ipi_dirq(LS2H_PCH_OHCI_IRQ);
++	if (!pci_msi_enabled()) {
++		for (i = 0; i < NR_IRQS; i++)
++			loongson_ipi_irq2pos[i] = -1;
++		for (i = 0; i < NR_DIRQS; i++)
++			loongson_ipi_pos2irq[i] = -1;
++		create_ipi_dirq(LS2H_PCH_SATA_IRQ);
++		create_ipi_dirq(LS2H_PCH_GMAC0_IRQ);
++		create_ipi_dirq(LS2H_PCH_GMAC1_IRQ);
++		create_ipi_dirq(LS2H_PCH_PCIE_PORT0_IRQ);
++		create_ipi_dirq(LS2H_PCH_PCIE_PORT1_IRQ);
++		create_ipi_dirq(LS2H_PCH_PCIE_PORT2_IRQ);
++		create_ipi_dirq(LS2H_PCH_PCIE_PORT3_IRQ);
++		create_ipi_dirq(LS2H_PCH_OTG_IRQ);
++		create_ipi_dirq(LS2H_PCH_EHCI_IRQ);
++		create_ipi_dirq(LS2H_PCH_OHCI_IRQ);
++	}
+ }
+ 
+ int __init ls2h_irq_of_init(struct device_node *node, struct device_node *parent)
+ {
+ 	u32 i;
+ 
+-	irq_domain_add_legacy(node, 160, LS2H_PCH_IRQ_BASE,
++	irq_alloc_descs(-1, LS2H_PCH_IRQ_BASE, 96, 0);
++	irq_domain_add_legacy(node, 96, LS2H_PCH_IRQ_BASE,
+ 			LS2H_PCH_IRQ_BASE, &irq_domain_simple_ops, NULL);
+ 
+ 	irq_set_chip_and_handler(1, &pch_irq_chip, handle_level_irq);
+@@ -214,8 +263,10 @@ int __init ls2h_irq_of_init(struct device_node *node, struct device_node *parent
+ 	irq_set_chip_and_handler(5, &pch_irq_chip, handle_level_irq);
+ 	irq_set_chip_and_handler(12, &pch_irq_chip, handle_level_irq);
+ 
+-	for (i = LS2H_PCH_IRQ_BASE; i < LS2H_PCH_LAST_IRQ; i++)
++	for (i = LS2H_PCH_IRQ_BASE; i < LS2H_PCH_LAST_IRQ; i++) {
++		irq_set_noprobe(i);
+ 		irq_set_chip_and_handler(i, &pch_irq_chip, handle_level_irq);
++	}
+ 	setup_irq(LS2H_PCH_IRQ_BASE + LPC_OFFSET, &lpc_irqaction);
+ 
+ 	return 0;
+diff --git a/arch/mips/loongson64/loongson-3/ls2h-platform.c b/arch/mips/loongson64/loongson-3/ls2h-platform.c
+index bbe97287255d..e3a14360ec18 100644
+--- a/arch/mips/loongson64/loongson-3/ls2h-platform.c
++++ b/arch/mips/loongson64/loongson-3/ls2h-platform.c
+@@ -131,6 +131,8 @@ static void pcie_port_init(int port)
+ 	writel(data, reg);
+ }
+ 
++void pci_no_msi(void);
++
+ static void ls2h_early_config(void)
+ {
+ 	u32 i, val;
+@@ -150,6 +152,9 @@ static void ls2h_early_config(void)
+ 
+ 	en_ref_clock();
+ 
++	if (!cpu_support_msi())
++		pci_no_msi();
++
+ 	val = readl((void *)(LS2H_PCIE_PORT_REG_BASE(0) | LS2H_PCIE_PORT_REG_CTR_STAT));
+ 	val |= LS2H_PCIE_REG_CTR_STAT_BIT_ISRC;  /* Enable RC mode */
+ 	writel(val, (void *)(LS2H_PCIE_PORT_REG_BASE(0) | LS2H_PCIE_PORT_REG_CTR_STAT));
+@@ -197,4 +202,8 @@ struct platform_controller_hub ls2h_pch = {
+ 	.irq_dispatch		= ls2h_irq_dispatch,
+ 	.pch_arch_initcall	= ls2h_arch_initcall,
+ 	.pch_device_initcall	= ls2h_device_initcall,
++#ifdef CONFIG_PCI_MSI
++	.setup_msi_irq		= ls2h_setup_msi_irq,
++	.teardown_msi_irq	= ls2h_teardown_msi_irq,
++#endif
+ };
+diff --git a/arch/mips/loongson64/loongson-3/ls7a-irq.c b/arch/mips/loongson64/loongson-3/ls7a-irq.c
+index a161f736a5e3..a1da12966e40 100644
+--- a/arch/mips/loongson64/loongson-3/ls7a-irq.c
++++ b/arch/mips/loongson64/loongson-3/ls7a-irq.c
+@@ -55,6 +55,8 @@ static void unmask_pch_irq(struct irq_data *d)
+ 	} else {
+ 		raw_spin_lock_irqsave(&pch_irq_lock, flags);
+ 		irq_nr = d->irq - LS7A_PCH_IRQ_BASE;
++		if (pci_msi_enabled())
++			writeq(1ULL << irq_nr, LS7A_INT_CLEAR_REG);
+ 		writeq(readq(LS7A_INT_MASK_REG) & ~(1ULL << irq_nr), LS7A_INT_MASK_REG);
+ 		raw_spin_unlock_irqrestore(&pch_irq_lock, flags);
+ 	}
+@@ -138,6 +140,99 @@ void ls7a_irq_dispatch(void)
+ 	}
+ }
+ 
++void ls7a_msi_irq_dispatch(void)
++{
++	struct irq_data *irqd;
++	struct cpumask affinity;
++	unsigned int i, irq, irqs;
++
++	/* Handle normal IRQs */
++	for (i = 0; i < msi_groups; i++) {
++		irqs = LOONGSON_HT1_INT_VECTOR(i);
++		LOONGSON_HT1_INT_VECTOR(i) = irqs; /* Acknowledge the IRQs */
++
++		while (irqs) {
++			irq = ffs(irqs) - 1;
++			irqs &= ~(1 << irq);
++			irq = (i * 32) + irq;
++
++			if (irq >= MIPS_CPU_IRQ_BASE && irq < (MIPS_CPU_IRQ_BASE + 8)) {
++				pr_err("spurious interrupt: IRQ%d.\n", irq);
++				spurious_interrupt();
++				continue;
++			}
++
++			/* handled by local core */
++			if (loongson_ipi_irq2pos[irq] == -1) {
++				do_IRQ(irq);
++				continue;
++			}
++
++			irqd = irq_get_irq_data(irq);
++			cpumask_and(&affinity, irqd->common->affinity, cpu_active_mask);
++			if (cpumask_empty(&affinity)) {
++				do_IRQ(irq);
++				continue;
++			}
++
++			irq_cpu[irq] = cpumask_next(irq_cpu[irq], &affinity);
++			if (irq_cpu[irq] >= nr_cpu_ids)
++				irq_cpu[irq] = cpumask_first(&affinity);
++
++			if (irq_cpu[irq] == 0) {
++				do_IRQ(irq);
++				continue;
++			}
++
++			/* balanced by other cores */
++			loongson3_send_irq_by_ipi(irq_cpu[irq], (0x1 << (loongson_ipi_irq2pos[irq])));
++		}
++	}
++}
++
++#define MSI_IRQ_BASE 16
++#define MSI_LAST_IRQ (32 * msi_groups)
++#define MSI_TARGET_ADDRESS_HI	0x0
++#define MSI_TARGET_ADDRESS_LO	0x2FF00000
++
++static DEFINE_SPINLOCK(bitmap_lock);
++
++int ls7a_setup_msi_irq(struct pci_dev *pdev, struct msi_desc *desc)
++{
++	int irq = irq_alloc_desc_from(MSI_IRQ_BASE, 0);
++	struct msi_msg msg;
++
++	if (irq < 0)
++		return irq;
++
++	if (irq >= MSI_LAST_IRQ) {
++		irq_free_desc(irq);
++		return -ENOSPC;
++	}
++
++	spin_lock(&bitmap_lock);
++	create_ipi_dirq(irq);
++	spin_unlock(&bitmap_lock);
++	irq_set_msi_desc(irq, desc);
++
++	msg.data = irq;
++	msg.address_hi = MSI_TARGET_ADDRESS_HI;
++	msg.address_lo = MSI_TARGET_ADDRESS_LO;
++
++	pci_write_msi_msg(irq, &msg);
++	irq_set_chip_and_handler(irq, &loongson_msi_irq_chip, handle_edge_irq);
++
++	return 0;
++}
++
++void ls7a_teardown_msi_irq(unsigned int irq)
++{
++	irq_free_desc(irq);
++	spin_lock(&bitmap_lock);
++	destroy_ipi_dirq(irq);
++	spin_unlock(&bitmap_lock);
++}
++
+ void ls7a_init_irq(void)
+ {
+ 	int i;
+@@ -147,14 +242,29 @@ void ls7a_init_irq(void)
+ 	LOONGSON_INT_ROUTER_UART1 = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
+ 	LOONGSON_INT_ROUTER_INTENSET = LOONGSON_INT_ROUTER_INTEN | (0x1 << 15) | (0x1 << 10);
+ 
+-	/* Route INTn0 to Core0 INT1 (IP3) */
+-	LOONGSON_INT_ROUTER_ENTRY(0) = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 1);
+-	LOONGSON_INT_ROUTER_INTENSET = LOONGSON_INT_ROUTER_INTEN | 0x1 << 0;
+-
+ 	/* Route IRQs to LS7A INT0 */
+ 	for (i = LS7A_PCH_IRQ_BASE; i < LS7A_PCH_LAST_IRQ; i++)
+ 		writeb(0x1, (LS7A_INT_ROUTE_ENTRY_REG + i - LS7A_PCH_IRQ_BASE));
+ 
++	if (pci_msi_enabled()) {
++		/* Route HT INTx to Core0 INT1 (IP3) */
++		for (i = 0; i < msi_groups; i++) {
++			LOONGSON_INT_ROUTER_HT1(i) =
++				LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 1);
++			LOONGSON_HT1_INTN_EN(i) = 0xffffffff;
++		}
++		LOONGSON_INT_ROUTER_INTENSET = LOONGSON_INT_ROUTER_INTEN | 0xffff << 16;
++
++		for (i = LS7A_PCH_IRQ_BASE; i < LS7A_PCH_LAST_IRQ; i++)
++			writeb(i, (LS7A_INT_HTMSI_VEC_REG + i - LS7A_PCH_IRQ_BASE));
++		writeq(0xffffffffffffffffULL, LS7A_INT_HTMSI_EN_REG);
++	} else {
++		/* Route INTn0 to Core0 INT1 (IP3) */
++		LOONGSON_INT_ROUTER_ENTRY(0) =
++			LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 1);
++		LOONGSON_INT_ROUTER_INTENSET = LOONGSON_INT_ROUTER_INTEN | 0x1 << 0;
++	}
++
+ 	writeq(0x0ULL, LS7A_INT_EDGE_REG);
+ 	writeq(0x0ULL, LS7A_INT_STATUS_REG);
+ 	/* Mask all interrupts except LPC (bit 19) */
+@@ -166,37 +276,42 @@ void ls7a_init_irq(void)
+ 	/* Clear all 18-bit interrupt bits */
+ 	writel(0x3ffff, LS7A_LPC_INT_CLR);
+ 
+-	for (i = 0; i < NR_IRQS; i++)
+-		loongson_ipi_irq2pos[i] = -1;
+-	for (i = 0; i < NR_DIRQS; i++)
+-		loongson_ipi_pos2irq[i] = -1;
+-	create_ipi_dirq(LS7A_PCH_SATA0_IRQ);
+-	create_ipi_dirq(LS7A_PCH_SATA1_IRQ);
+-	create_ipi_dirq(LS7A_PCH_SATA2_IRQ);
+-	create_ipi_dirq(LS7A_PCH_GMAC0_SBD_IRQ);
+-	create_ipi_dirq(LS7A_PCH_GMAC1_SBD_IRQ);
+-	create_ipi_dirq(LS7A_PCH_PCIE_F0_PORT0_IRQ);
+-	create_ipi_dirq(LS7A_PCH_PCIE_F0_PORT1_IRQ);
+-	create_ipi_dirq(LS7A_PCH_PCIE_F0_PORT2_IRQ);
+-	create_ipi_dirq(LS7A_PCH_PCIE_F0_PORT3_IRQ);
+-	create_ipi_dirq(LS7A_PCH_PCIE_F1_PORT0_IRQ);
+-	create_ipi_dirq(LS7A_PCH_PCIE_F1_PORT1_IRQ);
+-	create_ipi_dirq(LS7A_PCH_PCIE_G0_LO_IRQ);
+-	create_ipi_dirq(LS7A_PCH_PCIE_G0_HI_IRQ);
+-	create_ipi_dirq(LS7A_PCH_PCIE_G1_LO_IRQ);
+-	create_ipi_dirq(LS7A_PCH_PCIE_G1_HI_IRQ);
+-	create_ipi_dirq(LS7A_PCH_PCIE_H_LO_IRQ);
+-	create_ipi_dirq(LS7A_PCH_PCIE_H_HI_IRQ);
+-	create_ipi_dirq(LS7A_PCH_EHCI0_IRQ);
+-	create_ipi_dirq(LS7A_PCH_EHCI1_IRQ);
+-	create_ipi_dirq(LS7A_PCH_OHCI0_IRQ);
+-	create_ipi_dirq(LS7A_PCH_OHCI1_IRQ);
++	if (pci_msi_enabled())
++		loongson_pch->irq_dispatch = ls7a_msi_irq_dispatch;
++	else {
++		for (i = 0; i < NR_IRQS; i++)
++			loongson_ipi_irq2pos[i] = -1;
++		for (i = 0; i < NR_DIRQS; i++)
++			loongson_ipi_pos2irq[i] = -1;
++		create_ipi_dirq(LS7A_PCH_SATA0_IRQ);
++		create_ipi_dirq(LS7A_PCH_SATA1_IRQ);
++		create_ipi_dirq(LS7A_PCH_SATA2_IRQ);
++		create_ipi_dirq(LS7A_PCH_GMAC0_SBD_IRQ);
++		create_ipi_dirq(LS7A_PCH_GMAC1_SBD_IRQ);
++		create_ipi_dirq(LS7A_PCH_PCIE_F0_PORT0_IRQ);
++		create_ipi_dirq(LS7A_PCH_PCIE_F0_PORT1_IRQ);
++		create_ipi_dirq(LS7A_PCH_PCIE_F0_PORT2_IRQ);
++		create_ipi_dirq(LS7A_PCH_PCIE_F0_PORT3_IRQ);
++		create_ipi_dirq(LS7A_PCH_PCIE_F1_PORT0_IRQ);
++		create_ipi_dirq(LS7A_PCH_PCIE_F1_PORT1_IRQ);
++		create_ipi_dirq(LS7A_PCH_PCIE_G0_LO_IRQ);
++		create_ipi_dirq(LS7A_PCH_PCIE_G0_HI_IRQ);
++		create_ipi_dirq(LS7A_PCH_PCIE_G1_LO_IRQ);
++		create_ipi_dirq(LS7A_PCH_PCIE_G1_HI_IRQ);
++		create_ipi_dirq(LS7A_PCH_PCIE_H_LO_IRQ);
++		create_ipi_dirq(LS7A_PCH_PCIE_H_HI_IRQ);
++		create_ipi_dirq(LS7A_PCH_EHCI0_IRQ);
++		create_ipi_dirq(LS7A_PCH_EHCI1_IRQ);
++		create_ipi_dirq(LS7A_PCH_OHCI0_IRQ);
++		create_ipi_dirq(LS7A_PCH_OHCI1_IRQ);
++	}
+ }
+ 
+ int __init ls7a_irq_of_init(struct device_node *node, struct device_node *parent)
+ {
+ 	u32 i;
+ 
++	irq_alloc_descs(-1, LS7A_PCH_IRQ_BASE, 64, 0);
+ 	irq_domain_add_legacy(node, 64, LS7A_PCH_IRQ_BASE,
+ 			LS7A_PCH_IRQ_BASE, &irq_domain_simple_ops, NULL);
+ 
+@@ -205,8 +320,10 @@ int __init ls7a_irq_of_init(struct device_node *node, struct device_node *parent
+ 	irq_set_chip_and_handler(5, &pch_irq_chip, handle_level_irq);
+ 	irq_set_chip_and_handler(12, &pch_irq_chip, handle_level_irq);
+ 
+-	for (i = LS7A_PCH_IRQ_BASE; i < LS7A_PCH_LAST_IRQ; i++)
++	for (i = LS7A_PCH_IRQ_BASE; i < LS7A_PCH_LAST_IRQ; i++) {
++		irq_set_noprobe(i);
+ 		irq_set_chip_and_handler(i, &pch_irq_chip, handle_level_irq);
++	}
+ 	setup_irq(LS7A_PCH_IRQ_BASE + LPC_OFFSET, &lpc_irqaction);
+ 
+ 	return 0;
+diff --git a/arch/mips/loongson64/loongson-3/ls7a-platform.c b/arch/mips/loongson64/loongson-3/ls7a-platform.c
+index 7337aa771686..a8732eba9442 100644
+--- a/arch/mips/loongson64/loongson-3/ls7a-platform.c
++++ b/arch/mips/loongson64/loongson-3/ls7a-platform.c
+@@ -25,11 +25,16 @@
+ 
+ u32 node_id_offset;
+ 
++void pci_no_msi(void);
++
+ #define LS7A_DMA_CFG	(void *)TO_UNCAC(LS7A_CHIPCFG_REG_BASE + 0x041c)
+ 
+ static void ls7a_early_config(void)
+ {
+ 	node_id_offset = ((readl(LS7A_DMA_CFG) & 0x1f00) >> 8) + 36;
++
++	if (!cpu_support_msi())
++		pci_no_msi();
+ }
+ 
+ static struct resource pci_mem_resource = {
+@@ -73,4 +78,8 @@ struct platform_controller_hub ls7a_pch = {
+ 	.irq_dispatch		= ls7a_irq_dispatch,
+ 	.pch_arch_initcall	= ls7a_arch_initcall,
+ 	.pch_device_initcall	= ls7a_device_initcall,
++#ifdef CONFIG_PCI_MSI
++	.setup_msi_irq		= ls7a_setup_msi_irq,
++	.teardown_msi_irq	= ls7a_teardown_msi_irq,
++#endif
+ };
+diff --git a/arch/mips/loongson64/loongson-3/pci_msi.c b/arch/mips/loongson64/loongson-3/pci_msi.c
+new file mode 100644
+index 000000000000..1ab9089a0c23
+--- /dev/null
++++ b/arch/mips/loongson64/loongson-3/pci_msi.c
+@@ -0,0 +1,72 @@
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/init.h>
++#include <linux/interrupt.h>
++#include <linux/msi.h>
++#include <linux/pci.h>
++#include <linux/spinlock.h>
++#include <loongson-pch.h>
++
++#define MSIX_AUTO	(-1)
++
++static int msix_enable = MSIX_AUTO;
++core_param(msix, msix_enable, int, 0664);
++
++int arch_setup_msi_irqs(struct pci_dev *dev, int nvec, int type)
++{
++	struct msi_desc *entry;
++	int ret;
++
++	if (!pci_msi_enabled())
++		return -ENOSPC;
++
++	if (msix_enable == MSIX_AUTO)
++		msix_enable = (msi_groups > 4);
++
++	if (type == PCI_CAP_ID_MSIX && !msix_enable)
++		return -ENOSPC;
++
++	if (type == PCI_CAP_ID_MSI && nvec > 1)
++		return 1;
++
++	for_each_pci_msi_entry(entry, dev) {
++		ret = loongson_pch->setup_msi_irq(dev, entry);
++		if (ret < 0)
++			return ret;
++		if (ret > 0)
++			return -ENOSPC;
++	}
++
++	return 0;
++}
++
++int arch_setup_msi_irq(struct pci_dev *pdev, struct msi_desc *desc)
++{
++	if (!pci_msi_enabled())
++		return -ENOSPC;
++
++	if (msix_enable == MSIX_AUTO)
++		msix_enable = (msi_groups > 4);
++
++	if (desc->msi_attrib.is_msix && !msix_enable)
++		return -ENOSPC;
++
++	return loongson_pch->setup_msi_irq(pdev, desc);
++}
++
++void arch_teardown_msi_irq(unsigned int irq)
++{
++	loongson_pch->teardown_msi_irq(irq);
++}
++
++static void msi_nop(struct irq_data *data) { }
++
++struct irq_chip loongson_msi_irq_chip = {
++	.name = "PCI-MSI",
++	.irq_ack = msi_nop,
++	.irq_enable = pci_msi_unmask_irq,
++	.irq_disable = pci_msi_mask_irq,
++	.irq_mask = pci_msi_mask_irq,
++	.irq_unmask = pci_msi_unmask_irq,
++	.irq_set_affinity = plat_set_irq_affinity,
++};
+diff --git a/arch/mips/loongson64/loongson-3/rs780-irq.c b/arch/mips/loongson64/loongson-3/rs780-irq.c
+index bfdd945bce3d..1063f643321c 100644
+--- a/arch/mips/loongson64/loongson-3/rs780-irq.c
++++ b/arch/mips/loongson64/loongson-3/rs780-irq.c
+@@ -12,6 +12,7 @@
+ 
+ #include <irq.h>
+ #include <loongson.h>
++#include <loongson-pch.h>
+ #include "smp.h"
+ 
+ static unsigned int irq_cpu[NR_IRQS] = {[0 ... NR_IRQS-1] = -1};
+@@ -57,6 +58,99 @@ void rs780_irq_dispatch(void)
+ 	}
+ }
+ 
++void rs780_msi_irq_dispatch(void)
++{
++	struct irq_data *irqd;
++	struct cpumask affinity;
++	unsigned int i, irq, irqs;
++
++	/* Handle normal IRQs */
++	for (i = 0; i < msi_groups; i++) {
++		irqs = LOONGSON_HT1_INT_VECTOR(i);
++		LOONGSON_HT1_INT_VECTOR(i) = irqs; /* Acknowledge the IRQs */
++
++		while (irqs) {
++			irq = ffs(irqs) - 1;
++			irqs &= ~(1 << irq);
++			irq = (i * 32) + irq;
++
++			if (irq >= MIPS_CPU_IRQ_BASE && irq < (MIPS_CPU_IRQ_BASE + 8)) {
++				pr_err("spurious interrupt: IRQ%d.\n", irq);
++				spurious_interrupt();
++				continue;
++			}
++
++			/* handled by local core */
++			if (loongson_ipi_irq2pos[irq] == -1) {
++				do_IRQ(irq);
++				continue;
++			}
++
++			irqd = irq_get_irq_data(irq);
++			cpumask_and(&affinity, irqd->common->affinity, cpu_active_mask);
++			if (cpumask_empty(&affinity)) {
++				do_IRQ(irq);
++				continue;
++			}
++
++			irq_cpu[irq] = cpumask_next(irq_cpu[irq], &affinity);
++			if (irq_cpu[irq] >= nr_cpu_ids)
++				irq_cpu[irq] = cpumask_first(&affinity);
++
++			if (irq_cpu[irq] == 0) {
++				do_IRQ(irq);
++				continue;
++			}
++
++			/* balanced by other cores */
++			loongson3_send_irq_by_ipi(irq_cpu[irq], (0x1 << (loongson_ipi_irq2pos[irq])));
++		}
++	}
++}
++
++#define MSI_IRQ_BASE 16
++#define MSI_LAST_IRQ (32 * msi_groups)
++#define MSI_TARGET_ADDRESS_HI	0x0
++#define MSI_TARGET_ADDRESS_LO	0xFEE00000
++
++static DEFINE_SPINLOCK(bitmap_lock);
++
++int rs780_setup_msi_irq(struct pci_dev *pdev, struct msi_desc *desc)
++{
++	int irq = irq_alloc_desc_from(MSI_IRQ_BASE, 0);
++	struct msi_msg msg;
++
++	if (irq < 0)
++		return irq;
++
++	if (irq >= MSI_LAST_IRQ) {
++		irq_free_desc(irq);
++		return -ENOSPC;
++	}
++
++	spin_lock(&bitmap_lock);
++	create_ipi_dirq(irq);
++	spin_unlock(&bitmap_lock);
++	irq_set_msi_desc(irq, desc);
++
++	msg.data = irq;
++	msg.address_hi = MSI_TARGET_ADDRESS_HI;
++	msg.address_lo = MSI_TARGET_ADDRESS_LO;
++
++	pci_write_msi_msg(irq, &msg);
++	irq_set_chip_and_handler(irq, &loongson_msi_irq_chip, handle_edge_irq);
++
++	return 0;
++}
++
++void rs780_teardown_msi_irq(unsigned int irq)
++{
++	irq_free_desc(irq);
++	spin_lock(&bitmap_lock);
++	destroy_ipi_dirq(irq);
++	spin_unlock(&bitmap_lock);
++}
++
+ void rs780_init_irq(void)
+ {
+ 	int i;
+@@ -66,25 +160,39 @@ void rs780_init_irq(void)
+ 	LOONGSON_INT_ROUTER_UART0 = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
+ 	LOONGSON_INT_ROUTER_UART1 = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 0);
+ 	/* Route HT1 int0 ~ int3 to cpu Core0 INT1 */
+-	for (i = 0; i < 4; i++)
++	for (i = 0; i < max_t(int, msi_groups, 4); i++) {
+ 		LOONGSON_INT_ROUTER_HT1(i) = LOONGSON_INT_COREx_INTy(loongson_sysconf.boot_cpu_id, 1);
+-	/* Enable HT1 interrupts */
+-	LOONGSON_HT1_INTN_EN(0) = 0xffffffff;
++		/* Enable HT1 interrupts */
++		LOONGSON_HT1_INTN_EN(i) = 0xffffffff;
++	}
+ 	/* Enable router interrupt intenset */
+ 	LOONGSON_INT_ROUTER_INTENSET = LOONGSON_INT_ROUTER_INTEN |
+ 				       (0xffff << 16) | (0x1 << 15) | (0x1 << 10);
+ 
++	/* Clear HT1 original interrupts */
++	LOONGSON_HT1_INT_VECTOR(1) = 0xffffffff;
++	LOONGSON_HT1_INT_VECTOR(2) = 0xffffffff;
++	LOONGSON_HT1_INT_VECTOR(3) = 0xffffffff;
++	LOONGSON_HT1_INT_VECTOR(4) = 0xffffffff;
++	LOONGSON_HT1_INT_VECTOR(5) = 0xffffffff;
++	LOONGSON_HT1_INT_VECTOR(6) = 0xffffffff;
++	LOONGSON_HT1_INT_VECTOR(7) = 0xffffffff;
++
+ 	chip = irq_get_chip(I8259A_IRQ_BASE);
+ 	chip->irq_set_affinity = plat_set_irq_affinity;
+ 
+-	for (i = 0; i < NR_IRQS; i++)
+-		loongson_ipi_irq2pos[i] = -1;
+-	for (i = 0; i < NR_DIRQS; i++)
+-		loongson_ipi_pos2irq[i] = -1;
+-	create_ipi_dirq(3);
+-	create_ipi_dirq(4);
+-	create_ipi_dirq(5);
+-	create_ipi_dirq(6);
+-	create_ipi_dirq(14);
+-	create_ipi_dirq(15);
++	if (pci_msi_enabled())
++		loongson_pch->irq_dispatch = rs780_msi_irq_dispatch;
++	else {
++		for (i = 0; i < NR_IRQS; i++)
++			loongson_ipi_irq2pos[i] = -1;
++		for (i = 0; i < NR_DIRQS; i++)
++			loongson_ipi_pos2irq[i] = -1;
++		create_ipi_dirq(3);
++		create_ipi_dirq(4);
++		create_ipi_dirq(5);
++		create_ipi_dirq(6);
++		create_ipi_dirq(14);
++		create_ipi_dirq(15);
++	}
+ }
+diff --git a/arch/mips/loongson64/loongson-3/rs780-platform.c b/arch/mips/loongson64/loongson-3/rs780-platform.c
+index 61220ef8269d..92a8bacc6258 100644
+--- a/arch/mips/loongson64/loongson-3/rs780-platform.c
++++ b/arch/mips/loongson64/loongson-3/rs780-platform.c
+@@ -9,9 +9,14 @@
+ #include <boot_param.h>
+ #include <loongson-pch.h>
+ 
++void pci_no_msi(void);
++
+ static void rs780_early_config(void)
+ {
+ 	pci_request_acs();
++
++	if (!cpu_support_msi())
++		pci_no_msi();
+ }
+ 
+ static struct resource pci_mem_resource = {
+@@ -55,4 +60,8 @@ struct platform_controller_hub rs780_pch = {
+ 	.irq_dispatch		= rs780_irq_dispatch,
+ 	.pch_arch_initcall	= rs780_arch_initcall,
+ 	.pch_device_initcall	= rs780_device_initcall,
++#ifdef CONFIG_PCI_MSI
++	.setup_msi_irq		= rs780_setup_msi_irq,
++	.teardown_msi_irq	= rs780_teardown_msi_irq,
++#endif
+ };
+-- 
+2.31.1
+

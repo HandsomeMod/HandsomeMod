@@ -1,0 +1,44 @@
+From d7dcbefc37a5425e8fd84929248a5949c7248359 Mon Sep 17 00:00:00 2001
+From: Jiaxun Yang <jiaxun.yang@flygoat.com>
+Date: Sat, 8 Aug 2020 20:32:27 +0800
+Subject: [PATCH 016/131] MIPS: Loongson64: Do not override watch and ejtag
+ feature
+
+Do not override ejtag feature to 0 as Loongson 3A1000+ do have ejtag.
+For watch, as KVM emulated CPU doesn't have watch feature, we should
+not enable it unconditionally.
+
+Signed-off-by: Jiaxun Yang <jiaxun.yang@flygoat.com>
+Reviewed-by: Huacai Chen <chenhc@lemote.com>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/include/asm/mach-loongson64/cpu-feature-overrides.h | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/mips/include/asm/mach-loongson64/cpu-feature-overrides.h b/arch/mips/include/asm/mach-loongson64/cpu-feature-overrides.h
+index a16d98619c25..abe20e5a9b24 100644
+--- a/arch/mips/include/asm/mach-loongson64/cpu-feature-overrides.h
++++ b/arch/mips/include/asm/mach-loongson64/cpu-feature-overrides.h
+@@ -26,7 +26,9 @@
+ #define cpu_has_counter		1
+ #define cpu_has_dc_aliases	(PAGE_SIZE < 0x4000)
+ #define cpu_has_divec		0
++#ifndef CONFIG_CPU_LOONGSON3 
+ #define cpu_has_ejtag		0
++#endif
+ #define cpu_has_inclusive_pcaches	1
+ #define cpu_has_llsc		1
+ #define cpu_has_mcheck		0
+@@ -42,7 +44,9 @@
+ #define cpu_has_veic		0
+ #define cpu_has_vint		0
+ #define cpu_has_vtag_icache	0
++#ifndef CONFIG_CPU_LOONGSON3 
+ #define cpu_has_watch		1
++#endif
+ #define cpu_has_perf_cntr_intr_bit	0
+ 
+ #ifdef CONFIG_CPU_LOONGSON3
+-- 
+2.31.1
+

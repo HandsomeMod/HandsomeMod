@@ -1,0 +1,55 @@
+From 88242fc82301dd933a06d61c5a532ca75bf82e13 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 049/131] NVMe: Revert "NVMe: default to 4k device page size"
+
+This reverts commit c5c9f25b98a568451d665afe4aeefe17bf9f2995.
+Because Loongson prefer 16KB pagesize.
+---
+ drivers/nvme/host/core.c | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/nvme/host/core.c b/drivers/nvme/host/core.c
+index 7a964271959d..a8eaa3bc0038 100644
+--- a/drivers/nvme/host/core.c
++++ b/drivers/nvme/host/core.c
+@@ -2129,12 +2129,8 @@ EXPORT_SYMBOL_GPL(nvme_disable_ctrl);
+ 
+ int nvme_enable_ctrl(struct nvme_ctrl *ctrl)
+ {
+-	/*
+-	 * Default to a 4K page size, with the intention to update this
+-	 * path in the future to accomodate architectures with differing
+-	 * kernel and IO page sizes.
+-	 */
+-	unsigned dev_page_min, page_shift = 12;
++	unsigned page_shift = PAGE_SHIFT;
++	unsigned dev_page_min, dev_page_max;
+ 	int ret;
+ 
+ 	ret = ctrl->ops->reg_read64(ctrl, NVME_REG_CAP, &ctrl->cap);
+@@ -2143,6 +2139,7 @@ int nvme_enable_ctrl(struct nvme_ctrl *ctrl)
+ 		return ret;
+ 	}
+ 	dev_page_min = NVME_CAP_MPSMIN(ctrl->cap) + 12;
++	dev_page_max = NVME_CAP_MPSMAX(ctrl->cap) + 12;
+ 
+ 	if (page_shift < dev_page_min) {
+ 		dev_err(ctrl->device,
+@@ -2150,6 +2147,13 @@ int nvme_enable_ctrl(struct nvme_ctrl *ctrl)
+ 			1 << dev_page_min, 1 << page_shift);
+ 		return -ENODEV;
+ 	}
++	if (page_shift > dev_page_max) {
++		dev_info(ctrl->dev,
++			 "Device maximum page size (%u) smaller than "
++			 "host (%u); enabling work-around\n",
++			 1 << dev_page_max, 1 << page_shift);
++		page_shift = dev_page_max;
++	}
+ 
+ 	ctrl->page_size = 1 << page_shift;
+ 
+-- 
+2.31.1
+

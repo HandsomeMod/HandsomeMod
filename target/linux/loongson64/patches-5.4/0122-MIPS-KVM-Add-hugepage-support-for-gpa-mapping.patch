@@ -1,0 +1,524 @@
+From 19321634a645b235567c73807338718a3f35fdb9 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Tue, 11 Feb 2020 14:09:57 +0800
+Subject: [PATCH 122/131] MIPS: KVM: Add hugepage support for gpa mapping
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ arch/mips/kvm/callback.c |   6 +
+ arch/mips/kvm/entry.c    |  12 ++
+ arch/mips/kvm/mmu.c      | 347 ++++++++++++++++++++++++++++++++++++---
+ 3 files changed, 340 insertions(+), 25 deletions(-)
+
+diff --git a/arch/mips/kvm/callback.c b/arch/mips/kvm/callback.c
+index d88aa2173fb0..3e32e63ef1f4 100644
+--- a/arch/mips/kvm/callback.c
++++ b/arch/mips/kvm/callback.c
+@@ -12,3 +12,9 @@
+ 
+ struct kvm_mips_callbacks *kvm_mips_callbacks;
+ EXPORT_SYMBOL_GPL(kvm_mips_callbacks);
++#ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT
++extern int pmd_huge(pmd_t pmd);
++EXPORT_SYMBOL(pmd_huge);
++extern int pud_huge(pud_t pud);
++EXPORT_SYMBOL(pud_huge);
++#endif
+diff --git a/arch/mips/kvm/entry.c b/arch/mips/kvm/entry.c
+index 633a5df682ae..05a85343b92a 100644
+--- a/arch/mips/kvm/entry.c
++++ b/arch/mips/kvm/entry.c
+@@ -51,6 +51,7 @@
+ #define RA		31
+ 
+ /* Some CP0 registers */
++#define C0_PAGEMASK	5, 0
+ #define C0_PWBASE	5, 5
+ #define C0_HWRENA	7, 0
+ #define C0_BADVADDR	8, 0
+@@ -529,6 +530,17 @@ void *kvm_mips_build_tlb_refill_exception(void *addr, void *handler)
+ 	build_update_entries(&p, K0, K1);
+ 	build_tlb_write_entry(&p, &l, &r, tlb_random);
+ #endif
++	/* restore page mask */
++	if (PM_DEFAULT_MASK >> 16) {
++		uasm_i_lui(&p, K0, PM_DEFAULT_MASK >> 16);
++		uasm_i_ori(&p, K0, K0, PM_DEFAULT_MASK & 0xffff);
++		uasm_i_mtc0(&p, K0, C0_PAGEMASK);
++	} else if (PM_DEFAULT_MASK) {
++		uasm_i_ori(&p, K0, 0, PM_DEFAULT_MASK);
++		uasm_i_mtc0(&p, K0, C0_PAGEMASK);
++	} else {
++		uasm_i_mtc0(&p, 0, C0_PAGEMASK);
++	}
+ 
+ 	preempt_enable();
+ 
+diff --git a/arch/mips/kvm/mmu.c b/arch/mips/kvm/mmu.c
+index 97f63a84aa51..a6297a9f0174 100644
+--- a/arch/mips/kvm/mmu.c
++++ b/arch/mips/kvm/mmu.c
+@@ -10,7 +10,9 @@
+  */
+ 
+ #include <linux/highmem.h>
++#include <linux/hugetlb.h>
+ #include <linux/kvm_host.h>
++#include <linux/page-flags.h>
+ #include <linux/uaccess.h>
+ #include <asm/mmu_context.h>
+ #include <asm/pgalloc.h>
+@@ -157,6 +159,11 @@ static pte_t *kvm_mips_walk_pgd(pgd_t *pgd, struct kvm_mmu_memory_cache *cache,
+ 		pud_populate(NULL, pud, new_pmd);
+ 	}
+ 	pmd = pmd_offset(pud, addr);
++#ifdef CONFIG_MIPS_HUGE_TLB_SUPPORT
++	if (pmd_huge(*pmd)) {
++		return (pte_t *)pmd;
++	}
++#endif
+ 	if (pmd_none(*pmd)) {
+ 		pte_t *new_pte;
+ 
+@@ -213,6 +220,11 @@ static bool kvm_mips_flush_gpa_pmd(pmd_t *pmd, unsigned long start_gpa,
+ 		if (!pmd_present(pmd[i]))
+ 			continue;
+ 
++		if (pmd_huge(pmd[i])) {
++			pmd_clear(pmd + i);
++			continue;
++		}
++
+ 		pte = pte_offset(pmd + i, 0);
+ 		if (i == i_max)
+ 			end = end_gpa;
+@@ -303,7 +315,7 @@ bool kvm_mips_flush_gpa_pt(struct kvm *kvm, gfn_t start_gfn, gfn_t end_gfn)
+ 				      end_gfn << PAGE_SHIFT);
+ }
+ 
+-#define BUILD_PTE_RANGE_OP(name, op)					\
++#define BUILD_PTE_RANGE_OP(name, op, op_huge)				\
+ static int kvm_mips_##name##_pte(pte_t *pte, unsigned long start,	\
+ 				 unsigned long end)			\
+ {									\
+@@ -337,11 +349,21 @@ static int kvm_mips_##name##_pmd(pmd_t *pmd, unsigned long start,	\
+ 	int i_min = __pmd_offset(start);				\
+ 	int i_max = __pmd_offset(end);					\
+ 	int i;								\
++	pmd_t old, new;							\
+ 									\
+ 	for (i = i_min; i <= i_max; ++i, start = 0) {			\
+ 		if (!pmd_present(pmd[i]))				\
+ 			continue;					\
+ 									\
++		if (pmd_huge(pmd[i])) {					\
++			old = pmd[i];					\
++			new = op_huge(old);				\
++			if (pmd_val(new) == pmd_val(old))		\
++				continue;				\
++			set_pmd(pmd + i, new);				\
++			continue;					\
++		}							\
++									\
+ 		pte = pte_offset(pmd + i, 0);				\
+ 		if (i == i_max)						\
+ 			cur_end = end;					\
+@@ -403,7 +425,7 @@ static int kvm_mips_##name##_pgd(pgd_t *pgd, unsigned long start,	\
+  * GPA page table to allow dirty page tracking.
+  */
+ 
+-BUILD_PTE_RANGE_OP(mkclean, pte_mkclean)
++BUILD_PTE_RANGE_OP(mkclean, pte_mkclean, pmd_mkclean)
+ 
+ /**
+  * kvm_mips_mkclean_gpa_pt() - Make a range of guest physical addresses clean.
+@@ -455,7 +477,7 @@ void kvm_arch_mmu_enable_log_dirty_pt_masked(struct kvm *kvm,
+  * VM's GPA page table to allow detection of commonly used pages.
+  */
+ 
+-BUILD_PTE_RANGE_OP(mkold, pte_mkold)
++BUILD_PTE_RANGE_OP(mkold, pte_mkold, pmd_mkold)
+ 
+ static int kvm_mips_mkold_gpa_pt(struct kvm *kvm, gfn_t start_gfn,
+ 				 gfn_t end_gfn)
+@@ -590,6 +612,215 @@ int kvm_test_age_hva(struct kvm *kvm, unsigned long hva)
+ 	return handle_hva_to_gpa(kvm, hva, hva, kvm_test_age_hva_handler, NULL);
+ }
+ 
++static pud_t *kvm_mips_get_pud(struct kvm *kvm,
++		 struct kvm_mmu_memory_cache *cache, phys_addr_t addr)
++{
++	pgd_t *pgd;
++
++	pgd = kvm->arch.gpa_mm.pgd + pgd_index(addr);
++	if (pgd_none(*pgd)) {
++		/* Not used on MIPS yet */
++		BUG();
++		return NULL;
++	}
++
++	return pud_offset(pgd, addr);
++}
++
++static pmd_t *kvm_mips_get_pmd(struct kvm *kvm,
++		 struct kvm_mmu_memory_cache *cache, phys_addr_t addr)
++{
++	pud_t *pud;
++	pmd_t *pmd;
++
++	pud = kvm_mips_get_pud(kvm, cache, addr);
++	if (!pud || pud_huge(*pud))
++		return NULL;
++
++	if (pud_none(*pud)) {
++		if (!cache)
++			return NULL;
++		pmd = mmu_memory_cache_alloc(cache);
++		pmd_init((unsigned long)pmd,
++				(unsigned long)invalid_pte_table);
++		pud_populate(NULL, pud, pmd);
++	}
++
++	return pmd_offset(pud, addr);
++}
++
++int kvm_mips_set_pmd_huge(struct kvm_vcpu *vcpu, struct kvm_mmu_memory_cache
++			       *cache, phys_addr_t addr, const pmd_t *new_pmd)
++{
++	pmd_t *pmd, old_pmd;
++
++retry:
++	pmd = kvm_mips_get_pmd(vcpu->kvm, cache, addr);
++	VM_BUG_ON(!pmd);
++
++	old_pmd = *pmd;
++	/*
++	 * Multiple vcpus faulting on the same PMD entry, can
++	 * lead to them sequentially updating the PMD with the
++	 * same value. Following the break-before-make
++	 * (pmd_clear() followed by tlb_flush()) process can
++	 * hinder forward progress due to refaults generated
++	 * on missing translations.
++	 *
++	 * Skip updating the page table if the entry is
++	 * unchanged.
++	 */
++	if (pmd_val(old_pmd) == pmd_val(*new_pmd))
++		return 0;
++
++	if (pmd_present(old_pmd)) {
++		/*
++		 * If we already have PTE level mapping for this block,
++		 * we must unmap it to avoid inconsistent TLB state and
++		 * leaking the table page. We could end up in this situation
++		 * if the memory slot was marked for dirty logging and was
++		 * reverted, leaving PTE level mappings for the pages accessed
++		 * during the period. So, unmap the PTE level mapping for this
++		 * block and retry, as we could have released the upper level
++		 * table in the process.
++		 *
++		 * Normal THP split/merge follows mmu_notifier callbacks and do
++		 * get handled accordingly.
++		 */
++		if (!pmd_huge(old_pmd)) {
++			kvm_mips_flush_gpa_pt(vcpu->kvm,
++				(addr & PMD_MASK) >> PAGE_SHIFT,
++				((addr & PMD_MASK) + PMD_SIZE - 1) >> PAGE_SHIFT);
++			goto retry;
++		}
++		/*
++		 * Mapping in huge pages should only happen through a
++		 * fault.  If a page is merged into a transparent huge
++		 * page, the individual subpages of that huge page
++		 * should be unmapped through MMU notifiers before we
++		 * get here.
++		 *
++		 * Merging of CompoundPages is not supported; they
++		 * should become splitting first, unmapped, merged,
++		 * and mapped back in on-demand.
++		 */
++		WARN_ON_ONCE(pmd_pfn(old_pmd) != pmd_pfn(*new_pmd));
++		pmd_clear(pmd);
++	}
++
++	kvm_vz_host_tlb_inv(vcpu, addr & PMD_MASK);
++	set_pmd(pmd, *new_pmd);
++	return 0;
++}
++
++/*
++ * Adjust pfn start boundary if support for transparent hugepage
++ */
++static bool transparent_hugepage_adjust(kvm_pfn_t *pfnp, unsigned long *gpap)
++{
++	kvm_pfn_t pfn = *pfnp;
++	gfn_t gfn = *gpap >> PAGE_SHIFT;
++	struct page *page = pfn_to_page(pfn);
++
++	/*
++	 * PageTransCompoundMap() returns true for THP and
++	 * hugetlbfs. Make sure the adjustment is done only for THP
++	 * pages.
++	 */
++	if ((!PageHuge(page)) && PageTransCompound(page) &&
++			 (atomic_read(&page->_mapcount) < 0)) {
++		unsigned long mask;
++		/*
++		 * The address we faulted on is backed by a transparent huge
++		 * page.  However, because we map the compound huge page and
++		 * not the individual tail page, we need to transfer the
++		 * refcount to the head page.  We have to be careful that the
++		 * THP doesn't start to split while we are adjusting the
++		 * refcounts.
++		 *
++		 * We are sure this doesn't happen, because mmu_notifier_retry
++		 * was successful and we are holding the mmu_lock, so if this
++		 * THP is trying to split, it will be blocked in the mmu
++		 * notifier before touching any of the pages, specifically
++		 * before being able to call __split_huge_page_refcount().
++		 *
++		 * We can therefore safely transfer the refcount from PG_tail
++		 * to PG_head and switch the pfn from a tail page to the head
++		 * page accordingly.
++		 */
++		mask = PTRS_PER_PMD - 1;
++		VM_BUG_ON((gfn & mask) != (pfn & mask));
++		if (pfn & mask) {
++			*gpap &= PMD_MASK;
++			kvm_release_pfn_clean(pfn);
++			pfn &= ~mask;
++			kvm_get_pfn(pfn);
++			*pfnp = pfn;
++		}
++
++		return true;
++	}
++
++	return false;
++}
++
++static bool fault_supports_huge_mapping(struct kvm_memory_slot *memslot,
++					       unsigned long hva,
++					       unsigned long map_size)
++{
++	gpa_t gpa_start;
++	hva_t uaddr_start, uaddr_end;
++	size_t size;
++
++	size = memslot->npages * PAGE_SIZE;
++
++	gpa_start = memslot->base_gfn << PAGE_SHIFT;
++
++	uaddr_start = memslot->userspace_addr;
++	uaddr_end = uaddr_start + size;
++
++	/*
++	 * Pages belonging to memslots that don't have the same alignment
++	 * within a PMD/PUD for userspace and GPA cannot be mapped with stage-2
++	 * PMD/PUD entries, because we'll end up mapping the wrong pages.
++	 *
++	 * Consider a layout like the following:
++	 *
++	 *    memslot->userspace_addr:
++	 *    +-----+--------------------+--------------------+---+
++	 *    |abcde|fgh  Stage-1 block  |    Stage-1 block tv|xyz|
++	 *    +-----+--------------------+--------------------+---+
++	 *
++	 *    memslot->base_gfn << PAGE_SIZE:
++	 *      +---+--------------------+--------------------+-----+
++	 *      |abc|def  Stage-2 block  |    Stage-2 block   |tvxyz|
++	 *      +---+--------------------+--------------------+-----+
++	 *
++	 * If we create those stage-2 blocks, we'll end up with this incorrect
++	 * mapping:
++	 *   d -> f
++	 *   e -> g
++	 *   f -> h
++	 */
++	if ((gpa_start & (map_size - 1)) != (uaddr_start & (map_size - 1)))
++		return false;
++
++	/*
++	 * Next, let's make sure we're not trying to map anything not covered
++	 * by the memslot. This means we have to prohibit block size mappings
++	 * for the beginning and end of a non-block aligned and non-block sized
++	 * memory slot (illustrated by the head and tail parts of the
++	 * userspace view above containing pages 'abcde' and 'xyz',
++	 * respectively).
++	 *
++	 * Note that it doesn't matter if we do the check using the
++	 * userspace_addr or the base_gfn, as both are equally aligned (per
++	 * the check above) and equally sized.
++	 */
++	return (hva & ~(map_size - 1)) >= uaddr_start &&
++	       (hva & ~(map_size - 1)) + map_size <= uaddr_end;
++}
++
+ /**
+  * _kvm_mips_map_page_fast() - Fast path GPA fault handler.
+  * @vcpu:		VCPU pointer.
+@@ -617,7 +848,7 @@ static int _kvm_mips_map_page_fast(struct kvm_vcpu *vcpu, unsigned long gpa,
+ 	pte_t *ptep;
+ 	kvm_pfn_t pfn = 0;	/* silence bogus GCC warning */
+ 	bool pfn_valid = false;
+-	int ret = 0;
++	int i, ret = 0;
+ 
+ 	spin_lock(&kvm->mmu_lock);
+ 
+@@ -644,7 +875,13 @@ static int _kvm_mips_map_page_fast(struct kvm_vcpu *vcpu, unsigned long gpa,
+ 		/* Track dirtying of writeable pages */
+ 		set_pte(ptep, pte_mkdirty(*ptep));
+ 		pfn = pte_pfn(*ptep);
+-		mark_page_dirty(kvm, gfn);
++		if (!pmd_huge(*((pmd_t*)ptep)))
++			mark_page_dirty(kvm, gfn);
++		else {
++			gfn_t base_gfn = (gpa & PMD_MASK) >> PAGE_SHIFT;
++			for (i = 0; i < PTRS_PER_PTE; i++)
++				mark_page_dirty(kvm, base_gfn + i);
++		}
+ 		kvm_set_pfn_dirty(pfn);
+ 	}
+ 
+@@ -688,15 +925,20 @@ static int kvm_mips_map_page(struct kvm_vcpu *vcpu, unsigned long gpa,
+ 			     bool write_fault,
+ 			     pte_t *out_entry, pte_t *out_buddy)
+ {
+-	struct kvm *kvm = vcpu->kvm;
+-	struct kvm_mmu_memory_cache *memcache = &vcpu->arch.mmu_page_cache;
+-	gfn_t gfn = gpa >> PAGE_SHIFT;
+-	int srcu_idx, err;
+-	kvm_pfn_t pfn;
+-	pte_t *ptep, entry, old_pte;
+ 	bool writeable;
+-	unsigned long prot_bits;
++	bool force_pte = false;
++	int i, srcu_idx, err = 0;
++	unsigned long hva;
+ 	unsigned long mmu_seq;
++	unsigned long prot_bits;
++	unsigned long vma_pagesize;
++	pte_t *ptep;
++	kvm_pfn_t pfn;
++	gfn_t gfn = gpa >> PAGE_SHIFT;
++	struct vm_area_struct *vma;
++	struct kvm *kvm = vcpu->kvm;
++	struct kvm_memory_slot *memslot;
++	struct kvm_mmu_memory_cache *memcache = &vcpu->arch.mmu_page_cache;
+ 
+ 	/* Try the fast path to handle old / clean pages */
+ 	srcu_idx = srcu_read_lock(&kvm->srcu);
+@@ -705,6 +947,34 @@ static int kvm_mips_map_page(struct kvm_vcpu *vcpu, unsigned long gpa,
+ 	if (!err)
+ 		goto out;
+ 
++	memslot = gfn_to_memslot(kvm, gfn);
++	hva = gfn_to_hva_memslot_prot(memslot, gfn, &writeable);
++	if (kvm_is_error_hva(hva) || (write_fault && !writeable))
++		goto out;
++
++	/* Let's check if we will get back a huge page backed by hugetlbfs */
++	down_read(&current->mm->mmap_sem);
++	vma = find_vma_intersection(current->mm, hva, hva + 1);
++	if (unlikely(!vma)) {
++		kvm_err("Failed to find VMA for hva 0x%lx\n", hva);
++		up_read(&current->mm->mmap_sem);
++		err = -EFAULT;
++		goto out;
++	}
++
++	vma_pagesize = vma_kernel_pagesize(vma);
++
++	if (!fault_supports_huge_mapping(memslot, hva, vma_pagesize)) {
++		force_pte = true;
++		vma_pagesize = PAGE_SIZE;
++	}
++
++	/* PMD is not folded, adjust gfn to new boundary */
++	if (vma_pagesize == PMD_SIZE)
++		gfn = (gpa & huge_page_mask(hstate_vma(vma))) >> PAGE_SHIFT;
++
++	up_read(&current->mm->mmap_sem);
++
+ 	/* We need a minimum of cached pages ready for page table creation */
+ 	err = mmu_topup_memory_cache(memcache, KVM_MMU_CACHE_MIN_PAGES,
+ 				     KVM_NR_MEM_OBJS);
+@@ -746,34 +1016,61 @@ static int kvm_mips_map_page(struct kvm_vcpu *vcpu, unsigned long gpa,
+ 		 * gfn_to_pfn_prot().
+ 		 */
+ 		spin_unlock(&kvm->mmu_lock);
++		kvm_set_pfn_accessed(pfn);
+ 		kvm_release_pfn_clean(pfn);
+ 		goto retry;
+ 	}
+ 
+-	/* Ensure page tables are allocated */
+-	ptep = kvm_mips_pte_for_gpa(kvm, memcache, gpa);
++	if (vma_pagesize == PAGE_SIZE && !force_pte) {
++		/*
++		 * Only PMD_SIZE transparent hugepages(THP) are
++		 * currently supported. This code will need to be
++		 * updated to support other THP sizes.
++		 *
++		 * Make sure the host VA and the guest IPA are sufficiently
++		 * aligned and that the block is contained within the memslot.
++		 */
++		if (fault_supports_huge_mapping(memslot, hva, PMD_SIZE) &&
++		    transparent_hugepage_adjust(&pfn, &gpa)) {
++			vma_pagesize = PMD_SIZE;
++		}
++	}
+ 
+-	/* Set up the PTE */
++	/* Set up the prot bits */
+ 	prot_bits = _PAGE_PRESENT | __READABLE | _page_cachable_default;
+ 	if (writeable) {
+ 		prot_bits |= _PAGE_WRITE;
+ 		if (write_fault) {
+ 			prot_bits |= __WRITEABLE;
+-			mark_page_dirty(kvm, gfn);
+ 			kvm_set_pfn_dirty(pfn);
+ 		}
+ 	}
+-	entry = pfn_pte(pfn, __pgprot(prot_bits));
+ 
+-	/* Write the PTE */
+-	old_pte = *ptep;
+-	set_pte(ptep, entry);
++	if (vma_pagesize == PMD_SIZE) {
++		pmd_t new_pmd = pfn_pmd(pfn, __pgprot(prot_bits));
++		new_pmd = pmd_mkhuge(new_pmd);
++		if (writeable && write_fault) {
++			gfn_t base_gfn = (gpa & PMD_MASK) >> PAGE_SHIFT;
++			for (i = 0; i < PTRS_PER_PTE; i++)
++				mark_page_dirty(kvm, base_gfn + i);
++		}
+ 
+-	err = 0;
+-	if (out_entry)
+-		*out_entry = *ptep;
+-	if (out_buddy)
+-		*out_buddy = *ptep_buddy(ptep);
++		kvm_mips_set_pmd_huge(vcpu, memcache, gpa, &new_pmd);
++	} else {
++		pte_t new_pte = pfn_pte(pfn, __pgprot(prot_bits));
++		if (writeable && write_fault)
++			mark_page_dirty(kvm, gfn);
++
++		/* Ensure page tables are allocated */
++		ptep = kvm_mips_pte_for_gpa(kvm, memcache, gpa);
++		set_pte(ptep, new_pte);
++
++		err = 0;
++		if (out_entry)
++			*out_entry = *ptep;
++		if (out_buddy)
++			*out_buddy = *ptep_buddy(ptep);
++	}
+ 
+ 	spin_unlock(&kvm->mmu_lock);
+ 	kvm_release_pfn_clean(pfn);
+-- 
+2.31.1
+

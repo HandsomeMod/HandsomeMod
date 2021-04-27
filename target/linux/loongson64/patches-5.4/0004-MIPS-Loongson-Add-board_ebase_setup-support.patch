@@ -1,0 +1,65 @@
+From 6480a3e08af507852268725618de42ebc1f310a1 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Fri, 25 Oct 2019 09:10:04 +0800
+Subject: [PATCH 004/131] MIPS: Loongson: Add board_ebase_setup() support
+
+The EBase registers of old Loongson processor models before 3A2000 are
+32bit and have no WG bit; those of newer models are 64bit and do have
+the WG bit.
+
+Unfortunately, dynamically allocated EBase addresses do not work well
+for the Loongson platform, because Loongson's memory layout is very
+limited below 0x20000000. The dynamically allocated EBase address above
+0x20000000 is thus unmappable to a KSEG0/KSEG1 virtual address, but the
+cache error handler MUST be in KSEG1 (please see set_uncached_handler()
+in traps.c).
+
+Some might suggest that the cache error handler is hardly used so this
+is not a problem, but Loongson's MMIO configuration registers might be
+corrupted by set_uncached_handler().
+
+To make Linux kernel on Loongson more robust, a board_ebase_setup() hook
+is added to ensure CKSEG0 is always used for EBase. This is also useful
+for configurations where firmware-provided EBase is not sane.
+
+Maybe this problem is present for all MIPSr2 processors, but it seems
+not all platforms have memory at physical address 0. So this patch only
+touches Loongson.
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ arch/mips/loongson64/common/init.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/arch/mips/loongson64/common/init.c b/arch/mips/loongson64/common/init.c
+index 912fe61c4fc7..8e2047d04e94 100644
+--- a/arch/mips/loongson64/common/init.c
++++ b/arch/mips/loongson64/common/init.c
+@@ -15,6 +15,16 @@
+ /* Loongson CPU address windows config space base address */
+ unsigned long __maybe_unused _loongson_addrwincfg_base;
+ 
++static void __init mips_ebase_setup(void)
++{
++	ebase = CKSEG0;
++
++	if (cpu_has_ebase_wg)
++		write_c0_ebase(ebase | MIPS_EBASE_WG);
++
++	write_c0_ebase(ebase);
++}
++
+ static void __init mips_nmi_setup(void)
+ {
+ 	void *base;
+@@ -48,6 +58,7 @@ void __init prom_init(void)
+ 	/*init the uart base address */
+ 	prom_init_uart_base();
+ 	register_smp_ops(&loongson3_smp_ops);
++	board_ebase_setup = mips_ebase_setup;
+ 	board_nmi_handler_setup = mips_nmi_setup;
+ }
+ 
+-- 
+2.31.1
+

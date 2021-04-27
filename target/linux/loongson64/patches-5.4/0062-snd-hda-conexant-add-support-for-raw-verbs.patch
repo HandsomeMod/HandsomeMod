@@ -1,0 +1,42 @@
+From cf1ec22887faca7cd7c7486d53043cfacd545e63 Mon Sep 17 00:00:00 2001
+From: chenj <chenj@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 062/131] snd/hda/conexant: add support for raw verbs
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+Signed-off-by: Hongliang Tao <taohl@lemote.com>
+Signed-off-by: Hua Yan <yanh@lemote.com>
+---
+ sound/pci/hda/patch_conexant.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/sound/pci/hda/patch_conexant.c b/sound/pci/hda/patch_conexant.c
+index d2273c817983..a62f4d6d36af 100644
+--- a/sound/pci/hda/patch_conexant.c
++++ b/sound/pci/hda/patch_conexant.c
+@@ -43,6 +43,8 @@ struct conexant_spec {
+ 	unsigned int gpio_mute_led_mask;
+ 	unsigned int gpio_mic_led_mask;
+ 
++	const unsigned int *raw_init_verbs[5];
++	unsigned int num_raw_init_verbs;
+ };
+ 
+ 
+@@ -149,7 +151,13 @@ static void cx_auto_vmaster_hook_mute_led(void *private_data, int enabled)
+ 
+ static int cx_auto_init(struct hda_codec *codec)
+ {
++	int i, j;
+ 	struct conexant_spec *spec = codec->spec;
++
++	for (i = 0; i < spec->num_raw_init_verbs; i++)
++		for (j = 0; spec->raw_init_verbs[i][j] != -1; j++)
++			snd_hda_codec_exec_verb(codec, spec->raw_init_verbs[i][j], NULL);
++
+ 	snd_hda_gen_init(codec);
+ 	if (!spec->dynamic_eapd)
+ 		cx_auto_turn_eapd(codec, spec->num_eapds, spec->eapds, true);
+-- 
+2.31.1
+

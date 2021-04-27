@@ -1,0 +1,137 @@
+From 4e5dd9110ef42602178a24ff1a57531beecc4b12 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 030/131] MIPS: Loongson: Add the multifunction keys (Fnkey)
+ support.
+
+1, Add special function keys keycode to keycode mapping table.
+   Fn+F2: DisplaySwitch, keycode 227.
+   Fn+F5: BrightnessUp, keycode 225.
+   Fn+F6: BrightnessDown, keycode 224.
+2, Fixup some special keys (Fn+F2, Fn+F5, Fn+F6) on A1201 laptop:
+   do not generate release events issue.
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/input/keyboard/Kconfig      | 11 ++++++++++
+ drivers/input/keyboard/atkbd.c      | 21 +++++++++++++++++--
+ drivers/input/keyboard/lmps2atkbd.h | 32 +++++++++++++++++++++++++++++
+ 3 files changed, 62 insertions(+), 2 deletions(-)
+ create mode 100644 drivers/input/keyboard/lmps2atkbd.h
+
+diff --git a/drivers/input/keyboard/Kconfig b/drivers/input/keyboard/Kconfig
+index 8911bc2ec42a..0bce091cbbdf 100644
+--- a/drivers/input/keyboard/Kconfig
++++ b/drivers/input/keyboard/Kconfig
+@@ -156,6 +156,17 @@ config KEYBOARD_ATKBD_RDI_KEYCODES
+ 	  right-hand column will be interpreted as the key shown in the
+ 	  left-hand column.
+ 
++config KEYBOARD_ATKBD_LEMOTE_KEYCODES
++	bool "Use Lemote laptop (A1201) keyboard scancodes"
++	depends on MACH_LOONGSON && KEYBOARD_ATKBD
++	default y
++	help
++	  Say Y here if you want to use an AT or PS/2 keyboard, and your
++	  keyboard uses keycodes that are specific to Lemote laptop (A1201)
++	  keyboards.
++
++	  Say N if you use a standard keyboard.
++
+ config KEYBOARD_QT1050
+ 	tristate "Microchip AT42QT1050 Touch Sensor Chip"
+ 	depends on I2C
+diff --git a/drivers/input/keyboard/atkbd.c b/drivers/input/keyboard/atkbd.c
+index 7e3eae54c192..82ed22bfbff5 100644
+--- a/drivers/input/keyboard/atkbd.c
++++ b/drivers/input/keyboard/atkbd.c
+@@ -72,7 +72,13 @@ MODULE_PARM_DESC(terminal, "Enable break codes on an IBM Terminal keyboard conne
+ 
+ static const unsigned short atkbd_set2_keycode[ATKBD_KEYMAP_SIZE] = {
+ 
+-#ifdef CONFIG_KEYBOARD_ATKBD_HP_KEYCODES
++#if defined(CONFIG_KEYBOARD_ATKBD_LEMOTE_KEYCODES)
++
++/* XXX: need a more general approach */
++
++#include "lmps2atkbd.h"	/* include the keyboard scancodes */
++
++#elif defined(CONFIG_KEYBOARD_ATKBD_HP_KEYCODES)
+ 
+ /* XXX: need a more general approach */
+ 
+@@ -351,7 +357,7 @@ static unsigned int atkbd_compat_scancode(struct atkbd *atkbd, unsigned int code
+ 	if (atkbd->set == 3) {
+ 		if (atkbd->emul == 1)
+ 			code |= 0x100;
+-        } else {
++	} else {
+ 		code = (code & 0x7f) | ((code & 0x80) << 1);
+ 		if (atkbd->emul == 1)
+ 			code |= 0x80;
+@@ -926,6 +932,14 @@ static void atkbd_apply_forced_release_keylist(struct atkbd* atkbd,
+ 			__set_bit(keys[i], atkbd->force_release_mask);
+ }
+ 
++/*
++ * Most special keys (Fn+F?) on LS2GQ laptops do not generate release
++ * events so we have to do it ourselves.
++ */
++static unsigned int atkbd_lemote_laptop_forced_release_keys[] = {
++	0x61, 0x6F, 0x76, -1U
++};
++
+ /*
+  * Most special keys (Fn+F?) on Dell laptops do not generate release
+  * events so we have to do it ourselves.
+@@ -1807,6 +1821,9 @@ static int __init atkbd_init(void)
+ {
+ 	dmi_check_system(atkbd_dmi_quirk_table);
+ 
++	atkbd_platform_fixup = atkbd_apply_forced_release_keylist;
++	atkbd_platform_fixup_data = atkbd_lemote_laptop_forced_release_keys;
++
+ 	return serio_register_driver(&atkbd_drv);
+ }
+ 
+diff --git a/drivers/input/keyboard/lmps2atkbd.h b/drivers/input/keyboard/lmps2atkbd.h
+new file mode 100644
+index 000000000000..95d4ac5365c0
+--- /dev/null
++++ b/drivers/input/keyboard/lmps2atkbd.h
+@@ -0,0 +1,32 @@
++/*
++ * drivers/input/keyboard/lmps2atkbd.h
++ *
++ * Copyright (c) 2012 Huang Wei <huangw@lemote.com>
++ *
++ * Lemote PS/2 AT-compatible Keyboard, found in Lemote Laptops (A1201)
++ *
++ * This file is subject to the terms and conditions of the GNU General Public
++ * License.  See the file "COPYING" in the main directory of this archive
++ * for more details.
++ */
++
++/* These are offset for escaped keycodes: */
++	  0, 67, 65, 63, 61, 59, 60, 88,  0, 68, 66, 64, 62, 15, 41,117,
++	  0, 56, 42, 93, 29, 16,  2,  0,  0,  0, 44, 31, 30, 17,  3,  0,
++	  0, 46, 45, 32, 18,  5,  4, 95,  0, 57, 47, 33, 20, 19,  6,183,
++	  0, 49, 48, 35, 34, 21,  7,184,  0,  0, 50, 36, 22,  8,  9,185,
++	  0, 51, 37, 23, 24, 11, 10,  0,  0, 52, 53, 38, 39, 25, 12,225,
++	  0, 89, 40,  0, 26, 13,  0,  0, 58, 54, 28, 27,  0, 43, 85,224,
++	  0, 86, 91, 90, 92,  0, 14, 94,  0, 79,124, 75, 71,121,  0,227,
++	 82, 83, 80, 76, 77, 72,  1, 69, 87, 78, 81, 74, 55, 73, 70, 99,
++
++	  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
++	217,100,255,  0, 97,165,  0,  0,156,  0,  0,  0,  0,  0,  0,125,
++	173,114,  0,113,  0,  0,  0,126,128,  0,  0,140,  0,  0,  0,127,
++	159,  0,115,  0,164,  0,  0,116,158,  0,172,166,  0,  0,  0,142,
++	157,  0,  0,  0,  0,  0,  0,  0,155,  0, 98,  0,  0,163,  0,  0,
++	226,  0,  0,  0,  0,  0,  0,  0,  0,255, 96,  0,  0,  0,143,  0,
++	  0,  0,  0,  0,  0,  0,  0,  0,  0,107,  0,105,102,  0,  0,112,
++	110,111,108,112,106,103,  0,119,  0,118,109,  0, 99,104,119,  0,
++
++	  0,  0,  0, 65, 99,
+-- 
+2.31.1
+

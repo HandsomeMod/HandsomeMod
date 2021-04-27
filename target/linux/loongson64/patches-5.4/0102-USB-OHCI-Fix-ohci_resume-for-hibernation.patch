@@ -1,0 +1,41 @@
+From cb7e3d0a9d4f10a4ab05112783f66a30c212da8c Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Sat, 24 Nov 2018 15:28:13 +0800
+Subject: [PATCH 102/131] USB: OHCI: Fix ohci_resume() for hibernation
+
+During hibernation restore, some OHCI controllers (such as in AMD RS780
+and Loongson LS7A) may generate RHSC interrupt. Once RHSC interrupt
+occurs, it will be NOT really handled (just return IRQ_NOTMINE) by
+ohci_irq() because of OHCI_RH_HALTED at that time, until HCR command
+done.
+
+So we turn off MIE before OHCI reset to prevent from possible interrupt
+so that to reset safely. MIE will be enabled later in ohci_rh_resume(),
+and as a result this patch is also suitable for controllers without
+this trouble.
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+Signed-off-by: Jianmin Lv <lvjianmin@loongson.cn>
+---
+ drivers/usb/host/ohci-hcd.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/usb/host/ohci-hcd.c b/drivers/usb/host/ohci-hcd.c
+index 833f51282acc..86f00399bed5 100644
+--- a/drivers/usb/host/ohci-hcd.c
++++ b/drivers/usb/host/ohci-hcd.c
+@@ -1132,8 +1132,10 @@ int ohci_resume(struct usb_hcd *hcd, bool hibernated)
+ 	set_bit(HCD_FLAG_HW_ACCESSIBLE, &hcd->flags);
+ 
+ 	/* Make sure resume from hibernation re-enumerates everything */
+-	if (hibernated)
++	if (hibernated) {
++		ohci_writel(ohci, OHCI_INTR_MIE, &ohci->regs->intrdisable);
+ 		ohci_usb_reset(ohci);
++	}
+ 
+ 	/* See if the controller is already running or has been reset */
+ 	ohci->hc_control = ohci_readl(ohci, &ohci->regs->control);
+-- 
+2.31.1
+

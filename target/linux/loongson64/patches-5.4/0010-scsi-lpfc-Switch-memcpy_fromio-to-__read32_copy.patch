@@ -1,0 +1,40 @@
+From 412f79721518bd348de1ebf531233eb73c68229c Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Fri, 26 Jan 2018 17:02:59 +0800
+Subject: [PATCH 010/131] scsi: lpfc: Switch memcpy_fromio() to __read32_copy()
+
+In commit bc73905abf770192 ("[SCSI] lpfc 8.3.16: SLI Additions, updates,
+and code cleanup"), lpfc_memcpy_to_slim() have switched memcpy_toio() to
+__write32_copy() in order to prevent unaligned 64 bit copy. Recently, we
+found that lpfc_memcpy_from_slim() have similar issues, so let it switch
+memcpy_fromio() to __read32_copy().
+
+As maintainer says, it seems that we can hardly see a real "unaligned 64
+bit copy", but this patch is still useful. Because in our tests we found
+that lpfc doesn't support 128 bit access, but some optimized memcpy()
+use 128 bit access (at lease on Loongson).
+
+Cc: stable@vger.kernel.org
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/scsi/lpfc/lpfc_compat.h | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/scsi/lpfc/lpfc_compat.h b/drivers/scsi/lpfc/lpfc_compat.h
+index 43cf46a3a71f..0cd1e3c82d87 100644
+--- a/drivers/scsi/lpfc/lpfc_compat.h
++++ b/drivers/scsi/lpfc/lpfc_compat.h
+@@ -91,8 +91,8 @@ lpfc_memcpy_to_slim( void __iomem *dest, void *src, unsigned int bytes)
+ static inline void
+ lpfc_memcpy_from_slim( void *dest, void __iomem *src, unsigned int bytes)
+ {
+-	/* actually returns 1 byte past dest */
+-	memcpy_fromio( dest, src, bytes);
++	/* convert bytes in argument list to word count for copy function */
++	__ioread32_copy(dest, src, bytes / sizeof(uint32_t));
+ }
+ 
+ #endif	/* __BIG_ENDIAN */
+-- 
+2.31.1
+

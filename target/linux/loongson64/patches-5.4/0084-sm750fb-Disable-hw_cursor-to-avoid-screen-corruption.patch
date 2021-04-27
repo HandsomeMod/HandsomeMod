@@ -1,0 +1,35 @@
+From ea5d3af7fba49544c8f5e904c0d9165ac3cebd40 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 084/131] sm750fb: Disable hw_cursor to avoid screen corruption
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/staging/sm750fb/sm750.c | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/staging/sm750fb/sm750.c b/drivers/staging/sm750fb/sm750.c
+index ca85b67defb3..e1af189e802b 100644
+--- a/drivers/staging/sm750fb/sm750.c
++++ b/drivers/staging/sm750fb/sm750.c
+@@ -30,7 +30,7 @@
+  */
+ 
+ /* common var for all device */
+-static int g_hwcursor = 1;
++static int g_hwcursor;
+ static int g_noaccel;
+ static int g_nomtrr;
+ static const char *g_fbmode[] = {NULL, NULL};
+@@ -946,7 +946,7 @@ static void sm750fb_setup(struct sm750_dev *sm750_dev, char *src)
+ 	sm750_dev->initParm.resetMemory = 1;
+ 
+ 	/* defaultly turn g_hwcursor on for both view */
+-	g_hwcursor = 3;
++	g_hwcursor = 0;
+ 
+ 	if (!src || !*src) {
+ 		dev_warn(&sm750_dev->pdev->dev, "no specific g_option.\n");
+-- 
+2.31.1
+

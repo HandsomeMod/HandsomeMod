@@ -1,0 +1,53 @@
+From d6be82f1635e63a4fd83c7d0ac4a07a62993a486 Mon Sep 17 00:00:00 2001
+From: Nathan Chancellor <natechancellor@gmail.com>
+Date: Mon, 17 Feb 2020 14:11:49 -0700
+Subject: [PATCH 003/131] MIPS: vdso: Wrap -mexplicit-relocs in cc-option
+
+Clang does not support this option and errors out:
+
+clang-11: error: unknown argument: '-mexplicit-relocs'
+
+Clang does not appear to need this flag like GCC does because the jalr
+check that was added in commit 976c23af3ee5 ("mips: vdso: add build
+time check that no 'jalr t9' calls left") passes just fine with
+
+$ make ARCH=mips CC=clang CROSS_COMPILE=mipsel-linux-gnu- malta_defconfig arch/mips/vdso/
+
+even before commit d3f703c4359f ("mips: vdso: fix 'jalr t9' crash in
+vdso code").
+
+-mrelax-pic-calls has been supported since clang 9, which is the
+earliest version that could build a working MIPS kernel, and it is the
+default for clang so just leave it be.
+
+Fixes: d3f703c4359f ("mips: vdso: fix 'jalr t9' crash in vdso code")
+Link: https://github.com/ClangBuiltLinux/linux/issues/890
+Signed-off-by: Nathan Chancellor <natechancellor@gmail.com>
+Reviewed-by: Nick Desaulniers <ndesaulniers@google.com>
+Tested-by: Nick Desaulniers <ndesaulniers@google.com>
+Signed-off-by: Paul Burton <paulburton@kernel.org>
+Cc: Ralf Baechle <ralf@linux-mips.org>
+Cc: linux-mips@vger.kernel.org
+Cc: linux-kernel@vger.kernel.org
+Cc: clang-built-linux@googlegroups.com
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ arch/mips/vdso/Makefile | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/vdso/Makefile b/arch/mips/vdso/Makefile
+index 2a7a23390a51..215f44c276a8 100644
+--- a/arch/mips/vdso/Makefile
++++ b/arch/mips/vdso/Makefile
+@@ -29,7 +29,7 @@ endif
+ cflags-vdso := $(ccflags-vdso) \
+ 	$(filter -W%,$(filter-out -Wa$(comma)%,$(KBUILD_CFLAGS))) \
+ 	-O3 -g -fPIC -fno-strict-aliasing -fno-common -fno-builtin -G 0 \
+-	-mrelax-pic-calls -mexplicit-relocs \
++	-mrelax-pic-calls $(call cc-option, -mexplicit-relocs) \
+ 	-fno-stack-protector -fno-jump-tables -DDISABLE_BRANCH_PROFILING \
+ 	$(call cc-option, -fno-asynchronous-unwind-tables) \
+ 	$(call cc-option, -fno-stack-protector)
+-- 
+2.31.1
+

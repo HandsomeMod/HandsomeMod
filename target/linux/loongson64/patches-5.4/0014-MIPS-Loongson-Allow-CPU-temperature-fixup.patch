@@ -1,0 +1,100 @@
+From 74775b8d6584546931139372233a8e5b9b48be78 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 014/131] MIPS: Loongson: Allow CPU temperature fixup
+
+Allow other reference temperatures to fixup the original CPU
+temperatures (because some CPUs have invalid temperatures).
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/platform/mips/cpu_hwmon.c | 32 ++++++++++++++++++++++++++-----
+ 1 file changed, 27 insertions(+), 5 deletions(-)
+
+diff --git a/drivers/platform/mips/cpu_hwmon.c b/drivers/platform/mips/cpu_hwmon.c
+index 0d27cb7a9e3c..8982913d2931 100644
+--- a/drivers/platform/mips/cpu_hwmon.c
++++ b/drivers/platform/mips/cpu_hwmon.c
+@@ -13,6 +13,12 @@
+ 
+ static int csr_temp_enable = 0;
+ 
++/* Allow other reference temperatures to fixup the original cpu temperature */
++int __weak fixup_cpu_temp(int cpu, int cputemp)
++{
++	return cputemp;
++}
++
+ /*
+  * Loongson-3 series cpu has two sensors inside,
+  * each of them from 0 to 255,
+@@ -21,6 +27,7 @@ static int csr_temp_enable = 0;
+  */
+ int loongson3_cpu_temp(int cpu)
+ {
++	int cputemp;
+ 	u32 reg, prid_rev;
+ 
+ 	if (csr_temp_enable) {
+@@ -49,7 +56,8 @@ int loongson3_cpu_temp(int cpu)
+ 	}
+ 
+ out:
+-	return (int)reg * 1000;
++	cputemp = (int)reg * 1000;
++	return fixup_cpu_temp(cpu, cputemp);
+ }
+ 
+ static int nr_packages;
+@@ -146,7 +154,9 @@ static void remove_sysfs_cputemp_files(struct kobject *kobj)
+ 		sysfs_remove_files(kobj, hwmon_cputemp[i]);
+ }
+ 
+-#define CPU_THERMAL_THRESHOLD 90000
++static int cpu_initial_threshold = 70000;
++static int cpu_thermal_threshold = 96000;
++
+ static struct delayed_work thermal_work;
+ 
+ static void do_thermal_timer(struct work_struct *work)
+@@ -159,15 +169,17 @@ static void do_thermal_timer(struct work_struct *work)
+ 			temp_max = value;
+ 	}
+ 
+-	if (temp_max <= CPU_THERMAL_THRESHOLD)
++	if (temp_max <= cpu_thermal_threshold)
+ 		schedule_delayed_work(&thermal_work, msecs_to_jiffies(5000));
+-	else
++	else {
++		pr_emerg("Power off due to high CPU temp: %d\n", temp_max);
+ 		orderly_poweroff(true);
++	}
+ }
+ 
+ static int __init loongson_hwmon_init(void)
+ {
+-	int ret;
++	int i, ret, value, temp_max = 0;
+ 
+ 	pr_info("Loongson Hwmon Enter...\n");
+ 
+@@ -197,6 +209,16 @@ static int __init loongson_hwmon_init(void)
+ 		goto fail_create_sysfs_cputemp_files;
+ 	}
+ 
++	for (i=0; i<nr_packages; i++) {
++		value = loongson3_cpu_temp(i);
++		if (value > temp_max)
++			temp_max = value;
++	}
++
++	pr_info("Initial CPU temperature is %d (highest).\n", temp_max);
++	if (temp_max > cpu_initial_threshold)
++		cpu_thermal_threshold += temp_max - cpu_initial_threshold;
++
+ 	INIT_DEFERRABLE_WORK(&thermal_work, do_thermal_timer);
+ 	schedule_delayed_work(&thermal_work, msecs_to_jiffies(20000));
+ 
+-- 
+2.31.1
+

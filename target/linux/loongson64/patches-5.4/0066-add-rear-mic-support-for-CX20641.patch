@@ -1,0 +1,32 @@
+From 707a8872eb4966ae34f623330316630706dd1c53 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 066/131] add rear mic support for CX20641
+
+CX20641 Node1b's default config value should be 0x01A190F0 according to CX20641
+datesheet, but the true value is 0x018xxxxx, this cause PortC can't work as rear
+mic, so rewrite to default value
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ sound/pci/hda/patch_conexant.c | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/sound/pci/hda/patch_conexant.c b/sound/pci/hda/patch_conexant.c
+index 524f0fe2e2d7..c0d38aa768f9 100644
+--- a/sound/pci/hda/patch_conexant.c
++++ b/sound/pci/hda/patch_conexant.c
+@@ -1120,8 +1120,9 @@ static int patch_conexant_auto(struct hda_codec *codec)
+ 		snd_hda_pick_fixup(codec, cxt5051_fixup_models,
+ 				   cxt5051_fixups, cxt_fixups);
+ 		break;
+-	/* CX20631 node1b's default value is not same as datasheet, cause rear mic not work */
++	/* CX20631/CX20641 node1b's default value is not same as datasheet, cause rear mic not work */
+ 	case 0x14f15097:
++	case 0x14f150a1:
+ 		snd_hda_codec_set_pincfg(codec, 0x1b, 0x01a190f0);
+ 		codec->pin_amp_workaround = 1;
+ 		snd_hda_pick_fixup(codec, cxt5066_fixup_models,
+-- 
+2.31.1
+

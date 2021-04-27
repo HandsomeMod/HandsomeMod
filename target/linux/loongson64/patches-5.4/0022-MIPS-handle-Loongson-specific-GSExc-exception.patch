@@ -1,0 +1,198 @@
+From f81c6a7877408b805782d2657acc2951f3133ce8 Mon Sep 17 00:00:00 2001
+From: WANG Xuerui <git@xen0n.name>
+Date: Wed, 29 Jul 2020 21:14:17 +0800
+Subject: [PATCH 022/131] MIPS: handle Loongson-specific GSExc exception
+
+Newer Loongson cores (Loongson-3A R2 and newer) use the
+implementation-dependent ExcCode 16 to signal Loongson-specific
+exceptions. The extended cause is put in the non-standard CP0.Diag1
+register which is CP0 Register 22 Select 1, called GSCause in Loongson
+manuals. Inside is an exception code bitfield called GSExcCode, only
+codes 0 to 6 inclusive are documented (so far, in the Loongson 3A3000
+User Manual, Volume 2).
+
+During experiments, it was found that some undocumented unprivileged
+instructions can trigger the also-undocumented GSExcCode 8 on Loongson
+3A4000. Processor state is not corrupted, but we cannot continue without
+further knowledge, and Loongson is not providing that information as of
+this writing. So we send SIGILL on seeing this exception code to thwart
+easy local DoS attacks.
+
+Other exception codes are made fatal, partly because of insufficient
+knowledge, also partly because they are not as easily reproduced. None
+of them are encountered in the wild with upstream kernels and userspace
+so far.
+
+Some older cores (Loongson-3A1000 and Loongson-3B1500) have ExcCode 16
+too, but the semantic is equivalent to GSExcCode 0. Because the
+respective manuals did not mention the CP0.Diag1 register or its read
+behavior, these cores are not covered in this patch, as MFC0 from
+non-existent CP0 registers is UNDEFINED according to the MIPS
+architecture spec.
+
+Reviewed-by: Huacai Chen <chenhc@lemote.com>
+Signed-off-by: WANG Xuerui <git@xen0n.name>
+Cc: Huacai Chen <chenhc@lemote.com>
+Cc: Jiaxun Yang <jiaxun.yang@flygoat.com>
+Cc: Tiezhu Yang <yangtiezhu@loongson.cn>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ arch/mips/include/asm/cpu-features.h |  4 ++++
+ arch/mips/include/asm/cpu.h          |  1 +
+ arch/mips/include/asm/mipsregs.h     |  3 +++
+ arch/mips/kernel/cpu-probe.c         |  3 +++
+ arch/mips/kernel/genex.S             | 14 +++++++++++
+ arch/mips/kernel/traps.c             | 35 ++++++++++++++++++++++++++++
+ 6 files changed, 60 insertions(+)
+
+diff --git a/arch/mips/include/asm/cpu-features.h b/arch/mips/include/asm/cpu-features.h
+index 7737b0e570fc..a6ce5e1718a5 100644
+--- a/arch/mips/include/asm/cpu-features.h
++++ b/arch/mips/include/asm/cpu-features.h
+@@ -561,6 +561,10 @@
+ # define cpu_has_ftlbparex	__opt(MIPS_CPU_FTLBPAREX)
+ #endif
+ 
++#ifndef cpu_has_gsexcex
++# define cpu_has_gsexcex	__opt(MIPS_CPU_GSEXCEX)
++#endif
++
+ #ifdef CONFIG_SMP
+ /*
+  * Some systems share FTLB RAMs between threads within a core (siblings in
+diff --git a/arch/mips/include/asm/cpu.h b/arch/mips/include/asm/cpu.h
+index de70b9a04d1f..530e42d872a6 100644
+--- a/arch/mips/include/asm/cpu.h
++++ b/arch/mips/include/asm/cpu.h
+@@ -417,6 +417,7 @@ enum cpu_type_enum {
+ #define MIPS_CPU_MMID		BIT_ULL(57)	/* CPU supports MemoryMapIDs */
+ #define MIPS_CPU_CONST_TIMER	BIT_ULL(58)	/* CPU has constant timer */
+ #define MIPS_CPU_FTLBPAREX	BIT_ULL(59)	/* CPU has FTLB parity exception */
++#define MIPS_CPU_GSEXCEX	BIT_ULL(60)	/* CPU has GSExc exception */
+ 
+ /*
+  * CPU ASE encodings
+diff --git a/arch/mips/include/asm/mipsregs.h b/arch/mips/include/asm/mipsregs.h
+index 35077eaca86c..8c0a161af4f2 100644
+--- a/arch/mips/include/asm/mipsregs.h
++++ b/arch/mips/include/asm/mipsregs.h
+@@ -473,6 +473,9 @@
+ /* Implementation specific trap codes used by MIPS cores */
+ #define MIPS_EXCCODE_TLBPAR	16	/* TLB parity error exception */
+ 
++/* Implementation specific trap codes used by Loongson cores */
++#define LOONGSON_EXCCODE_GSEXC	16	/* Loongson-specific exception */
++
+ /*
+  * Bits in the coprocessor 0 config register.
+  */
+diff --git a/arch/mips/kernel/cpu-probe.c b/arch/mips/kernel/cpu-probe.c
+index 2dec2feba765..aec485394a6d 100644
+--- a/arch/mips/kernel/cpu-probe.c
++++ b/arch/mips/kernel/cpu-probe.c
+@@ -1987,6 +1987,9 @@ static inline void cpu_probe_loongson(struct cpuinfo_mips *c, unsigned int cpu)
+ 		panic("Unknown Loongson Processor ID!");
+ 		break;
+ 	}
++
++	/* All Loongson processors covered here define ExcCode 16 as GSExc. */
++	c->options |= MIPS_CPU_GSEXCEX;
+ }
+ 
+ static inline void cpu_probe_ingenic(struct cpuinfo_mips *c, unsigned int cpu)
+diff --git a/arch/mips/kernel/genex.S b/arch/mips/kernel/genex.S
+index 9c5f8a5d097f..354ee7c6748a 100644
+--- a/arch/mips/kernel/genex.S
++++ b/arch/mips/kernel/genex.S
+@@ -496,6 +496,19 @@ NESTED(nmi_handler, PT_SIZE, sp)
+ 	KMODE
+ 	.endm
+ 
++	.macro __build_clear_gsexc
++	.set	push
++	/*
++	 * We need to specify a selector to access the CP0.Diag1 (GSCause)
++	 * register. All GSExc-equipped processors have MIPS32.
++	 */
++	.set	mips32
++	mfc0	a1, CP0_DIAGNOSTIC1
++	.set	pop
++	TRACE_IRQS_ON
++	STI
++	.endm
++
+ 	.macro	__BUILD_silent exception
+ 	.endm
+ 
+@@ -554,6 +567,7 @@ NESTED(nmi_handler, PT_SIZE, sp)
+ 	BUILD_HANDLER fpe fpe fpe silent		/* #15 */
+ #endif
+ 	BUILD_HANDLER ftlb ftlb none silent		/* #16 */
++	BUILD_HANDLER gsexc gsexc gsexc silent		/* #16 */
+ 	BUILD_HANDLER msa msa sti silent		/* #21 */
+ 	BUILD_HANDLER mdmx mdmx sti silent		/* #22 */
+ #ifdef	CONFIG_HARDWARE_WATCHPOINTS
+diff --git a/arch/mips/kernel/traps.c b/arch/mips/kernel/traps.c
+index 06a36ff6d665..b5aeea7c430b 100644
+--- a/arch/mips/kernel/traps.c
++++ b/arch/mips/kernel/traps.c
+@@ -89,6 +89,7 @@ extern asmlinkage void handle_tr(void);
+ extern asmlinkage void handle_msa_fpe(void);
+ extern asmlinkage void handle_fpe(void);
+ extern asmlinkage void handle_ftlb(void);
++extern asmlinkage void handle_gsexc(void);
+ extern asmlinkage void handle_msa(void);
+ extern asmlinkage void handle_mdmx(void);
+ extern asmlinkage void handle_watch(void);
+@@ -1869,6 +1870,37 @@ asmlinkage void do_ftlb(void)
+ 	cache_parity_error();
+ }
+ 
++asmlinkage void do_gsexc(struct pt_regs *regs, u32 diag1)
++{
++	u32 exccode = (diag1 & LOONGSON_DIAG1_EXCCODE) >>
++			LOONGSON_DIAG1_EXCCODE_SHIFT;
++	enum ctx_state prev_state;
++
++	prev_state = exception_enter();
++
++	switch (exccode) {
++	case 0x08:
++		/* Undocumented exception, will trigger on certain
++		 * also-undocumented instructions accessible from userspace.
++		 * Processor state is not otherwise corrupted, but currently
++		 * we don't know how to proceed. Maybe there is some
++		 * undocumented control flag to enable the instructions?
++		 */
++		force_sig(SIGILL);
++		break;
++
++	default:
++		/* None of the other exceptions, documented or not, have
++		 * further details given; none are encountered in the wild
++		 * either. Panic in case some of them turn out to be fatal.
++		 */
++		show_regs(regs);
++		panic("Unhandled Loongson exception - GSCause = %08x", diag1);
++	}
++
++	exception_exit(prev_state);
++}
++
+ /*
+  * SDBBP EJTAG debug exception handler.
+  * We skip the instruction and return to the next instruction.
+@@ -2427,6 +2459,9 @@ void __init trap_init(void)
+ 	if (cpu_has_ftlbparex)
+ 		set_except_vector(MIPS_EXCCODE_TLBPAR, handle_ftlb);
+ 
++	if (cpu_has_gsexcex)
++		set_except_vector(LOONGSON_EXCCODE_GSEXC, handle_gsexc);
++
+ 	if (cpu_has_rixiex) {
+ 		set_except_vector(EXCCODE_TLBRI, tlb_do_page_fault_0);
+ 		set_except_vector(EXCCODE_TLBXI, tlb_do_page_fault_0);
+-- 
+2.31.1
+

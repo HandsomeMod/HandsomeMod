@@ -1,0 +1,47 @@
+From 7f87f4fc18f0b67c451d14aba19a16aa9bd6c2c1 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 069/131] Retry to configure USB device if needed
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/usb/core/message.c | 9 ++++++++-
+ 1 file changed, 8 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/usb/core/message.c b/drivers/usb/core/message.c
+index 041c68ea329f..53ebc947a14b 100644
+--- a/drivers/usb/core/message.c
++++ b/drivers/usb/core/message.c
+@@ -1808,7 +1808,7 @@ int usb_set_configuration(struct usb_device *dev, int configuration)
+ 	struct usb_host_config *cp = NULL;
+ 	struct usb_interface **new_interfaces = NULL;
+ 	struct usb_hcd *hcd = bus_to_hcd(dev->bus);
+-	int n, nintf;
++	int n, nintf, retried = 0;
+ 
+ 	if (dev->authorized == 0 || configuration == -1)
+ 		configuration = 0;
+@@ -1961,6 +1961,7 @@ int usb_set_configuration(struct usb_device *dev, int configuration)
+ 	}
+ 	kfree(new_interfaces);
+ 
++retry:
+ 	ret = usb_control_msg(dev, usb_sndctrlpipe(dev, 0),
+ 			      USB_REQ_SET_CONFIGURATION, 0, configuration, 0,
+ 			      NULL, 0, USB_CTRL_SET_TIMEOUT);
+@@ -1969,6 +1970,12 @@ int usb_set_configuration(struct usb_device *dev, int configuration)
+ 		 * All the old state is gone, so what else can we do?
+ 		 * The device is probably useless now anyway.
+ 		 */
++		if (!retried) {
++			retried = 1;
++			printk("Retry to configure %d-%s!\n", dev->bus->busnum, dev->devpath);
++			goto retry;
++		}
++
+ 		usb_hcd_alloc_bandwidth(dev, NULL, NULL, NULL);
+ 		for (i = 0; i < nintf; ++i) {
+ 			usb_disable_interface(dev, cp->interface[i], true);
+-- 
+2.31.1
+

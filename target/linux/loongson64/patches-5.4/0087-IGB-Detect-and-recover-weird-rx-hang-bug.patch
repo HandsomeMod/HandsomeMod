@@ -1,0 +1,126 @@
+From dc38394981656f234a5f354b1665fd7e20cd9516 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 087/131] IGB: Detect and recover weird rx hang bug
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/net/ethernet/intel/igb/igb.h      |  7 +++
+ drivers/net/ethernet/intel/igb/igb_main.c | 69 +++++++++++++++++++++++
+ 2 files changed, 76 insertions(+)
+
+diff --git a/drivers/net/ethernet/intel/igb/igb.h b/drivers/net/ethernet/intel/igb/igb.h
+index ca54e268d157..771883517ba2 100644
+--- a/drivers/net/ethernet/intel/igb/igb.h
++++ b/drivers/net/ethernet/intel/igb/igb.h
+@@ -305,6 +305,13 @@ struct igb_q_vector {
+ 	struct rcu_head rcu;	/* to avoid race with update stats on free */
+ 	char name[IFNAMSIZ + 9];
+ 
++	u32 rdh_old;
++	u32 rdt_old;
++	u32 rx_ntu_old;
++	u32 rx_ntc_old;
++	int weird_hang_count;
++	bool weird_hang_recheck;
++
+ 	/* for dynamic allocation of rings associated with this q_vector */
+ 	struct igb_ring ring[0] ____cacheline_internodealigned_in_smp;
+ };
+diff --git a/drivers/net/ethernet/intel/igb/igb_main.c b/drivers/net/ethernet/intel/igb/igb_main.c
+index 3e41b20ed8eb..4dcf8150dd65 100644
+--- a/drivers/net/ethernet/intel/igb/igb_main.c
++++ b/drivers/net/ethernet/intel/igb/igb_main.c
+@@ -3967,6 +3967,15 @@ static int __igb_open(struct net_device *netdev, bool resuming)
+ 	hw->mac.get_link_status = 1;
+ 	schedule_work(&adapter->watchdog_task);
+ 
++	for (i = 0; i < adapter->num_q_vectors; i++) {
++		adapter->q_vector[i]->rdh_old = 0;
++		adapter->q_vector[i]->rdt_old = 0;
++		adapter->q_vector[i]->rx_ntu_old = 0;
++		adapter->q_vector[i]->rx_ntc_old = 0;
++		adapter->q_vector[i]->weird_hang_count = 0;
++		adapter->q_vector[i]->weird_hang_recheck = false;
++	}
++
+ 	return 0;
+ 
+ err_set_queues:
+@@ -8309,6 +8318,64 @@ static void igb_put_rx_buffer(struct igb_ring *rx_ring,
+ 	rx_buffer->page = NULL;
+ }
+ 
++static void igb_check_weird_hang(struct igb_ring *rx_ring)
++{
++	u32 i, rdh, rdt, staterr;
++	union e1000_adv_rx_desc *rx_desc, *next_rxd;
++	struct igb_q_vector *q_vector = rx_ring->q_vector;
++	struct e1000_hw *hw = &q_vector->adapter->hw;
++
++	if (q_vector->adapter->link_speed != SPEED_1000)
++		return;
++
++	i = rx_ring->next_to_clean;
++	rdh = rd32(E1000_RDH(rx_ring->reg_idx));
++	rdt = rd32(E1000_RDT(rx_ring->reg_idx));
++	rx_desc = IGB_RX_DESC(rx_ring, i);
++	staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
++	next_rxd = IGB_RX_DESC(rx_ring, (i+1)%rx_ring->count);
++
++	/* Weird Hung */
++	if (igb_desc_unused(rx_ring)==0 && rdh==rdt && !igb_test_staterr(rx_desc, E1000_RXD_STAT_DD)) {
++		if (!q_vector->weird_hang_recheck) { /* Check Twice*/
++			q_vector->weird_hang_recheck = true;
++			q_vector->rdh_old = rdh;
++			q_vector->rdt_old = rdt;
++			q_vector->rx_ntu_old = rx_ring->next_to_use;
++			q_vector->rx_ntc_old = rx_ring->next_to_clean;
++		}
++		else {
++			q_vector->weird_hang_recheck = false;
++			if (rdh==q_vector->rdh_old && rdt==q_vector->rdt_old
++				&& rx_ring->next_to_use==q_vector->rx_ntu_old
++				&& rx_ring->next_to_clean==q_vector->rx_ntc_old) {
++				q_vector->weird_hang_count++;
++				dev_err(rx_ring->dev,
++				      "Detected the %dth Weird Rx Hang:\n"
++				      "  RDH                  <%x>\n"
++				      "  RDT                  <%x>\n"
++				      "  next_to_use          <%x>\n"
++				      "  next_to_clean        <%x>\n"
++				      "  rx_desc status       <%x>\n",
++				      q_vector->weird_hang_count,
++				      rdh, rdt,
++				      rx_ring->next_to_use,
++				      rx_ring->next_to_clean,
++				      staterr);
++
++				if (igb_test_staterr(next_rxd, E1000_RXD_STAT_DD)) { /* Really hang, light recover */
++					dev_err(rx_ring->dev, "Recover by skipping rx_desc...\n");
++					rx_ring->next_to_clean = (i+1) % rx_ring->count;
++				}
++				else {                                  /* Really hang, heavy recover */
++					dev_err(rx_ring->dev, "Recover by resetting device...\n");
++					schedule_work(&q_vector->adapter->reset_task);
++				}
++			}
++		}
++	}
++}
++
+ static int igb_clean_rx_irq(struct igb_q_vector *q_vector, const int budget)
+ {
+ 	struct igb_ring *rx_ring = q_vector->rx.ring;
+@@ -8316,6 +8383,8 @@ static int igb_clean_rx_irq(struct igb_q_vector *q_vector, const int budget)
+ 	unsigned int total_bytes = 0, total_packets = 0;
+ 	u16 cleaned_count = igb_desc_unused(rx_ring);
+ 
++	igb_check_weird_hang(rx_ring);
++
+ 	while (likely(total_packets < budget)) {
+ 		union e1000_adv_rx_desc *rx_desc;
+ 		struct igb_rx_buffer *rx_buffer;
+-- 
+2.31.1
+

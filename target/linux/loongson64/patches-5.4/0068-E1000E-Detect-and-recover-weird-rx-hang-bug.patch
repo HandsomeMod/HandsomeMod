@@ -1,0 +1,167 @@
+From 3b204be41b10f039fc3418e9cfbe0b38a0e92610 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 068/131] E1000E: Detect and recover weird rx hang bug
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+---
+ drivers/net/ethernet/intel/e1000e/e1000.h  |  6 ++
+ drivers/net/ethernet/intel/e1000e/netdev.c | 76 ++++++++++++++++++++++
+ 2 files changed, 82 insertions(+)
+
+diff --git a/drivers/net/ethernet/intel/e1000e/e1000.h b/drivers/net/ethernet/intel/e1000e/e1000.h
+index 944abd5eae11..f89a0375c238 100644
+--- a/drivers/net/ethernet/intel/e1000e/e1000.h
++++ b/drivers/net/ethernet/intel/e1000e/e1000.h
+@@ -224,6 +224,7 @@ struct e1000_adapter {
+ 
+ 	bool detect_tx_hung;
+ 	bool tx_hang_recheck;
++	bool rx_hang_recheck;
+ 	u8 tx_timeout_factor;
+ 
+ 	u32 tx_int_delay;
+@@ -266,6 +267,10 @@ struct e1000_adapter {
+ 	u32 alloc_rx_buff_failed;
+ 	u32 rx_dma_failed;
+ 	u32 rx_hwtstamp_cleared;
++	u32 rdh_old;
++	u32 rdt_old;
++	u32 rx_ntu_old;
++	u32 rx_ntc_old;
+ 
+ 	unsigned int rx_ps_pages;
+ 	u16 rx_ps_bsize0;
+@@ -311,6 +316,7 @@ struct e1000_adapter {
+ 	struct work_struct print_hang_task;
+ 
+ 	int phy_hang_count;
++	int weird_hang_count;
+ 
+ 	u16 tx_ring_count;
+ 	u16 rx_ring_count;
+diff --git a/drivers/net/ethernet/intel/e1000e/netdev.c b/drivers/net/ethernet/intel/e1000e/netdev.c
+index 4cb05a31e66d..09245115a27e 100644
+--- a/drivers/net/ethernet/intel/e1000e/netdev.c
++++ b/drivers/net/ethernet/intel/e1000e/netdev.c
+@@ -635,6 +635,69 @@ static void e1000e_update_tdt_wa(struct e1000_ring *tx_ring, unsigned int i)
+ 	}
+ }
+ 
++static void e1000_check_82574_weird_hang(struct e1000_ring *rx_ring, bool ps)
++{
++	u32 i, rdh, rdt, staterr, next_staterr;
++	struct e1000_adapter *adapter = rx_ring->adapter;
++
++	if (adapter->link_speed != SPEED_1000)
++		return;
++
++	i = rx_ring->next_to_clean;
++	rdh = readl(rx_ring->head);
++	rdt = readl(rx_ring->tail);
++	if (ps) {
++		union e1000_rx_desc_packet_split *rx_desc = E1000_RX_DESC_PS(*rx_ring, i);
++		union e1000_rx_desc_packet_split *next_rxd = E1000_RX_DESC_PS(*rx_ring, (i+1)%rx_ring->count);
++		staterr = le32_to_cpu(rx_desc->wb.middle.status_error);
++		next_staterr = le32_to_cpu(next_rxd->wb.middle.status_error);
++	}
++	else {
++		union e1000_rx_desc_extended *rx_desc = E1000_RX_DESC_EXT(*rx_ring, i);
++		union e1000_rx_desc_extended *next_rxd = E1000_RX_DESC_EXT(*rx_ring, (i+1)%rx_ring->count);
++		staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
++		next_staterr = le32_to_cpu(next_rxd->wb.upper.status_error);
++	}
++
++	/* Rx Hung */
++	if (e1000_desc_unused(rx_ring)==0 && rdh==rdt && !(staterr & E1000_RXD_STAT_DD)) {
++		if (!adapter->rx_hang_recheck) { /* Check Twice*/
++			adapter->rx_hang_recheck = true;
++			adapter->rdh_old = rdh;
++			adapter->rdt_old = rdt;
++			adapter->rx_ntu_old = rx_ring->next_to_use;
++			adapter->rx_ntc_old = rx_ring->next_to_clean;
++		}
++		else {
++			adapter->rx_hang_recheck = false;
++			if (rdh==adapter->rdh_old && rdt==adapter->rdt_old
++				&& rx_ring->next_to_use==adapter->rx_ntu_old
++				&& rx_ring->next_to_clean==adapter->rx_ntc_old) {
++				adapter->weird_hang_count++;
++				e_err("Detected the %dth Weird Rx Hang:\n"
++				      "  RDH                  <%x>\n"
++				      "  RDT                  <%x>\n"
++				      "  next_to_use          <%x>\n"
++				      "  next_to_clean        <%x>\n"
++				      "  rx_desc status       <%x>\n",
++				      adapter->weird_hang_count,
++				      rdh, rdt,
++				      rx_ring->next_to_use,
++				      rx_ring->next_to_clean,
++				      staterr);
++
++				if (next_staterr & E1000_RXD_STAT_DD) { /* Really hang, light recover */
++					e_err("Recover by skipping rx_desc...\n");
++					rx_ring->next_to_clean = (i+1) % rx_ring->count;
++				}
++				else {                                  /* Really hang, heavy recover */
++					e_err("Recover by resetting device...\n");
++					schedule_work(&adapter->reset_task);
++				}
++			}
++		}
++	}
++}
+ /**
+  * e1000_alloc_rx_buffers - Replace used receive buffers
+  * @rx_ring: Rx descriptor ring
+@@ -917,6 +980,8 @@ static bool e1000_clean_rx_irq(struct e1000_ring *rx_ring, int *work_done,
+ 	bool cleaned = false;
+ 	unsigned int total_rx_bytes = 0, total_rx_packets = 0;
+ 
++	e1000_check_82574_weird_hang(rx_ring, false);
++
+ 	i = rx_ring->next_to_clean;
+ 	rx_desc = E1000_RX_DESC_EXT(*rx_ring, i);
+ 	staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
+@@ -1313,6 +1378,8 @@ static bool e1000_clean_rx_irq_ps(struct e1000_ring *rx_ring, int *work_done,
+ 	bool cleaned = false;
+ 	unsigned int total_rx_bytes = 0, total_rx_packets = 0;
+ 
++	e1000_check_82574_weird_hang(rx_ring, true);
++
+ 	i = rx_ring->next_to_clean;
+ 	rx_desc = E1000_RX_DESC_PS(*rx_ring, i);
+ 	staterr = le32_to_cpu(rx_desc->wb.middle.status_error);
+@@ -1516,6 +1583,8 @@ static bool e1000_clean_jumbo_rx_irq(struct e1000_ring *rx_ring, int *work_done,
+ 	unsigned int total_rx_bytes = 0, total_rx_packets = 0;
+ 	struct skb_shared_info *shinfo;
+ 
++	e1000_check_82574_weird_hang(rx_ring, false);
++
+ 	i = rx_ring->next_to_clean;
+ 	rx_desc = E1000_RX_DESC_EXT(*rx_ring, i);
+ 	staterr = le32_to_cpu(rx_desc->wb.upper.status_error);
+@@ -4665,6 +4734,7 @@ int e1000e_open(struct net_device *netdev)
+ 	e1000_irq_enable(adapter);
+ 
+ 	adapter->tx_hang_recheck = false;
++	adapter->rx_hang_recheck = false;
+ 
+ 	hw->mac.get_link_status = true;
+ 	pm_runtime_put(&pdev->dev);
+@@ -7375,6 +7445,12 @@ static int e1000_probe(struct pci_dev *pdev, const struct pci_device_id *ent)
+ 	if (pci_dev_run_wake(pdev) && hw->mac.type < e1000_pch_cnp)
+ 		pm_runtime_put_noidle(&pdev->dev);
+ 
++	adapter->rdh_old = 0;
++	adapter->rdt_old = 0;
++	adapter->rx_ntu_old = 0;
++	adapter->rx_ntc_old = 0;
++	adapter->weird_hang_count = 0;
++
+ 	return 0;
+ 
+ err_register:
+-- 
+2.31.1
+

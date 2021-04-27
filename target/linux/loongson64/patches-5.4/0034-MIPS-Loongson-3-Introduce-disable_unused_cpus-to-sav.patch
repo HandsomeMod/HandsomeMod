@@ -1,0 +1,93 @@
+From cb30c63a3815262d64954215c03091fde4657860 Mon Sep 17 00:00:00 2001
+From: Huacai Chen <chenhc@lemote.com>
+Date: Thu, 1 Dec 2016 09:51:35 +0800
+Subject: [PATCH 034/131] MIPS: Loongson 3: Introduce disable_unused_cpus() to
+ save power.
+
+When use maxcpus=n to limit the number of cores, the initial offlined
+cores are running a infinite loop in firmware and their clocks are not
+disabled. For power saving, we take the unused cores up and then down
+at boot time. When resume from STR, we do this the same.
+
+Signed-off-by: Huacai Chen <chenhc@lemote.com>
+Signed-off-by: Hongliang Tao <taohl@lemote.com>
+Signed-off-by: Hua Yan <yanh@lemote.com>
+---
+ .../include/asm/mach-loongson64/loongson.h     |  6 ++++++
+ arch/mips/loongson64/common/pm.c               |  8 ++++++++
+ arch/mips/loongson64/loongson-3/smp.c          | 18 ++++++++++++++++++
+ 3 files changed, 32 insertions(+)
+
+diff --git a/arch/mips/include/asm/mach-loongson64/loongson.h b/arch/mips/include/asm/mach-loongson64/loongson.h
+index 159f87b8eecb..89f1d206534e 100644
+--- a/arch/mips/include/asm/mach-loongson64/loongson.h
++++ b/arch/mips/include/asm/mach-loongson64/loongson.h
+@@ -357,4 +357,10 @@ void mach_suspend(void);
+ void mach_resume(void);
+ void loongson_suspend_enter(void);
+ 
++#ifdef CONFIG_HOTPLUG_CPU
++extern int disable_unused_cpus(void);
++#else
++static inline int disable_unused_cpus(void) { return 0; }
++#endif
++
+ #endif /* __ASM_MACH_LOONGSON64_LOONGSON_H */
+diff --git a/arch/mips/loongson64/common/pm.c b/arch/mips/loongson64/common/pm.c
+index adab73efc877..0075a564f8d6 100644
+--- a/arch/mips/loongson64/common/pm.c
++++ b/arch/mips/loongson64/common/pm.c
+@@ -66,6 +66,13 @@ static int loongson_pm_begin(suspend_state_t state)
+ 	return 0;
+ }
+ 
++static void loongson_pm_wake(void)
++{
++#ifdef CONFIG_CPU_LOONGSON3
++	disable_unused_cpus();
++#endif
++}
++
+ static void loongson_pm_end(void)
+ {
+ #ifdef CONFIG_LOONGSON3_CPUAUTOPLUG
+@@ -110,6 +117,7 @@ static const struct platform_suspend_ops loongson_pm_ops = {
+ 	.valid	= loongson_pm_valid_state,
+ 	.begin	= loongson_pm_begin,
+ 	.enter	= loongson_pm_enter,
++	.wake	= loongson_pm_wake,
+ 	.end	= loongson_pm_end,
+ };
+ 
+diff --git a/arch/mips/loongson64/loongson-3/smp.c b/arch/mips/loongson64/loongson-3/smp.c
+index ba39c59d5806..92409dba87d1 100644
+--- a/arch/mips/loongson64/loongson-3/smp.c
++++ b/arch/mips/loongson64/loongson-3/smp.c
+@@ -812,6 +812,24 @@ static int register_loongson3_notifier(void)
+ }
+ early_initcall(register_loongson3_notifier);
+ 
++int disable_unused_cpus(void)
++{
++	int cpu;
++	struct cpumask tmp;
++
++	cpumask_complement(&tmp, cpu_online_mask);
++	cpumask_and(&tmp, &tmp, cpu_possible_mask);
++
++	for_each_cpu(cpu, &tmp)
++		cpu_up(cpu);
++
++	for_each_cpu(cpu, &tmp)
++		cpu_down(cpu);
++
++	return 0;
++}
++core_initcall(disable_unused_cpus);
++
+ #endif
+ 
+ const struct plat_smp_ops loongson3_smp_ops = {
+-- 
+2.31.1
+
