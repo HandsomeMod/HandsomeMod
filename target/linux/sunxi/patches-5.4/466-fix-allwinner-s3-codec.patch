@@ -1,0 +1,30 @@
+From 86a8b69875e9e025cf409915b5da440cd7a7160b Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Wed, 28 Apr 2021 15:30:39 +0800
+Subject: [PATCH] fix allwinner s3 codec
+
+---
+ sound/soc/sunxi/sun8i-codec-analog.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/sound/soc/sunxi/sun8i-codec-analog.c b/sound/soc/sunxi/sun8i-codec-analog.c
+index be872eefa..2280e2b98 100755
+--- a/sound/soc/sunxi/sun8i-codec-analog.c
++++ b/sound/soc/sunxi/sun8i-codec-analog.c
+@@ -729,8 +729,12 @@ static int sun8i_codec_analog_add_mixer(struct snd_soc_component *cmpnt,
+ }
+ 
+ static const struct sun8i_codec_analog_quirks sun8i_v3s_quirks = {
+-	.has_headphone	= true,
++	.has_headphone = true,
+ 	.has_hmic	= true,
++	.has_linein	= true,
++	.has_lineout	= true,
++	.has_mbias	= true,
++	.has_mic2	= true,
+ };
+ 
+ static int sun8i_codec_analog_cmpnt_probe(struct snd_soc_component *cmpnt)
+-- 
+2.31.1
+
