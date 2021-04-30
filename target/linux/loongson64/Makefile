@@ -14,8 +14,8 @@ FEATURES:=squashfs ext4 targz fpu display usbgadget gpio
 SUBTARGETS:=generic 
 MAINTAINER:=HandsomeYingyan<handosmeyingyan@gmali.com>
 
-KERNEL_PATCHVER:=5.4
-KERNEL_TESTING_PATCHVER:=5.4
+KERNEL_PATCHVER:=5.10
+KERNEL_TESTING_PATCHVER:=5.10
 KERNELNAME:=vmlinuz
 # vmlinuz is not in arch/mips/boot/
 IMAGES_DIR:=../../..

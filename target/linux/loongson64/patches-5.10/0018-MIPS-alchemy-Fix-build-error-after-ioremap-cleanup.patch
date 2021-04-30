@@ -1,0 +1,37 @@
+From 7a6659a59198acb5e9be050f42dbb1060efe7434 Mon Sep 17 00:00:00 2001
+From: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+Date: Mon, 20 Apr 2020 13:28:54 +0200
+Subject: [PATCH 18/81] MIPS: alchemy: Fix build error after ioremap cleanup
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+IOremap changes caused following build error:
+
+arch/mips/alchemy/common/setup.c:99:9: error: implicit declaration of function
++‘remap_pfn_range’; did you mean ‘io_remap_pfn_range’?
++[-Werror=implicit-function-declaration]
+
+Fixed my including linux/mm.h
+
+Fixes: d399157283fb ("MIPS: cleanup fixup_bigphys_addr handling")
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/alchemy/common/setup.c | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/mips/alchemy/common/setup.c b/arch/mips/alchemy/common/setup.c
+index a8cbc552bd..0f60efe048 100644
+--- a/arch/mips/alchemy/common/setup.c
++++ b/arch/mips/alchemy/common/setup.c
+@@ -27,6 +27,7 @@
+ 
+ #include <linux/init.h>
+ #include <linux/ioport.h>
++#include <linux/mm.h>
+ 
+ #include <asm/dma-coherence.h>
+ #include <asm/mipsregs.h>
+-- 
+2.31.1
+

@@ -1,0 +1,25 @@
+From d879029177a41bc5d5fdfecc6e9306d45ade0a40 Mon Sep 17 00:00:00 2001
+From: Peter <mbyzhang@outlook.com>
+Date: Sun, 20 Dec 2020 01:18:39 +0800
+Subject: [PATCH 78/81] configs: enable devicetree based probing for 8250 ports
+
+---
+ kernel/configs/debian.config | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/kernel/configs/debian.config b/kernel/configs/debian.config
+index 1582c9a3c2..ca14f01c0c 100644
+--- a/kernel/configs/debian.config
++++ b/kernel/configs/debian.config
+@@ -5185,7 +5185,7 @@ CONFIG_SERIAL_8250_HUB6=m
+ # CONFIG_SERIAL_8250_RT288X is not set
+ # CONFIG_SERIAL_8250_MID is not set
+ CONFIG_SERIAL_8250_MOXA=m
+-CONFIG_SERIAL_OF_PLATFORM=m
++#CONFIG_SERIAL_OF_PLATFORM=m
+ 
+ ##
+ ## file: drivers/uio/Kconfig
+-- 
+2.31.1
+

@@ -1,0 +1,250 @@
+From d257b8fe173a4b22ca32780a6e65b075a3b88301 Mon Sep 17 00:00:00 2001
+From: Christoph Hellwig <hch@lst.de>
+Date: Thu, 16 Apr 2020 17:00:10 +0200
+Subject: [PATCH 14/81] MIPS: move ioremap_prot und iounmap out of line
+
+Neither of these interfaces is anywhere near the fast path.  Move them
+out of line and avoid exposing implementation details to the drivers.
+
+Signed-off-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/include/asm/io.h | 86 ++------------------------------------
+ arch/mips/mm/Makefile      |  2 +-
+ arch/mips/mm/ioremap.c     | 45 ++++++++++----------
+ arch/mips/mm/ioremap64.c   | 23 ++++++++++
+ 4 files changed, 49 insertions(+), 107 deletions(-)
+ create mode 100644 arch/mips/mm/ioremap64.c
+
+diff --git a/arch/mips/include/asm/io.h b/arch/mips/include/asm/io.h
+index f007571e03..346fffd9e9 100644
+--- a/arch/mips/include/asm/io.h
++++ b/arch/mips/include/asm/io.h
+@@ -30,8 +30,6 @@
+ #include <asm/pgtable-bits.h>
+ #include <asm/processor.h>
+ #include <asm/string.h>
+-
+-#include <ioremap.h>
+ #include <mangle-port.h>
+ 
+ /*
+@@ -153,87 +151,9 @@ static inline void *isa_bus_to_virt(unsigned long address)
+  */
+ #define page_to_phys(page)	((dma_addr_t)page_to_pfn(page) << PAGE_SHIFT)
+ 
+-#ifdef CONFIG_64BIT
+-static inline void __iomem *ioremap_prot(phys_addr_t offset,
+-		unsigned long size, unsigned long prot_val)
+-{
+-	unsigned long flags = prot_val & _CACHE_MASK;
+-	u64 base = (flags == _CACHE_UNCACHED ? IO_BASE : UNCAC_BASE);
+-	void __iomem *addr;
+-
+-	addr = plat_ioremap(offset, size, flags);
+-	if (!addr)
+-		addr = (void __iomem *)(unsigned long)(base + offset);
+-	return addr;
+-}
+-
+-static inline void iounmap(const volatile void __iomem *addr)
+-{
+-	plat_iounmap(addr);
+-}
+-#else /* CONFIG_64BIT */
+-extern void __iomem * __ioremap(phys_addr_t offset, phys_addr_t size, unsigned long flags);
+-extern void __iounmap(const volatile void __iomem *addr);
+-
+-/*
+- * ioremap_prot     -   map bus memory into CPU space
+- * @offset:    bus address of the memory
+- * @size:      size of the resource to map
+-
+- * ioremap_prot gives the caller control over cache coherency attributes (CCA)
+- */
+-static inline void __iomem *ioremap_prot(phys_addr_t offset,
+-		unsigned long size, unsigned long prot_val)
+-{
+-	unsigned long flags = prot_val & _CACHE_MASK;
+-	void __iomem *addr = plat_ioremap(offset, size, flags);
+-
+-	if (addr)
+-		return addr;
+-
+-#define __IS_LOW512(addr) (!((phys_addr_t)(addr) & (phys_addr_t) ~0x1fffffffULL))
+-
+-	if (__builtin_constant_p(offset) &&
+-	    __builtin_constant_p(size) && __builtin_constant_p(flags)) {
+-		phys_addr_t phys_addr, last_addr;
+-
+-		phys_addr = fixup_bigphys_addr(offset, size);
+-
+-		/* Don't allow wraparound or zero size. */
+-		last_addr = phys_addr + size - 1;
+-		if (!size || last_addr < phys_addr)
+-			return NULL;
+-
+-		/*
+-		 * Map uncached objects in the low 512MB of address
+-		 * space using KSEG1.
+-		 */
+-		if (__IS_LOW512(phys_addr) && __IS_LOW512(last_addr) &&
+-		    flags == _CACHE_UNCACHED)
+-			return (void __iomem *)
+-				(unsigned long)CKSEG1ADDR(phys_addr);
+-	}
+-
+-	return __ioremap(offset, size, flags);
+-
+-#undef __IS_LOW512
+-}
+-
+-static inline void iounmap(const volatile void __iomem *addr)
+-{
+-	if (plat_iounmap(addr))
+-		return;
+-
+-#define __IS_KSEG1(addr) (((unsigned long)(addr) & ~0x1fffffffUL) == CKSEG1)
+-
+-	if (__builtin_constant_p(addr) && __IS_KSEG1(addr))
+-		return;
+-
+-	__iounmap(addr);
+-
+-#undef __IS_KSEG1
+-}
+-#endif /* !CONFIG_64BIT */
++void __iomem *ioremap_prot(phys_addr_t offset, unsigned long size,
++		unsigned long prot_val);
++void iounmap(const volatile void __iomem *addr);
+ 
+ /*
+  * ioremap     -   map bus memory into CPU space
+diff --git a/arch/mips/mm/Makefile b/arch/mips/mm/Makefile
+index 46f483e952..865926a377 100644
+--- a/arch/mips/mm/Makefile
++++ b/arch/mips/mm/Makefile
+@@ -23,7 +23,7 @@ obj-y				+= uasm-mips.o
+ endif
+ 
+ obj-$(CONFIG_32BIT)		+= ioremap.o pgtable-32.o
+-obj-$(CONFIG_64BIT)		+= pgtable-64.o
++obj-$(CONFIG_64BIT)		+= ioremap64.o pgtable-64.o
+ obj-$(CONFIG_HIGHMEM)		+= highmem.o
+ obj-$(CONFIG_HUGETLB_PAGE)	+= hugetlbpage.o
+ obj-$(CONFIG_DMA_NONCOHERENT)	+= dma-noncoherent.o
+diff --git a/arch/mips/mm/ioremap.c b/arch/mips/mm/ioremap.c
+index 8317f337a8..c5b5181c7c 100644
+--- a/arch/mips/mm/ioremap.c
++++ b/arch/mips/mm/ioremap.c
+@@ -17,6 +17,10 @@
+ #include <asm/cacheflush.h>
+ #include <asm/io.h>
+ #include <asm/tlbflush.h>
++#include <ioremap.h>
++
++#define IS_LOW512(addr) (!((phys_addr_t)(addr) & (phys_addr_t) ~0x1fffffffULL))
++#define IS_KSEG1(addr) (((unsigned long)(addr) & ~0x1fffffffUL) == CKSEG1)
+ 
+ static inline void remap_area_pte(pte_t * pte, unsigned long address,
+ 	phys_addr_t size, phys_addr_t phys_addr, unsigned long flags)
+@@ -118,27 +122,25 @@ static int __ioremap_check_ram(unsigned long start_pfn, unsigned long nr_pages,
+ }
+ 
+ /*
+- * Generic mapping function (not visible outside):
+- */
+-
+-/*
+- * Remap an arbitrary physical address space into the kernel virtual
+- * address space. Needed when the kernel wants to access high addresses
+- * directly.
++ * ioremap_prot     -   map bus memory into CPU space
++ * @phys_addr:    bus address of the memory
++ * @size:      size of the resource to map
+  *
+- * NOTE! We need to allow non-page-aligned mappings too: we will obviously
+- * have to convert them into an offset in a page-aligned mapping, but the
+- * caller shouldn't need to know that small detail.
++ * ioremap_prot gives the caller control over cache coherency attributes (CCA)
+  */
+-
+-#define IS_LOW512(addr) (!((phys_addr_t)(addr) & (phys_addr_t) ~0x1fffffffULL))
+-
+-void __iomem * __ioremap(phys_addr_t phys_addr, phys_addr_t size, unsigned long flags)
++void __iomem *ioremap_prot(phys_addr_t phys_addr, unsigned long size,
++		unsigned long prot_val)
+ {
++	unsigned long flags = prot_val & _CACHE_MASK;
+ 	unsigned long offset, pfn, last_pfn;
+-	struct vm_struct * area;
++	struct vm_struct *area;
+ 	phys_addr_t last_addr;
+-	void * addr;
++	void *addr;
++	void __iomem *cpu_addr;
++
++	cpu_addr = plat_ioremap(phys_addr, size, flags);
++	if (cpu_addr)
++		return cpu_addr;
+ 
+ 	phys_addr = fixup_bigphys_addr(phys_addr, size);
+ 
+@@ -189,14 +191,13 @@ void __iomem * __ioremap(phys_addr_t phys_addr, phys_addr_t size, unsigned long
+ 
+ 	return (void __iomem *) (offset + (char *)addr);
+ }
++EXPORT_SYMBOL(ioremap_prot);
+ 
+-#define IS_KSEG1(addr) (((unsigned long)(addr) & ~0x1fffffffUL) == CKSEG1)
+-
+-void __iounmap(const volatile void __iomem *addr)
++void iounmap(const volatile void __iomem *addr)
+ {
+ 	struct vm_struct *p;
+ 
+-	if (IS_KSEG1(addr))
++	if (plat_iounmap(addr) || IS_KSEG1(addr))
+ 		return;
+ 
+ 	p = remove_vm_area((void *) (PAGE_MASK & (unsigned long __force) addr));
+@@ -205,6 +206,4 @@ void __iounmap(const volatile void __iomem *addr)
+ 
+ 	kfree(p);
+ }
+-
+-EXPORT_SYMBOL(__ioremap);
+-EXPORT_SYMBOL(__iounmap);
++EXPORT_SYMBOL(iounmap);
+diff --git a/arch/mips/mm/ioremap64.c b/arch/mips/mm/ioremap64.c
+new file mode 100644
+index 0000000000..15e7820d6a
+--- /dev/null
++++ b/arch/mips/mm/ioremap64.c
+@@ -0,0 +1,23 @@
++// SPDX-License-Identifier: GPL-2.0-only
++#include <linux/io.h>
++#include <ioremap.h>
++
++void __iomem *ioremap_prot(phys_addr_t offset, unsigned long size,
++		unsigned long prot_val)
++{
++	unsigned long flags = prot_val & _CACHE_MASK;
++	u64 base = (flags == _CACHE_UNCACHED ? IO_BASE : UNCAC_BASE);
++	void __iomem *addr;
++
++	addr = plat_ioremap(offset, size, flags);
++	if (!addr)
++		addr = (void __iomem *)(unsigned long)(base + offset);
++	return addr;
++}
++EXPORT_SYMBOL(ioremap_prot);
++
++void iounmap(const volatile void __iomem *addr)
++{
++	plat_iounmap(addr);
++}
++EXPORT_SYMBOL(iounmap);
+-- 
+2.31.1
+

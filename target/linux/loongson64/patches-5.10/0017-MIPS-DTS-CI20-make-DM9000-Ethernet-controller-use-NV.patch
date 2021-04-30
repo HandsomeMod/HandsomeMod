@@ -1,0 +1,35 @@
+From 19c968222934835058e9ed3d515de744d8275213 Mon Sep 17 00:00:00 2001
+From: "H. Nikolaus Schaller" <hns@goldelico.com>
+Date: Fri, 28 Feb 2020 17:00:53 +0100
+Subject: [PATCH 17/81] MIPS: DTS: CI20: make DM9000 Ethernet controller use
+ NVMEM to find the default MAC address
+
+There is a unique MAC address programmed into the eFuses
+of the JZ4780 chip in the CI20 factory. By using this
+for initializing the DM9000 Ethernet controller, every
+CI20 board has an individual - but stable - MAC address
+and DHCP can assign stable IP addresses.
+
+Signed-off-by: H. Nikolaus Schaller <hns@goldelico.com>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/boot/dts/ingenic/ci20.dts | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/arch/mips/boot/dts/ingenic/ci20.dts b/arch/mips/boot/dts/ingenic/ci20.dts
+index db0ca250bd..75f5bfbf2c 100644
+--- a/arch/mips/boot/dts/ingenic/ci20.dts
++++ b/arch/mips/boot/dts/ingenic/ci20.dts
+@@ -386,6 +386,9 @@ dm9000@6 {
+ 
+ 		interrupt-parent = <&gpe>;
+ 		interrupts = <19 4>;
++
++		nvmem-cells = <&eth0_addr>;
++		nvmem-cell-names = "mac-address";
+ 	};
+ };
+ 
+-- 
+2.31.1
+

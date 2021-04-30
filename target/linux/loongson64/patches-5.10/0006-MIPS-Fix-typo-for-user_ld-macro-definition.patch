@@ -1,0 +1,30 @@
+From 5ceb89f8a301b2d5c2ffa20c9b41eb2501360113 Mon Sep 17 00:00:00 2001
+From: bibo mao <maobibo@loongson.cn>
+Date: Wed, 15 Apr 2020 17:56:43 +0800
+Subject: [PATCH 06/81] MIPS: Fix typo for user_ld macro definition
+
+There is typo for macro user_ld if __ASSEMBLY__ is declared, this
+patch fixes this issue.
+
+Signed-off-by: bibo mao <maobibo@loongson.cn>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/include/asm/asm-eva.h | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/include/asm/asm-eva.h b/arch/mips/include/asm/asm-eva.h
+index d80be38c41..e327ebc767 100644
+--- a/arch/mips/include/asm/asm-eva.h
++++ b/arch/mips/include/asm/asm-eva.h
+@@ -180,7 +180,7 @@
+ #define user_ld(reg, addr)		kernel_lw(reg, addr)
+ #else
+ #define user_sd(reg, addr)		kernel_sd(reg, addr)
+-#define user_ld(reg, addr)		kernel_sd(reg, addr)
++#define user_ld(reg, addr)		kernel_ld(reg, addr)
+ #endif /* CONFIG_32BIT */
+ 
+ #endif /* CONFIG_EVA */
+-- 
+2.31.1
+

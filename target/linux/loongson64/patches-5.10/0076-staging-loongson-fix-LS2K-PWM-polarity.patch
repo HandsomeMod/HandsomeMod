@@ -1,0 +1,29 @@
+From 47d281b829a11a174d1b0cd9cc05b4443cc589e2 Mon Sep 17 00:00:00 2001
+From: Peter <mbyzhang@outlook.com>
+Date: Thu, 1 Oct 2020 15:17:15 +0800
+Subject: [PATCH 76/81] staging: loongson: fix LS2K PWM polarity
+
+---
+ drivers/staging/loongson/pwm-ls2k.c | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/staging/loongson/pwm-ls2k.c b/drivers/staging/loongson/pwm-ls2k.c
+index 832681470c..dd0df4b4a9 100644
+--- a/drivers/staging/loongson/pwm-ls2k.c
++++ b/drivers/staging/loongson/pwm-ls2k.c
+@@ -95,7 +95,11 @@ static int ls2k_pwm_config(struct pwm_chip *chip, struct pwm_device *pwm,
+ 		val0 = 1;
+ 	period = val0;
+ 
+-	val1 = CPU_FRQ_PWM * duty_ns;
++	if (period_ns >= duty_ns)
++		val1 = CPU_FRQ_PWM * (period_ns - duty_ns);
++	else
++		val1 = 0;
++
+ 	do_div(val1, NSEC_PER_SEC);
+ 	if (val1 < 1)
+ 		val1 = 1;
+-- 
+2.31.1
+

@@ -1,0 +1,46 @@
+From 2a3d47c94ebdfb97bd8aa95343c58b679cb11724 Mon Sep 17 00:00:00 2001
+From: Tiezhu Yang <yangtiezhu@loongson.cn>
+Date: Tue, 21 Apr 2020 19:59:45 +0800
+Subject: [PATCH 25/81] MIPS: Cleanup code about plat_mem_setup()
+
+In the current code, plat_mem_setup() is called by arch_mem_init() instead
+of setup_arch() and has been declared in asm/bootinfo.h, so modify the code
+comment to reflect the reality and remove the useless duplicate declartion
+in arch/mips/kernel/setup.c.
+
+Signed-off-by: Tiezhu Yang <yangtiezhu@loongson.cn>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/include/asm/bootinfo.h | 2 +-
+ arch/mips/kernel/setup.c         | 2 --
+ 2 files changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/arch/mips/include/asm/bootinfo.h b/arch/mips/include/asm/bootinfo.h
+index 61727785a2..dcd6a75277 100644
+--- a/arch/mips/include/asm/bootinfo.h
++++ b/arch/mips/include/asm/bootinfo.h
+@@ -121,7 +121,7 @@ extern unsigned long fw_passed_dtb;
+ #endif
+ 
+ /*
+- * Platform memory detection hook called by setup_arch
++ * Platform memory detection hook called by arch_mem_init()
+  */
+ extern void plat_mem_setup(void);
+ 
+diff --git a/arch/mips/kernel/setup.c b/arch/mips/kernel/setup.c
+index b1e2d43603..5481a0c685 100644
+--- a/arch/mips/kernel/setup.c
++++ b/arch/mips/kernel/setup.c
+@@ -654,8 +654,6 @@ static void __init bootcmdline_init(char **cmdline_p)
+  */
+ static void __init arch_mem_init(char **cmdline_p)
+ {
+-	extern void plat_mem_setup(void);
+-
+ 	/* call board setup routine */
+ 	plat_mem_setup();
+ 	memblock_set_bottom_up(true);
+-- 
+2.31.1
+

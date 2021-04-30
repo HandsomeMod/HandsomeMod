@@ -1,0 +1,181 @@
+From b604d4973af7df4bbe970b2c380f5a0477fa53ec Mon Sep 17 00:00:00 2001
+From: Christoph Hellwig <hch@lst.de>
+Date: Thu, 16 Apr 2020 17:00:06 +0200
+Subject: [PATCH 10/81] MIPS: remove cpu_has_64bit_addresses
+
+This macro is identical to CONFIG_64BIT, and using a Kconfig variable
+for the only places that checks them (the ioremap implementation) will
+simplify later patches in this series.
+
+Signed-off-by: Christoph Hellwig <hch@lst.de>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/include/asm/cpu-features.h                        | 6 ------
+ arch/mips/include/asm/io.h                                  | 4 ++--
+ arch/mips/include/asm/mach-ath25/cpu-feature-overrides.h    | 1 -
+ arch/mips/include/asm/mach-ath79/cpu-feature-overrides.h    | 1 -
+ .../include/asm/mach-lantiq/falcon/cpu-feature-overrides.h  | 1 -
+ .../include/asm/mach-ralink/mt7620/cpu-feature-overrides.h  | 1 -
+ .../include/asm/mach-ralink/mt7621/cpu-feature-overrides.h  | 1 -
+ .../include/asm/mach-ralink/rt288x/cpu-feature-overrides.h  | 1 -
+ .../include/asm/mach-ralink/rt305x/cpu-feature-overrides.h  | 1 -
+ .../include/asm/mach-ralink/rt3883/cpu-feature-overrides.h  | 1 -
+ arch/mips/include/asm/mach-rc32434/cpu-feature-overrides.h  | 1 -
+ 11 files changed, 2 insertions(+), 17 deletions(-)
+
+diff --git a/arch/mips/include/asm/cpu-features.h b/arch/mips/include/asm/cpu-features.h
+index de44c92b1c..400b123cb6 100644
+--- a/arch/mips/include/asm/cpu-features.h
++++ b/arch/mips/include/asm/cpu-features.h
+@@ -435,9 +435,6 @@
+ # ifndef cpu_has_64bit_gp_regs
+ # define cpu_has_64bit_gp_regs		0
+ # endif
+-# ifndef cpu_has_64bit_addresses
+-# define cpu_has_64bit_addresses	0
+-# endif
+ # ifndef cpu_vmbits
+ # define cpu_vmbits 31
+ # endif
+@@ -456,9 +453,6 @@
+ # ifndef cpu_has_64bit_gp_regs
+ # define cpu_has_64bit_gp_regs		1
+ # endif
+-# ifndef cpu_has_64bit_addresses
+-# define cpu_has_64bit_addresses	1
+-# endif
+ # ifndef cpu_vmbits
+ # define cpu_vmbits cpu_data[0].vmbits
+ # define __NEED_VMBITS_PROBE
+diff --git a/arch/mips/include/asm/io.h b/arch/mips/include/asm/io.h
+index cf1f2a4a24..7be323ed2b 100644
+--- a/arch/mips/include/asm/io.h
++++ b/arch/mips/include/asm/io.h
+@@ -166,7 +166,7 @@ static inline void __iomem * __ioremap_mode(phys_addr_t offset, unsigned long si
+ 
+ #define __IS_LOW512(addr) (!((phys_addr_t)(addr) & (phys_addr_t) ~0x1fffffffULL))
+ 
+-	if (cpu_has_64bit_addresses) {
++	if (IS_ENABLED(CONFIG_64BIT)) {
+ 		u64 base = UNCAC_BASE;
+ 
+ 		/*
+@@ -275,7 +275,7 @@ static inline void iounmap(const volatile void __iomem *addr)
+ 
+ #define __IS_KSEG1(addr) (((unsigned long)(addr) & ~0x1fffffffUL) == CKSEG1)
+ 
+-	if (cpu_has_64bit_addresses ||
++	if (IS_ENABLED(CONFIG_64BIT) ||
+ 	    (__builtin_constant_p(addr) && __IS_KSEG1(addr)))
+ 		return;
+ 
+diff --git a/arch/mips/include/asm/mach-ath25/cpu-feature-overrides.h b/arch/mips/include/asm/mach-ath25/cpu-feature-overrides.h
+index 95a0b58090..a54f20d956 100644
+--- a/arch/mips/include/asm/mach-ath25/cpu-feature-overrides.h
++++ b/arch/mips/include/asm/mach-ath25/cpu-feature-overrides.h
+@@ -56,6 +56,5 @@
+ #define cpu_has_64bits			0
+ #define cpu_has_64bit_zero_reg		0
+ #define cpu_has_64bit_gp_regs		0
+-#define cpu_has_64bit_addresses		0
+ 
+ #endif /* __ASM_MACH_ATH25_CPU_FEATURE_OVERRIDES_H */
+diff --git a/arch/mips/include/asm/mach-ath79/cpu-feature-overrides.h b/arch/mips/include/asm/mach-ath79/cpu-feature-overrides.h
+index e7c972fccd..79ab3ad9fe 100644
+--- a/arch/mips/include/asm/mach-ath79/cpu-feature-overrides.h
++++ b/arch/mips/include/asm/mach-ath79/cpu-feature-overrides.h
+@@ -45,7 +45,6 @@
+ #define cpu_has_64bits		0
+ #define cpu_has_64bit_zero_reg	0
+ #define cpu_has_64bit_gp_regs	0
+-#define cpu_has_64bit_addresses 0
+ 
+ #define cpu_dcache_line_size()	32
+ #define cpu_icache_line_size()	32
+diff --git a/arch/mips/include/asm/mach-lantiq/falcon/cpu-feature-overrides.h b/arch/mips/include/asm/mach-lantiq/falcon/cpu-feature-overrides.h
+index f03c1c42dd..10226976f7 100644
+--- a/arch/mips/include/asm/mach-lantiq/falcon/cpu-feature-overrides.h
++++ b/arch/mips/include/asm/mach-lantiq/falcon/cpu-feature-overrides.h
+@@ -46,7 +46,6 @@
+ #define cpu_has_64bits		0
+ #define cpu_has_64bit_zero_reg	0
+ #define cpu_has_64bit_gp_regs	0
+-#define cpu_has_64bit_addresses	0
+ 
+ #define cpu_dcache_line_size()	32
+ #define cpu_icache_line_size()	32
+diff --git a/arch/mips/include/asm/mach-ralink/mt7620/cpu-feature-overrides.h b/arch/mips/include/asm/mach-ralink/mt7620/cpu-feature-overrides.h
+index 6ea5908f0c..c4579f1705 100644
+--- a/arch/mips/include/asm/mach-ralink/mt7620/cpu-feature-overrides.h
++++ b/arch/mips/include/asm/mach-ralink/mt7620/cpu-feature-overrides.h
+@@ -45,7 +45,6 @@
+ #define cpu_has_64bits		0
+ #define cpu_has_64bit_zero_reg	0
+ #define cpu_has_64bit_gp_regs	0
+-#define cpu_has_64bit_addresses	0
+ 
+ #define cpu_dcache_line_size()	32
+ #define cpu_icache_line_size()	32
+diff --git a/arch/mips/include/asm/mach-ralink/mt7621/cpu-feature-overrides.h b/arch/mips/include/asm/mach-ralink/mt7621/cpu-feature-overrides.h
+index e06f517b25..168359a0a5 100644
+--- a/arch/mips/include/asm/mach-ralink/mt7621/cpu-feature-overrides.h
++++ b/arch/mips/include/asm/mach-ralink/mt7621/cpu-feature-overrides.h
+@@ -46,7 +46,6 @@
+ #define cpu_has_64bits		0
+ #define cpu_has_64bit_zero_reg	0
+ #define cpu_has_64bit_gp_regs	0
+-#define cpu_has_64bit_addresses	0
+ 
+ #define cpu_dcache_line_size()	32
+ #define cpu_icache_line_size()	32
+diff --git a/arch/mips/include/asm/mach-ralink/rt288x/cpu-feature-overrides.h b/arch/mips/include/asm/mach-ralink/rt288x/cpu-feature-overrides.h
+index 9c069646d0..fdaf8c9182 100644
+--- a/arch/mips/include/asm/mach-ralink/rt288x/cpu-feature-overrides.h
++++ b/arch/mips/include/asm/mach-ralink/rt288x/cpu-feature-overrides.h
+@@ -44,7 +44,6 @@
+ #define cpu_has_64bits		0
+ #define cpu_has_64bit_zero_reg	0
+ #define cpu_has_64bit_gp_regs	0
+-#define cpu_has_64bit_addresses	0
+ 
+ #define cpu_dcache_line_size()	16
+ #define cpu_icache_line_size()	16
+diff --git a/arch/mips/include/asm/mach-ralink/rt305x/cpu-feature-overrides.h b/arch/mips/include/asm/mach-ralink/rt305x/cpu-feature-overrides.h
+index 2e423fd153..7a385fe784 100644
+--- a/arch/mips/include/asm/mach-ralink/rt305x/cpu-feature-overrides.h
++++ b/arch/mips/include/asm/mach-ralink/rt305x/cpu-feature-overrides.h
+@@ -44,7 +44,6 @@
+ #define cpu_has_64bits		0
+ #define cpu_has_64bit_zero_reg	0
+ #define cpu_has_64bit_gp_regs	0
+-#define cpu_has_64bit_addresses	0
+ 
+ #define cpu_dcache_line_size()	32
+ #define cpu_icache_line_size()	32
+diff --git a/arch/mips/include/asm/mach-ralink/rt3883/cpu-feature-overrides.h b/arch/mips/include/asm/mach-ralink/rt3883/cpu-feature-overrides.h
+index 7cee0e2325..0a61910f65 100644
+--- a/arch/mips/include/asm/mach-ralink/rt3883/cpu-feature-overrides.h
++++ b/arch/mips/include/asm/mach-ralink/rt3883/cpu-feature-overrides.h
+@@ -43,7 +43,6 @@
+ #define cpu_has_64bits		0
+ #define cpu_has_64bit_zero_reg	0
+ #define cpu_has_64bit_gp_regs	0
+-#define cpu_has_64bit_addresses	0
+ 
+ #define cpu_dcache_line_size()	32
+ #define cpu_icache_line_size()	32
+diff --git a/arch/mips/include/asm/mach-rc32434/cpu-feature-overrides.h b/arch/mips/include/asm/mach-rc32434/cpu-feature-overrides.h
+index bc46179fdf..8539ccfb69 100644
+--- a/arch/mips/include/asm/mach-rc32434/cpu-feature-overrides.h
++++ b/arch/mips/include/asm/mach-rc32434/cpu-feature-overrides.h
+@@ -54,7 +54,6 @@
+ #define cpu_has_64bits			0
+ #define cpu_has_64bit_zero_reg		0
+ #define cpu_has_64bit_gp_regs		0
+-#define cpu_has_64bit_addresses		0
+ 
+ #define cpu_has_inclusive_pcaches	0
+ 
+-- 
+2.31.1
+

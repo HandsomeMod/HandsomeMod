@@ -1,0 +1,50 @@
+From 13b401759d30267d569d497fa99c1ce646432a36 Mon Sep 17 00:00:00 2001
+From: Peter <mbyzhang@outlook.com>
+Date: Sun, 20 Dec 2020 18:39:37 +0800
+Subject: [PATCH 80/81] LS2K: More serial devices in dts
+
+---
+ arch/mips/boot/dts/loongson/loongson2k.dts | 27 ++++++++++++++++++++++
+ 1 file changed, 27 insertions(+)
+
+diff --git a/arch/mips/boot/dts/loongson/loongson2k.dts b/arch/mips/boot/dts/loongson/loongson2k.dts
+index a6ae83bc61..2f8f07b034 100644
+--- a/arch/mips/boot/dts/loongson/loongson2k.dts
++++ b/arch/mips/boot/dts/loongson/loongson2k.dts
+@@ -41,6 +41,33 @@ uart0: serial@1fe00000 {
+ 			no-loopback-test;
+ 		};
+ 
++		uart3: serial@1fe00300 {
++			compatible = "ns16550a";
++			reg = <0 0x1fe00300 0 0x8>;
++			clock-frequency = <125000000>;
++			interrupt-parent = <&liointc0>;
++			interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
++			no-loopback-test;
++		};
++
++		uart4: serial@1fe00400 {
++			compatible = "ns16550a";
++			reg = <0 0x1fe00400 0 0x8>;
++			clock-frequency = <125000000>;
++			interrupt-parent = <&liointc0>;
++			interrupts = <1 IRQ_TYPE_LEVEL_LOW>;
++			no-loopback-test;
++		};
++
++		uart5: serial@1fe00500 {
++			compatible = "ns16550a";
++			reg = <0 0x1fe00500 0 0x8>;
++			clock-frequency = <125000000>;
++			interrupt-parent = <&liointc0>;
++			interrupts = <1 IRQ_TYPE_LEVEL_LOW>;
++			no-loopback-test;
++		};
++
+ 		can0: can@1fe00c00{
+ 			compatible = "nxp,sja1000";
+ 			reg = <0 0x1fe00c00 0 0xff>;
+-- 
+2.31.1
+

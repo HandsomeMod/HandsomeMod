@@ -1,0 +1,29 @@
+From 6cf17746dd8a5bda934da2d6f6b4c07b6aa6b602 Mon Sep 17 00:00:00 2001
+From: Jiaxun Yang <jiaxun.yang@flygoat.com>
+Date: Mon, 10 Aug 2020 17:39:58 +0800
+Subject: [PATCH 71/81] LS2K: DTS add RTC
+
+Signed-off-by: Jiaxun Yang <jiaxun.yang@flygoat.com>
+---
+ arch/mips/boot/dts/loongson/loongson2k.dts | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/arch/mips/boot/dts/loongson/loongson2k.dts b/arch/mips/boot/dts/loongson/loongson2k.dts
+index 62a29411d9..a51a20f309 100644
+--- a/arch/mips/boot/dts/loongson/loongson2k.dts
++++ b/arch/mips/boot/dts/loongson/loongson2k.dts
+@@ -111,6 +111,11 @@ gpio: gpio@1fe10500{
+ 			#gpio-cells = <2>;
+ 		};
+ 
++		rtc0: rtc@1fe07800 {
++			compatible = "loongson,ls2k-rtc";
++			reg = <0 0x1fe07800 0 0x78>;
++		};
++
+ 		liointc0: interrupt-controller@1fe11400 {
+ 			compatible = "loongson,liointc-2.0";
+ 			reg = <0 0x1fe11400 0 0x40>,
+-- 
+2.31.1
+

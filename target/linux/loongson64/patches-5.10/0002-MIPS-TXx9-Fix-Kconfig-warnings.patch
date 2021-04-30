@@ -1,0 +1,79 @@
+From de0c4eb44c39cbb2b3b11bac699b618b0f8d4142 Mon Sep 17 00:00:00 2001
+From: YueHaibing <yuehaibing@huawei.com>
+Date: Fri, 3 Apr 2020 17:49:04 +0800
+Subject: [PATCH 02/81] MIPS: TXx9: Fix Kconfig warnings
+
+If TTY and SND is not n, we got this warnings:
+
+WARNING: unmet direct dependencies detected for HAS_TXX9_SERIAL
+  Depends on [n]: TTY [=n] && HAS_IOMEM [=y]
+  Selected by [y]:
+  - SOC_TX3927 [=y]
+
+WARNING: unmet direct dependencies detected for HAS_TXX9_SERIAL
+  Depends on [n]: TTY [=n] && HAS_IOMEM [=y]
+  Selected by [y]:
+  - SOC_TX4938 [=y]
+
+Only dependencies is enabled, they can be enabled, so
+use 'imply' instead of 'select' to fix this.
+
+Signed-off-by: YueHaibing <yuehaibing@huawei.com>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/txx9/Kconfig | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/arch/mips/txx9/Kconfig b/arch/mips/txx9/Kconfig
+index 9a22a182b7..85c4c121c7 100644
+--- a/arch/mips/txx9/Kconfig
++++ b/arch/mips/txx9/Kconfig
+@@ -58,7 +58,7 @@ config TOSHIBA_RBTX4939
+ config SOC_TX3927
+ 	bool
+ 	select CEVT_TXX9
+-	select HAS_TXX9_SERIAL
++	imply HAS_TXX9_SERIAL
+ 	select HAVE_PCI
+ 	select IRQ_TXX9
+ 	select GPIO_TXX9
+@@ -66,30 +66,30 @@ config SOC_TX3927
+ config SOC_TX4927
+ 	bool
+ 	select CEVT_TXX9
+-	select HAS_TXX9_SERIAL
++	imply HAS_TXX9_SERIAL
+ 	select HAVE_PCI
+ 	select IRQ_TXX9
+ 	select PCI_TX4927
+ 	select GPIO_TXX9
+-	select HAS_TXX9_ACLC
++	imply HAS_TXX9_ACLC
+ 
+ config SOC_TX4938
+ 	bool
+ 	select CEVT_TXX9
+-	select HAS_TXX9_SERIAL
++	imply HAS_TXX9_SERIAL
+ 	select HAVE_PCI
+ 	select IRQ_TXX9
+ 	select PCI_TX4927
+ 	select GPIO_TXX9
+-	select HAS_TXX9_ACLC
++	imply HAS_TXX9_ACLC
+ 
+ config SOC_TX4939
+ 	bool
+ 	select CEVT_TXX9
+-	select HAS_TXX9_SERIAL
++	imply HAS_TXX9_SERIAL
+ 	select HAVE_PCI
+ 	select PCI_TX4927
+-	select HAS_TXX9_ACLC
++	imply HAS_TXX9_ACLC
+ 
+ config TXX9_7SEGLED
+ 	bool
+-- 
+2.31.1
+

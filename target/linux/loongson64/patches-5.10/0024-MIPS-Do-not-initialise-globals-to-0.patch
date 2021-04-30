@@ -1,0 +1,33 @@
+From 2c66e281c0330289aad93e6dd722b25fee29306c Mon Sep 17 00:00:00 2001
+From: Tiezhu Yang <yangtiezhu@loongson.cn>
+Date: Tue, 21 Apr 2020 19:59:44 +0800
+Subject: [PATCH 24/81] MIPS: Do not initialise globals to 0
+
+Fix the following checkpatch error:
+
+ERROR: do not initialise globals to 0
+#834: FILE: arch/mips/kernel/setup.c:834:
++int hw_coherentio = 0;	/* Actual hardware supported DMA coherency setting. */
+
+Signed-off-by: Tiezhu Yang <yangtiezhu@loongson.cn>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/kernel/setup.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/mips/kernel/setup.c b/arch/mips/kernel/setup.c
+index 10bef8f78e..b1e2d43603 100644
+--- a/arch/mips/kernel/setup.c
++++ b/arch/mips/kernel/setup.c
+@@ -831,7 +831,7 @@ arch_initcall(debugfs_mips);
+ /* User defined DMA coherency from command line. */
+ enum coherent_io_user_state coherentio = IO_COHERENCE_DEFAULT;
+ EXPORT_SYMBOL_GPL(coherentio);
+-int hw_coherentio = 0;	/* Actual hardware supported DMA coherency setting. */
++int hw_coherentio;	/* Actual hardware supported DMA coherency setting. */
+ 
+ static int __init setcoherentio(char *str)
+ {
+-- 
+2.31.1
+

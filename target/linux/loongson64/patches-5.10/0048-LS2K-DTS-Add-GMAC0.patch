@@ -1,0 +1,47 @@
+From 558a256acfeb022e132113e7952a9df3df375302 Mon Sep 17 00:00:00 2001
+From: Jiaxun Yang <jiaxun.yang@flygoat.com>
+Date: Fri, 24 Apr 2020 17:05:54 +0800
+Subject: [PATCH 48/81] LS2K: DTS: Add GMAC0
+
+Signed-off-by: Jiaxun Yang <jiaxun.yang@flygoat.com>
+---
+ arch/mips/boot/dts/loongson/loongson2k.dts | 23 ++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/arch/mips/boot/dts/loongson/loongson2k.dts b/arch/mips/boot/dts/loongson/loongson2k.dts
+index b3047da398..a1d72c261f 100644
+--- a/arch/mips/boot/dts/loongson/loongson2k.dts
++++ b/arch/mips/boot/dts/loongson/loongson2k.dts
+@@ -88,6 +88,29 @@ pci@1a000000 {
+ 			ranges = <0x01000000 0x0 0x00000000 0x0 0x00000000  0x0 0x00010000>,
+ 					<0x02000000 0x0 0x40000000 0x0 0x40000000  0x0 0x40000000>;
+ 
++			gmac0: gmac@3,0 {
++				compatible = "pci0014,7a03.0",
++						   "pci0014,7a03",
++						   "pciclass0c0320",
++						   "pciclass0c03",
++						   "loongson,pci-gmac";
++
++				reg = <0x1800 0x0 0x0 0x0 0x0>;
++				interrupts = <12 IRQ_TYPE_LEVEL_LOW>,
++						<13 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-names = "macirq", "eth_lpi";
++				interrupt-parent = <&liointc0>;
++				phy-mode = "rgmii";
++				mdio {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					compatible = "snps,dwmac-mdio";
++					phy0: ethernet-phy@0 {
++						reg = <0>;
++					};
++				};
++			};
++
+ 			ehci@4,1 {
+ 				compatible = "pci0014,7a14.0",
+ 						   "pci0014,7a14",
+-- 
+2.31.1
+

@@ -1,0 +1,65 @@
+From 190607f2d59e174bcf8415efb1bb390737f8d428 Mon Sep 17 00:00:00 2001
+From: PrasannaKumar Muralidharan <prasannatsmkumar@gmail.com>
+Date: Fri, 28 Feb 2020 17:00:52 +0100
+Subject: [PATCH 16/81] MIPS: DTS: JZ4780: define node for JZ4780 efuse
+
+This patch brings support for the JZ4780 efuse. Currently it only exposes
+a read only access to the entire 8K bits efuse memory and the
+ethernet mac address for the davicom dm9000 chip on the CI20 board.
+
+It also changes the nemc ranges definition to give the driver
+access to the efuse registers, which are in the middle of the
+nemc reg range.
+
+Tested-by: Mathieu Malaterre <malat@debian.org>
+Signed-off-by: PrasannaKumar Muralidharan <prasannatsmkumar@gmail.com>
+Signed-off-by: Mathieu Malaterre <malat@debian.org>
+Signed-off-by: H. Nikolaus Schaller <hns@goldelico.com>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/boot/dts/ingenic/jz4780.dtsi | 19 +++++++++++++++++--
+ 1 file changed, 17 insertions(+), 2 deletions(-)
+
+diff --git a/arch/mips/boot/dts/ingenic/jz4780.dtsi b/arch/mips/boot/dts/ingenic/jz4780.dtsi
+index bb89653d16..1c94f67911 100644
+--- a/arch/mips/boot/dts/ingenic/jz4780.dtsi
++++ b/arch/mips/boot/dts/ingenic/jz4780.dtsi
+@@ -358,11 +358,12 @@ i2c4: i2c@10054000 {
+ 	};
+ 
+ 	nemc: nemc@13410000 {
+-		compatible = "ingenic,jz4780-nemc";
++		compatible = "ingenic,jz4780-nemc", "simple-mfd";
+ 		reg = <0x13410000 0x10000>;
+ 		#address-cells = <2>;
+ 		#size-cells = <1>;
+-		ranges = <1 0 0x1b000000 0x1000000
++		ranges = <0 0 0x13410000 0x10000
++			  1 0 0x1b000000 0x1000000
+ 			  2 0 0x1a000000 0x1000000
+ 			  3 0 0x19000000 0x1000000
+ 			  4 0 0x18000000 0x1000000
+@@ -372,6 +373,20 @@ nemc: nemc@13410000 {
+ 		clocks = <&cgu JZ4780_CLK_NEMC>;
+ 
+ 		status = "disabled";
++
++		efuse: efuse@d0 {
++			reg = <0 0xd0 0x30>;
++			compatible = "ingenic,jz4780-efuse";
++
++			clocks = <&cgu JZ4780_CLK_AHB2>;
++
++			#address-cells = <1>;
++			#size-cells = <1>;
++
++			eth0_addr: eth-mac-addr@0x22 {
++				reg = <0x22 0x6>;
++			};
++		};
+ 	};
+ 
+ 	dma: dma@13420000 {
+-- 
+2.31.1
+

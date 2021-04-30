@@ -1,0 +1,32 @@
+From a89aa749ece9c6fee7932163472d2ee0efd6ddd3 Mon Sep 17 00:00:00 2001
+From: Jiaxun Yang <jiaxun.yang@flygoat.com>
+Date: Mon, 20 Apr 2020 21:45:28 +0800
+Subject: [PATCH 22/81] MIPS: DTS: Loongson64: Add ACPI Controller Node
+
+Add ACPI Controller Node for RS780E PCH to fit newly added driver.
+
+Signed-off-by: Jiaxun Yang <jiaxun.yang@flygoat.com>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/boot/dts/loongson/rs780e-pch.dtsi | 5 +++++
+ 1 file changed, 5 insertions(+)
+
+diff --git a/arch/mips/boot/dts/loongson/rs780e-pch.dtsi b/arch/mips/boot/dts/loongson/rs780e-pch.dtsi
+index 45c54d555f..8687c4f737 100644
+--- a/arch/mips/boot/dts/loongson/rs780e-pch.dtsi
++++ b/arch/mips/boot/dts/loongson/rs780e-pch.dtsi
+@@ -21,6 +21,11 @@ rtc0: rtc@70 {
+ 				interrupts = <8>;
+ 				interrupt-parent = <&htpic>;
+ 			};
++
++			acpi@800 {
++				compatible = "loongson,rs780e-acpi";
++				reg = <1 0x800 0x100>;
++			};
+ 		};
+ 	};
+ };
+-- 
+2.31.1
+

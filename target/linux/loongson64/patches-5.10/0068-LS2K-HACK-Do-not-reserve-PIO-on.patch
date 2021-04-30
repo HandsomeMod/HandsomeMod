@@ -1,0 +1,28 @@
+From 037789c384cf9c4da44071d4a9f4156627d9dd96 Mon Sep 17 00:00:00 2001
+From: Jiaxun Yang <jiaxun.yang@flygoat.com>
+Date: Tue, 30 Jun 2020 20:05:13 +0800
+Subject: [PATCH 68/81] LS2K: HACK: Do not reserve PIO on
+
+Signed-off-by: Jiaxun Yang <jiaxun.yang@flygoat.com>
+---
+ arch/mips/loongson64/init.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/mips/loongson64/init.c b/arch/mips/loongson64/init.c
+index a05d9c908b..1da7882c05 100644
+--- a/arch/mips/loongson64/init.c
++++ b/arch/mips/loongson64/init.c
+@@ -50,6 +50,10 @@ static __init void reserve_pio_range(void)
+ {
+ 	struct logic_pio_hwaddr *range;
+ 
++	/* HACK: No need on 2K */
++	if ((read_c0_prid() & PRID_IMP_MASK) == PRID_IMP_LOONGSON_64R)
++		return;
++
+ 	range = kzalloc(sizeof(*range), GFP_ATOMIC);
+ 	if (!range)
+ 		return;
+-- 
+2.31.1
+

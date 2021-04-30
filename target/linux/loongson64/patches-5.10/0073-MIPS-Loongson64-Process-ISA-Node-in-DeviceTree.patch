@@ -1,0 +1,128 @@
+From c48bd28cf6aac3fb638346f5c67808bb9d0f248a Mon Sep 17 00:00:00 2001
+From: Jiaxun Yang <jiaxun.yang@flygoat.com>
+Date: Tue, 28 Jul 2020 23:36:56 +0800
+Subject: [PATCH 73/81] MIPS: Loongson64: Process ISA Node in DeviceTree
+
+Previously, we're hardcoding reserved ISA I/O Space in, now
+we're processing it I/O via DeviceTree directly.
+The ranges property if ISA node is used to determine the size and address
+of reserved I/O space.
+
+Signed-off-by: Jiaxun Yang <jiaxun.yang@flygoat.com>
+Signed-off-by: Thomas Bogendoerfer <tsbogend@alpha.franken.de>
+---
+ arch/mips/loongson64/init.c | 80 ++++++++++++++++++++++++++++---------
+ 1 file changed, 61 insertions(+), 19 deletions(-)
+
+diff --git a/arch/mips/loongson64/init.c b/arch/mips/loongson64/init.c
+index 1da7882c05..0f2ce6be14 100644
+--- a/arch/mips/loongson64/init.c
++++ b/arch/mips/loongson64/init.c
+@@ -7,6 +7,8 @@
+ #include <linux/irqchip.h>
+ #include <linux/logic_pio.h>
+ #include <linux/memblock.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
+ #include <asm/bootinfo.h>
+ #include <asm/traps.h>
+ #include <asm/smp-ops.h>
+@@ -46,36 +48,76 @@ void __init prom_free_prom_memory(void)
+ {
+ }
+ 
+-static __init void reserve_pio_range(void)
++static int __init add_legacy_isa_io(struct fwnode_handle *fwnode, resource_size_t hw_start,
++				    resource_size_t size)
+ {
++	int ret = 0;
+ 	struct logic_pio_hwaddr *range;
+-
+-	/* HACK: No need on 2K */
+-	if ((read_c0_prid() & PRID_IMP_MASK) == PRID_IMP_LOONGSON_64R)
+-		return;
++	unsigned long vaddr;
+ 
+ 	range = kzalloc(sizeof(*range), GFP_ATOMIC);
+ 	if (!range)
+-		return;
++		return -ENOMEM;
+ 
+-	range->fwnode = &of_root->fwnode;
+-	range->size = MMIO_LOWER_RESERVED;
+-	range->hw_start = LOONGSON_PCIIO_BASE;
++	range->fwnode = fwnode;
++	range->size = size;
++	range->hw_start = hw_start;
+ 	range->flags = LOGIC_PIO_CPU_MMIO;
+ 
+-	if (logic_pio_register_range(range)) {
+-		pr_err("Failed to reserve PIO range for legacy ISA\n");
++	ret = logic_pio_register_range(range);
++	if (ret) {
+ 		kfree(range);
+-		return;
++		return ret;
+ 	}
+ 
+-	/*
+-	 * i8259 would access I/O space, so mapping must be done here.
+-	 * Please remove it when all drivers can be managed by logic_pio.
+-	 */
+-	ioremap_page_range(PCI_IO_START, PCI_IO_START + MMIO_LOWER_RESERVED,
+-				  LOONGSON_PCIIO_BASE,
+-				  pgprot_device(PAGE_KERNEL));
++	/* Legacy ISA must placed at the start of PCI_IOBASE */
++	if (range->io_start != 0) {
++		logic_pio_unregister_range(range);
++		kfree(range);
++		return -EINVAL;
++	}
++
++	vaddr = PCI_IO_START + range->io_start;
++
++	ioremap_page_range(vaddr, vaddr + size, hw_start, pgprot_device(PAGE_KERNEL));
++
++	return 0;
++}
++
++static __init void reserve_pio_range(void)
++{
++	struct device_node *np;
++
++	for_each_node_by_name(np, "isa") {
++		struct of_range range;
++		struct of_range_parser parser;
++
++		pr_info("ISA Bridge: %pOF\n", np);
++
++		if (of_range_parser_init(&parser, np)) {
++			pr_info("Failed to parse resources.\n");
++			break;
++		}
++
++		for_each_of_range(&parser, &range) {
++			switch (range.flags & IORESOURCE_TYPE_BITS) {
++			case IORESOURCE_IO:
++				pr_info(" IO 0x%016llx..0x%016llx  ->  0x%016llx\n",
++					range.cpu_addr,
++					range.cpu_addr + range.size - 1,
++					range.bus_addr);
++				if (add_legacy_isa_io(&np->fwnode, range.cpu_addr, range.size))
++					pr_warn("Failed to reserve legacy IO in Logic PIO\n");
++				break;
++			case IORESOURCE_MEM:
++				pr_info(" MEM 0x%016llx..0x%016llx  ->  0x%016llx\n",
++					range.cpu_addr,
++					range.cpu_addr + range.size - 1,
++					range.bus_addr);
++				break;
++			}
++		}
++	}
+ }
+ 
+ void __init arch_init_irq(void)
+-- 
+2.31.1
+

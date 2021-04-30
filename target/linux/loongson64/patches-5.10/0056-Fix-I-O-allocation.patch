@@ -1,0 +1,36 @@
+From e42a2d9e4128bf7b8e0d4638f67dc6f95189de2b Mon Sep 17 00:00:00 2001
+From: Jiaxun Yang <jiaxun.yang@flygoat.com>
+Date: Tue, 28 Apr 2020 16:29:32 +0800
+Subject: [PATCH 56/81] Fix I/O allocation
+
+Signed-off-by: Jiaxun Yang <jiaxun.yang@flygoat.com>
+---
+ arch/mips/boot/dts/loongson/loongson2k.dts | 5 ++---
+ 1 file changed, 2 insertions(+), 3 deletions(-)
+
+diff --git a/arch/mips/boot/dts/loongson/loongson2k.dts b/arch/mips/boot/dts/loongson/loongson2k.dts
+index 69f0cac90a..2f12a54186 100644
+--- a/arch/mips/boot/dts/loongson/loongson2k.dts
++++ b/arch/mips/boot/dts/loongson/loongson2k.dts
+@@ -21,8 +21,7 @@ package0: bus@10000000 {
+ 		compatible = "simple-bus";
+ 		#address-cells = <2>;
+ 		#size-cells = <2>;
+-		ranges = <0 0x00000000 0 0x00000000 0 0x10000 /* ioports */
+-			0 0x10000000 0 0x10000000 0 0x10000000
++		ranges = <0 0x10000000 0 0x10000000 0 0x10000000
+ 			0 0x40000000 0 0x40000000 0 0x40000000
+ 			0xfe 0x00000000 0xfe 0x00000000 0 0x40000000>;
+ 
+@@ -85,7 +84,7 @@ pci@1a000000 {
+ 			reg = <0 0x1a000000 0 0x02000000>,
+ 				<0xfe 0x00000000 0 0x20000000>;
+ 
+-			ranges = <0x01000000 0x0 0x00000000 0x0 0x00000000  0x0 0x00010000>,
++			ranges = <0x01000000 0x0 0x00000000 0x0 0x18000000  0x0 0x00010000>,
+ 					<0x02000000 0x0 0x40000000 0x0 0x40000000  0x0 0x40000000>;
+ 
+ 			gmac0: gmac@3,0 {
+-- 
+2.31.1
+

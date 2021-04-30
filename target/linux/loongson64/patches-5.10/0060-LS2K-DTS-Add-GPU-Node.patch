@@ -1,0 +1,37 @@
+From 0c2123f921541fc4b54e05b122718b8e75219362 Mon Sep 17 00:00:00 2001
+From: Jiaxun Yang <jiaxun.yang@flygoat.com>
+Date: Fri, 1 May 2020 00:22:05 +0800
+Subject: [PATCH 60/81] LS2K: DTS: Add GPU Node
+
+Nothing much, just ensure GPU can get it's IRQ.
+
+Signed-off-by: Jiaxun Yang <jiaxun.yang@flygoat.com>
+---
+ arch/mips/boot/dts/loongson/loongson2k.dts | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/arch/mips/boot/dts/loongson/loongson2k.dts b/arch/mips/boot/dts/loongson/loongson2k.dts
+index 1f4f9dd00a..b19bcdef49 100644
+--- a/arch/mips/boot/dts/loongson/loongson2k.dts
++++ b/arch/mips/boot/dts/loongson/loongson2k.dts
+@@ -132,6 +132,17 @@ ehci@4,2 {
+ 				interrupt-parent = <&liointc1>;
+ 			};
+ 
++			gpu@5,0 {
++				compatible = "pci0014,7a05.0",
++						   "pci0014,7a05",
++						   "pciclass010601",
++						   "pciclass0106";
++
++				reg = <0x2800 0x0 0x0 0x0 0x0>;
++				interrupts = <29 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-parent = <&liointc0>;
++			};
++
+ 			dc@6,0 {
+ 				compatible = "pci0014,7a06.0",
+ 						   "pci0014,7a06",
+-- 
+2.31.1
+
