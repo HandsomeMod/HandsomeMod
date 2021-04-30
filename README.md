@@ -49,7 +49,7 @@ https://github.com/openwrt/openwrt
 - Rapsberry pies (BCM27xx)
 - Allwinner Socs （Sunxi）
 - Freescale I.MX6ULL Family
-- Loongson64 Family
+- Loongson64 Family (5.10)
 
 
 ## License
