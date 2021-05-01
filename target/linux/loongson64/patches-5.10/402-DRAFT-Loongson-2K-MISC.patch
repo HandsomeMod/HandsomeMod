@@ -1,0 +1,82 @@
+From 7f316e98973f53af16862391b9573df13fa70e83 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sat, 1 May 2021 21:11:10 +0800
+Subject: [PATCH 02/17] DRAFT: Loongson-2K MISC
+
+---
+ arch/mips/include/asm/mach-loongson64/boot_param.h | 2 ++
+ arch/mips/loongson64/env.c                         | 7 +++++++
+ arch/mips/loongson64/init.c                        | 5 ++++-
+ drivers/platform/mips/cpu_hwmon.c                  | 3 +++
+ 4 files changed, 16 insertions(+), 1 deletion(-)
+
+diff --git a/arch/mips/include/asm/mach-loongson64/boot_param.h b/arch/mips/include/asm/mach-loongson64/boot_param.h
+index afc92b7a6..deafd177f 100644
+--- a/arch/mips/include/asm/mach-loongson64/boot_param.h
++++ b/arch/mips/include/asm/mach-loongson64/boot_param.h
+@@ -38,12 +38,14 @@ enum loongson_cpu_type {
+ 	Legacy_1B = 0x5,
+ 	Legacy_2G = 0x6,
+ 	Legacy_2H = 0x7,
++	Legacy_2K = 0x8,
+ 	Loongson_1A = 0x100,
+ 	Loongson_1B = 0x101,
+ 	Loongson_2E = 0x200,
+ 	Loongson_2F = 0x201,
+ 	Loongson_2G = 0x202,
+ 	Loongson_2H = 0x203,
++	Loongson_2K = 0x204,
+ 	Loongson_3A = 0x300,
+ 	Loongson_3B = 0x301
+ };
+diff --git a/arch/mips/loongson64/env.c b/arch/mips/loongson64/env.c
+index 11133f34b..facd19bf0 100644
+--- a/arch/mips/loongson64/env.c
++++ b/arch/mips/loongson64/env.c
+@@ -65,6 +65,13 @@ void __init prom_init_env(void)
+ 	cpu_clock_freq = ecpu->cpu_clock_freq;
+ 	loongson_sysconf.cputype = ecpu->cputype;
+ 	switch (ecpu->cputype) {
++	case Legacy_2K:
++	case Loongson_2K:
++		loongson_sysconf.cores_per_node = 2;
++		loongson_sysconf.cores_per_package = 2;
++		smp_group[0] = TO_UNCAC(0x1fe11000);
++		loongson_sysconf.workarounds = WORKAROUND_CPUHOTPLUG;
++		break;
+ 	case Legacy_3A:
+ 	case Loongson_3A:
+ 		loongson_sysconf.cores_per_node = 4;
+diff --git a/arch/mips/loongson64/init.c b/arch/mips/loongson64/init.c
+index ed75f7971..8bc276b8e 100644
+--- a/arch/mips/loongson64/init.c
++++ b/arch/mips/loongson64/init.c
+@@ -60,7 +60,10 @@ void __init prom_init(void)
+ 	prom_init_numa_memory();
+ 
+ 	/* Hardcode to CPU UART 0 */
+-	setup_8250_early_printk_port(TO_UNCAC(LOONGSON_REG_BASE + 0x1e0), 0, 1024);
++	if ((read_c0_prid() & PRID_IMP_MASK) == PRID_IMP_LOONGSON_64R)
++		setup_8250_early_printk_port(TO_UNCAC(0x1fe00000), 0, 1024);
++	else
++		setup_8250_early_printk_port(TO_UNCAC(LOONGSON_REG_BASE + 0x1e0), 0, 1024);
+ 
+ 	register_smp_ops(&loongson3_smp_ops);
+ 	board_nmi_handler_setup = mips_nmi_setup;
+diff --git a/drivers/platform/mips/cpu_hwmon.c b/drivers/platform/mips/cpu_hwmon.c
+index 386389ffe..ea2481a8a 100644
+--- a/drivers/platform/mips/cpu_hwmon.c
++++ b/drivers/platform/mips/cpu_hwmon.c
+@@ -161,6 +161,9 @@ static int __init loongson_hwmon_init(void)
+ {
+ 	int ret;
+ 
++	if (!loongson_chipcfg[0])
++		return;
++
+ 	pr_info("Loongson Hwmon Enter...\n");
+ 
+ 	if (cpu_has_csr())
+-- 
+2.17.1
+

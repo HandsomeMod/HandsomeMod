@@ -1,0 +1,2465 @@
+From 995fbb8653ffecc9a8bb00eb392b113496c80a8e Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sat, 1 May 2021 22:04:05 +0800
+Subject: [PATCH 07/17] DRAFT: LS2K Display
+
+---
+ arch/mips/boot/dts/loongson/loongson2k.dts    |   1 +
+ drivers/gpu/drm/Kconfig                       |   2 +
+ drivers/gpu/drm/Makefile                      |   1 +
+ drivers/gpu/drm/loongson/Kconfig              |  20 +
+ drivers/gpu/drm/loongson/Makefile             |  15 +
+ drivers/gpu/drm/loongson/loongson_connector.c | 201 +++++
+ drivers/gpu/drm/loongson/loongson_crtc.c      | 300 ++++++++
+ drivers/gpu/drm/loongson/loongson_drv.c       | 726 ++++++++++++++++++
+ drivers/gpu/drm/loongson/loongson_drv.h       | 280 +++++++
+ drivers/gpu/drm/loongson/loongson_encoder.c   | 100 +++
+ drivers/gpu/drm/loongson/loongson_irq.c       | 120 +++
+ drivers/gpu/drm/loongson/loongson_pll.c       | 226 ++++++
+ drivers/gpu/drm/loongson/loongson_vbios.c     | 259 +++++++
+ drivers/gpu/drm/loongson/loongson_vbios.h     |  80 ++
+ 14 files changed, 2331 insertions(+)
+ create mode 100755 drivers/gpu/drm/loongson/Kconfig
+ create mode 100755 drivers/gpu/drm/loongson/Makefile
+ create mode 100755 drivers/gpu/drm/loongson/loongson_connector.c
+ create mode 100644 drivers/gpu/drm/loongson/loongson_crtc.c
+ create mode 100755 drivers/gpu/drm/loongson/loongson_drv.c
+ create mode 100755 drivers/gpu/drm/loongson/loongson_drv.h
+ create mode 100755 drivers/gpu/drm/loongson/loongson_encoder.c
+ create mode 100755 drivers/gpu/drm/loongson/loongson_irq.c
+ create mode 100644 drivers/gpu/drm/loongson/loongson_pll.c
+ create mode 100755 drivers/gpu/drm/loongson/loongson_vbios.c
+ create mode 100755 drivers/gpu/drm/loongson/loongson_vbios.h
+
+diff --git a/arch/mips/boot/dts/loongson/loongson2k.dts b/arch/mips/boot/dts/loongson/loongson2k.dts
+index a6ae83bc6..547112418 100644
+--- a/arch/mips/boot/dts/loongson/loongson2k.dts
++++ b/arch/mips/boot/dts/loongson/loongson2k.dts
+@@ -248,6 +248,7 @@
+ 				interrupt-parent = <&liointc0>;
+ 			};
+ 
++
+ 			sata@8,0 {
+ 				compatible = "pci0014,7a08.0",
+ 						   "pci0014,7a08",
+diff --git a/drivers/gpu/drm/Kconfig b/drivers/gpu/drm/Kconfig
+index ca868271f..7f9833d80 100644
+--- a/drivers/gpu/drm/Kconfig
++++ b/drivers/gpu/drm/Kconfig
+@@ -392,6 +392,8 @@ source "drivers/gpu/drm/tidss/Kconfig"
+ 
+ source "drivers/gpu/drm/xlnx/Kconfig"
+ 
++source "drivers/gpu/drm/loongson/Kconfig"
++
+ # Keep legacy drivers last
+ 
+ menuconfig DRM_LEGACY
+diff --git a/drivers/gpu/drm/Makefile b/drivers/gpu/drm/Makefile
+index 81569009f..cab1296f0 100644
+--- a/drivers/gpu/drm/Makefile
++++ b/drivers/gpu/drm/Makefile
+@@ -123,4 +123,5 @@ obj-$(CONFIG_DRM_PANFROST) += panfrost/
+ obj-$(CONFIG_DRM_ASPEED_GFX) += aspeed/
+ obj-$(CONFIG_DRM_MCDE) += mcde/
+ obj-$(CONFIG_DRM_TIDSS) += tidss/
++obj-$(CONFIG_DRM_LOONGSON) += loongson/
+ obj-y			+= xlnx/
+diff --git a/drivers/gpu/drm/loongson/Kconfig b/drivers/gpu/drm/loongson/Kconfig
+new file mode 100755
+index 000000000..bfba7fbb3
+--- /dev/null
++++ b/drivers/gpu/drm/loongson/Kconfig
+@@ -0,0 +1,20 @@
++
++config DRM_LOONGSON
++	tristate "DRM support for LS2H/LS7A Display Controller"
++	depends on DRM && PCI
++	select FB_CFB_FILLRECT
++	select FB_CFB_COPYAREA
++	select FB_CFB_IMAGEBLIT
++	select DRM_KMS_HELPER
++	select DRM_KMS_FB_HELPER
++	select DRM_GEM_CMA_HELPER
++	select DRM_KMS_CMA_HELPER
++	select DRM_TTM
++	default MACH_LOONGSON64
++	help
++	  Support the display controllers found on the Loongson LS2H/LS7A
++	  bridge.
++
++	  This driver provides no built-in acceleration; acceleration is
++	  performed by Vivante GC1000. This driver provides kernel mode
++	  setting and buffer management to userspace.
+diff --git a/drivers/gpu/drm/loongson/Makefile b/drivers/gpu/drm/loongson/Makefile
+new file mode 100755
+index 000000000..b427f41fd
+--- /dev/null
++++ b/drivers/gpu/drm/loongson/Makefile
+@@ -0,0 +1,15 @@
++#
++# Makefile for the drm device driver.  This driver provides support for the
++# Direct Rendering Infrastructure (DRI)
++#
++
++ccflags-y := -Iinclude/drm
++loongson-y := loongson_drv.o \
++	loongson_irq.o \
++	loongson_encoder.o \
++	loongson_crtc.o \
++	loongson_connector.o \
++	loongson_pll.o \
++	loongson_vbios.o
++
++obj-$(CONFIG_DRM_LOONGSON)	+= loongson.o
+diff --git a/drivers/gpu/drm/loongson/loongson_connector.c b/drivers/gpu/drm/loongson/loongson_connector.c
+new file mode 100755
+index 000000000..118433c8f
+--- /dev/null
++++ b/drivers/gpu/drm/loongson/loongson_connector.c
+@@ -0,0 +1,201 @@
++/*
++ * Copyright (c) 2018 Loongson Technology Co., Ltd.
++ * Authors:
++ *	Chen Zhu <zhuchen@loongson.cn>
++ *	Yaling Fang <fangyaling@loongson.cn>
++ *	Dandan Zhang <zhangdandan@loongson.cn>
++ *	Huacai Chen <chenhc@lemote.com>
++ * This program is free software; you can redistribute  it and/or modify it
++ * under  the terms of  the GNU General  Public License as published by the
++ * Free Software Foundation;  either version 2 of the  License, or (at your
++ * option) any later version.
++ */
++
++#include <linux/export.h>
++#include <linux/i2c.h>
++#include <linux/i2c-algo-bit.h>
++#include <linux/pm_runtime.h>
++#include <drm/drm_atomic_helper.h>
++#include <drm/drm_crtc_helper.h>
++//#include <drm/drm_probe_helper.h>
++#include <drm/drm_edid.h>
++
++#include "loongson_drv.h"
++
++#define DVO_I2C_NAME "loongson_dvo_i2c"
++#define adapter_to_i2c_client(d) container_of(d, struct i2c_client, adapter)
++
++static struct eep_info{
++	struct i2c_adapter *adapter;
++	unsigned short addr;
++}eeprom_info[2];
++
++static DEFINE_MUTEX(edid_lock);
++struct i2c_client *loongson_drm_i2c_client[2];
++
++/**
++ * loongson_connector_best_encoder
++ *
++ * @connector: point to the drm_connector structure
++ *
++ * Select the best encoder for the given connector. Used by both the helpers in
++ * drm_atomic_helper_check_modeset() and legacy CRTC helpers
++ */
++static struct drm_encoder *loongson_connector_best_encoder(struct drm_connector
++						  *connector)
++{
++	int enc_id = drm_connector_index(connector);
++	/* pick the encoder ids */
++	if (enc_id)
++		return drm_encoder_find(connector->dev, NULL, enc_id);
++	return NULL;
++}
++
++
++/**
++ * loongson_vga_get_modes
++ *
++ * @connetcor: central DRM connector control structure
++ *
++ * Fill in all modes currently valid for the sink into the connector->probed_modes list.
++ * It should also update the EDID property by calling drm_connector_update_edid_property().
++ */
++static int loongson_vga_get_modes(struct drm_connector *connector)
++{
++	int ret;
++	if(drm_connector_index(connector) == 0){
++		ret = drm_add_modes_noedid(connector, 1024, 768);
++		drm_set_preferred_mode(connector, 1024, 768);
++	} else {
++		ret = drm_add_modes_noedid(connector, 1024, 768);
++		drm_set_preferred_mode(connector, 1024, 768);
++	}
++	return ret;
++}
++
++/**
++ * loongson_i2c_create
++ *
++ * @dev: point to drm_device structure
++ *
++ * Create i2c adapter
++ */
++struct loongson_i2c_chan *loongson_i2c_create(struct drm_device *dev)
++{
++	int ret, data, clock;
++	struct loongson_i2c_chan *i2c;
++	struct loongson_drm_device *ldev = dev->dev_private;
++
++	return i2c;
++}
++
++/**
++ * loongson_i2c_destroy
++ *
++ * @i2c: point to loongson_i2c_chan
++ *
++ * Destroy i2c adapter
++ */
++void loongson_i2c_destroy(struct loongson_i2c_chan *i2c)
++{
++	if (!i2c)
++		return;
++	i2c_del_adapter(&i2c->adapter);
++	kfree(i2c);
++}
++
++/**
++ * loongson_vga_detect
++ *
++ * @connector: point to drm_connector
++ * @force: bool
++ *
++ * Check to see if anything is attached to the connector.
++ * The parameter force is set to false whilst polling,
++ * true when checking the connector due to a user request
++ */
++static enum drm_connector_status loongson_vga_detect(struct drm_connector
++						   *connector, bool force)
++{
++	if (drm_connector_index(connector) == 0)
++		return connector_status_connected;
++	return connector_status_disconnected;
++}
++
++
++/**
++ * loongson_connector_destroy
++ *
++ * @connector: point to the drm_connector structure
++ *
++ * Clean up connector resources
++ */
++static void loongson_connector_destroy(struct drm_connector *connector)
++{
++	struct loongson_connector *loongson_connector = to_loongson_connector(connector);
++	drm_connector_cleanup(connector);
++	kfree(connector);
++}
++
++
++/**
++ * These provide the minimum set of functions required to handle a connector
++ *
++ * Helper operations for connectors.These functions are used
++ * by the atomic and legacy modeset helpers and by the probe helpers.
++ */
++static const struct drm_connector_helper_funcs loongson_vga_connector_helper_funcs = {
++        .get_modes = loongson_vga_get_modes,
++};
++
++/**
++ * These provide the minimum set of functions required to handle a connector
++ *
++ * Control connectors on a given device.
++ * The functions below allow the core DRM code to control connectors,
++ * enumerate available modes and so on.
++ */
++static const struct drm_connector_funcs loongson_vga_connector_funcs = {
++//       .dpms = drm_helper_connector_dpms,
++        .detect = loongson_vga_detect,
++        .fill_modes = drm_helper_probe_single_connector_modes,
++	.destroy = drm_connector_cleanup,
++	.reset = drm_atomic_helper_connector_reset,
++	.atomic_duplicate_state = drm_atomic_helper_connector_duplicate_state,
++	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
++};
++
++/**
++ * loongson_vga_init
++ *
++ * @dev: drm device
++ * @connector_id:
++ *
++ * Vga is the interface between host and monitor
++ * This function is to init vga
++ */
++struct drm_connector *loongson_vga_init(struct drm_device *dev, unsigned int connector_id)
++{
++	struct i2c_adapter *i2c_adap;
++	struct i2c_board_info i2c_info;
++	struct drm_connector *connector;
++	struct loongson_connector *loongson_connector;
++	struct loongson_drm_device *ldev = (struct loongson_drm_device*)dev->dev_private;
++
++	loongson_connector = kzalloc(sizeof(struct loongson_connector), GFP_KERNEL);
++	if (!loongson_connector)
++		return NULL;
++
++	pr_info("Connector INIT ID: %d\n", connector_id);
++
++	connector = &loongson_connector->base;
++
++	drm_connector_helper_add(connector, &loongson_vga_connector_helper_funcs);
++
++	drm_connector_init(dev, connector,
++			   &loongson_vga_connector_funcs, DRM_MODE_CONNECTOR_VGA);
++
++	drm_connector_register(connector);
++
++	return connector;
++}
+diff --git a/drivers/gpu/drm/loongson/loongson_crtc.c b/drivers/gpu/drm/loongson/loongson_crtc.c
+new file mode 100644
+index 000000000..469091320
+--- /dev/null
++++ b/drivers/gpu/drm/loongson/loongson_crtc.c
+@@ -0,0 +1,300 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Copyright (C) 2019 Lemote Inc.
++ * Authors:
++ *	Jiaxun Yang <jiaxun.yang@flygoat.com>
++ */
++
++#include <drm/drm_atomic_helper.h>
++#include <drm/drm_device.h>
++#include <drm/drm_fb_cma_helper.h>
++#include <drm/drm_gem_cma_helper.h>
++#include <drm/drm_vblank.h>
++#include <drm/drm_plane_helper.h>
++#include <drm/drm_fourcc.h>
++
++#include "loongson_drv.h"
++
++static const uint32_t loongson_primary_formats[] = {
++	DRM_FORMAT_RGB565,
++	DRM_FORMAT_RGB888,
++	DRM_FORMAT_XRGB8888,
++	DRM_FORMAT_ARGB8888,
++};
++
++static const uint64_t loongson_format_modifiers[] = {
++    DRM_FORMAT_MOD_LINEAR,
++    DRM_FORMAT_MOD_INVALID
++};
++
++static int loongson_crtc_enable_vblank(struct drm_crtc *crtc) {
++	struct loongson_crtc *lcrtc = to_loongson_crtc(crtc);
++	struct loongson_drm_device *ldev = lcrtc->ldev;
++
++	if(lcrtc->crtc_id == 0) {
++		ldev->int_reg |= (BIT(LS_INT_DVO0_FB_END) << 16);
++	} else {
++		ldev->int_reg |= (BIT(LS_INT_DVO1_FB_END) << 16);
++	}
++
++	writel(ldev->int_reg, ldev->rmmio  + LS_FB_INT_REG);
++
++	return 0;
++}
++
++static void loongson_crtc_disable_vblank(struct drm_crtc *crtc) {
++	struct loongson_crtc *lcrtc = to_loongson_crtc(crtc);
++	struct loongson_drm_device *ldev = lcrtc->ldev;
++
++	if(lcrtc->crtc_id == 0) {
++		ldev->int_reg &= (~BIT(LS_INT_DVO0_VSYNC) << 16);
++	} else {
++		ldev->int_reg &= (~BIT(LS_INT_DVO1_VSYNC) << 16);
++	}
++
++	writel(ldev->int_reg, ldev->rmmio  + LS_FB_INT_REG);
++
++}
++
++static const struct drm_crtc_funcs loongson_crtc_funcs = {
++	.destroy = drm_crtc_cleanup,
++	.set_config = drm_atomic_helper_set_config,
++	.page_flip = drm_atomic_helper_page_flip,
++	.reset = drm_atomic_helper_crtc_reset,
++	.atomic_duplicate_state = drm_atomic_helper_crtc_duplicate_state,
++	.atomic_destroy_state = drm_atomic_helper_crtc_destroy_state,
++	.enable_vblank = loongson_crtc_enable_vblank,
++	.disable_vblank = loongson_crtc_disable_vblank,
++};
++
++static enum drm_mode_status loongson_crtc_mode_valid(struct drm_crtc *crtc,
++						    const struct drm_display_mode *mode)
++{
++	if(mode->hdisplay % 16)
++		return MODE_BAD;
++
++	return MODE_OK;
++}
++
++u32 ls_crtc_read(struct loongson_crtc *lcrtc, u32 offset)
++{
++    struct loongson_drm_device *ldev = lcrtc->ldev;
++//	pr_err("ls_read: %lx", ldev->rmmio + offset + (lcrtc->crtc_id * REG_OFF));
++    return readl(ldev->rmmio + offset + (lcrtc->crtc_id * REG_OFF));
++	return 0;
++}
++
++void ls_crtc_write(struct loongson_crtc *lcrtc, u32 offset, u32 val)
++{
++    struct loongson_drm_device *ldev = lcrtc->ldev;
++//	pr_err("ls_write: %lx, %lx", ldev->rmmio + offset + (lcrtc->crtc_id * REG_OFF), val);
++    writel(val, ldev->rmmio + offset + (lcrtc->crtc_id * REG_OFF));
++}
++
++static void loongson_crtc_mode_set_nofb(struct drm_crtc *crtc)
++{
++    struct loongson_crtc *lcrtc = to_loongson_crtc(crtc);
++	struct drm_display_mode *mode = &crtc->state->adjusted_mode;
++
++
++    unsigned int hr, hss, hse, hfl;
++	unsigned int vr, vss, vse, vfl;
++    unsigned int width, height;
++	unsigned int crtc_id, pix_freq;
++
++    hr	= mode->hdisplay;
++	hss	= mode->hsync_start;
++	hse	= mode->hsync_end;
++	hfl	= mode->htotal;
++
++	vr	= mode->vdisplay;
++	vss	= mode->vsync_start;
++	vse	= mode->vsync_end;
++	vfl	= mode->vtotal;
++
++	pix_freq = mode->clock;
++
++
++//    pr_info("fb width = %d, height = %d\n", width, height);
++	pr_info("crtc_id = %d, hr = %d, hss = %d, hse = %d, hfl = %d, vr = %d, vss = %d, vse = %d, vfl = %d, pix_freq = %d,\n",
++			lcrtc->crtc_id, hr, hss, hse, hfl, vr, vss, vse, vfl, pix_freq);
++
++	spin_lock_irq(&loongson_reglock);
++    ls_crtc_write(lcrtc, LS_FB_DITCFG_DVO0_REG, 0);
++    ls_crtc_write(lcrtc, LS_FB_DITTAB_LO_DVO0_REG, 0);
++    ls_crtc_write(lcrtc, LS_FB_DITTAB_HI_DVO0_REG, 0);
++    ls_crtc_write(lcrtc, LS_FB_PANCFG_DVO0_REG, 0x80001311);
++    ls_crtc_write(lcrtc, LS_FB_PANTIM_DVO0_REG, 0);
++
++    ls_crtc_write(lcrtc, LS_FB_HDISPLAY_DVO0_REG, (mode->crtc_htotal << 16) | mode->crtc_hdisplay);
++    ls_crtc_write(lcrtc, LS_FB_HSYNC_DVO0_REG, 0x40000000 | (mode->crtc_hsync_end << 16) | mode->crtc_hsync_start);
++
++    ls_crtc_write(lcrtc, LS_FB_VDISPLAY_DVO0_REG, (mode->crtc_vtotal << 16) | mode->crtc_vdisplay);
++    ls_crtc_write(lcrtc, LS_FB_VSYNC_DVO0_REG, 0x40000000 | (mode->crtc_vsync_end << 16) | mode->crtc_vsync_start);
++
++	ls_crtc_write(lcrtc, LS_FB_STRI_DVO0_REG, (crtc->primary->state->fb->pitches[0] + 255) & ~255);
++
++	pr_info("stride: %x",(crtc->primary->state->fb->pitches[0] + 255) & ~255);
++
++
++    switch (crtc->primary->state->fb->format->format) {
++		case DRM_FORMAT_RGB565:
++			pr_info("16bit");
++			lcrtc->cfg_reg |= 0x3;
++			break;
++		case DRM_FORMAT_RGB888:
++		default:
++			pr_info("24/32bit");
++			lcrtc->cfg_reg |= 0x4;
++			break;
++    }
++	spin_unlock_irq(&loongson_reglock);
++
++	ls_config_pll(lcrtc->crtc_id, mode->clock);
++}
++
++static void loongson_crtc_atomic_enable(struct drm_crtc *crtc,
++				       struct drm_crtc_state *old_state)
++{
++	struct loongson_crtc *lcrtc = to_loongson_crtc(crtc);
++
++	lcrtc->cfg_reg |= CFG_ENABLE;
++
++	spin_lock_irq(&loongson_reglock);
++    ls_crtc_write(lcrtc, LS_FB_CFG_DVO0_REG, 0x0);
++	mdelay(100);
++    ls_crtc_write(lcrtc, LS_FB_CFG_DVO0_REG, lcrtc->cfg_reg);
++	mdelay(10);
++	spin_unlock_irq(&loongson_reglock);
++
++	drm_crtc_vblank_on(crtc);
++}
++
++static void loongson_crtc_atomic_disable(struct drm_crtc *crtc,
++					struct drm_crtc_state *old_state)
++{
++	struct loongson_crtc *lcrtc = to_loongson_crtc(crtc);
++
++	lcrtc->cfg_reg &= ~CFG_ENABLE;
++	spin_lock_irq(&loongson_reglock);
++//    ls_crtc_write(lcrtc, LS_FB_CFG_DVO0_REG, lcrtc->cfg_reg);
++    ls_crtc_write(lcrtc, LS_FB_CFG_DVO0_REG, 0x0);
++	spin_unlock_irq(&loongson_reglock);
++
++	spin_lock_irq(&crtc->dev->event_lock);
++	if (crtc->state->event) {
++		drm_crtc_send_vblank_event(crtc, crtc->state->event);
++		crtc->state->event = NULL;
++	}
++	spin_unlock_irq(&crtc->dev->event_lock);
++
++	drm_crtc_vblank_off(crtc);
++}
++
++static void loongson_crtc_atomic_flush(struct drm_crtc *crtc,
++				  struct drm_crtc_state *old_crtc_state)
++{
++	struct loongson_crtc *lcrtc = to_loongson_crtc(crtc);
++	struct drm_pending_vblank_event *event = crtc->state->event;
++
++	if (event) {
++		crtc->state->event = NULL;
++
++		spin_lock_irq(&crtc->dev->event_lock);
++		if (drm_crtc_vblank_get(crtc) == 0)
++			drm_crtc_arm_vblank_event(crtc, event);
++		else
++			drm_crtc_send_vblank_event(crtc, event);
++		spin_unlock_irq(&crtc->dev->event_lock);
++	}
++}
++
++
++static const struct drm_crtc_helper_funcs loongson_crtc_helper_funcs = {
++	.mode_valid = loongson_crtc_mode_valid,
++	.mode_set_nofb	= loongson_crtc_mode_set_nofb,
++	.atomic_enable	= loongson_crtc_atomic_enable,
++	.atomic_disable	= loongson_crtc_atomic_disable,
++	.atomic_flush	= loongson_crtc_atomic_flush,
++};
++
++static void loongson_plane_atomic_update(struct drm_plane *plane,
++					struct drm_plane_state *old_state)
++{
++	struct loongson_crtc *lcrtc;
++
++	if (!plane->state->crtc || !plane->state->fb)
++		return;
++
++	lcrtc = to_loongson_crtc(plane->state->crtc);
++	spin_lock_irq(&loongson_reglock);
++	if(old_state->fb){
++		if(old_state->fb->pitches[0] != plane->state->fb->pitches[0])
++    		ls_crtc_write(lcrtc, LS_FB_STRI_DVO0_REG, plane->state->fb->pitches[0]);
++	} else {
++//		ls_crtc_write(lcrtc, LS_FB_STRI_DVO0_REG, plane->state->fb->pitches[0]);
++	}
++	if(((ls_crtc_read(lcrtc, LS_FB_CFG_DVO0_REG) & CFG_FBNUM)  >> CFG_FBNUM_BIT) == 1) {
++    	ls_crtc_write(lcrtc, LS_FB_ADDR0_DVO0_REG, drm_fb_cma_get_gem_addr(plane->state->fb, plane->state, 0));
++	} else {
++    	ls_crtc_write(lcrtc, LS_FB_ADDR1_DVO0_REG, drm_fb_cma_get_gem_addr(plane->state->fb, plane->state, 0));
++	}
++	ls_crtc_write(lcrtc, LS_FB_CFG_DVO0_REG, lcrtc->cfg_reg | CFG_FBSWITCH);
++	spin_unlock_irq(&loongson_reglock);
++}
++
++static const struct drm_plane_helper_funcs loongson_plane_helper_funcs = {
++	.atomic_update = loongson_plane_atomic_update,
++};
++
++static void loongson_plane_destroy(struct drm_plane *plane)
++{
++	drm_plane_cleanup(plane);
++}
++
++
++static const struct drm_plane_funcs loongson_plane_funcs = {
++	.atomic_duplicate_state = drm_atomic_helper_plane_duplicate_state,
++	.atomic_destroy_state = drm_atomic_helper_plane_destroy_state,
++	.destroy = loongson_plane_destroy,
++	.disable_plane = drm_atomic_helper_disable_plane,
++	.reset = drm_atomic_helper_plane_reset,
++	.update_plane = drm_atomic_helper_update_plane,
++};
++
++void loongson_crtc_init(struct loongson_drm_device *ldev)
++{
++	struct loongson_crtc *ls_crtc;
++	int i, ret;
++
++	for(i=0;i<ldev->vbios->crtc_num;i++){
++		ldev->lcrtc[i].ldev = ldev;
++        ldev->lcrtc[i].crtc_id = i;
++		ldev->lcrtc[i].cfg_reg = CFG_RESET;
++
++		ls_crtc_write(&ldev->lcrtc[i], LS_FB_CFG_DVO0_REG, CFG_RESET);
++
++		pr_info("init crtc");
++
++        ldev->lcrtc[i].primary = devm_kzalloc(ldev->dev->dev, sizeof(*ldev->lcrtc[i].primary), GFP_KERNEL);
++	    if (!ldev->lcrtc[i].primary)
++		    return;
++
++	    ret = drm_universal_plane_init(ldev->dev, ldev->lcrtc[i].primary, BIT(i), &loongson_plane_funcs,
++				       loongson_primary_formats,
++				       ARRAY_SIZE(loongson_primary_formats),
++				       loongson_format_modifiers,
++				       DRM_PLANE_TYPE_PRIMARY, NULL);
++        if(ret)
++            return;
++        drm_plane_helper_add(ldev->lcrtc[i].primary, &loongson_plane_helper_funcs);
++
++        ret = drm_crtc_init_with_planes(ldev->dev, &ldev->lcrtc[i].base,ldev->lcrtc[i].primary, NULL,
++				&loongson_crtc_funcs, NULL);
++        if (ret) {
++		    loongson_plane_destroy(ldev->lcrtc[i].primary);
++		return;
++	    }
++        drm_crtc_helper_add(&ldev->lcrtc[i].base, &loongson_crtc_helper_funcs);
++    }
++}
+diff --git a/drivers/gpu/drm/loongson/loongson_drv.c b/drivers/gpu/drm/loongson/loongson_drv.c
+new file mode 100755
+index 000000000..4524baa63
+--- /dev/null
++++ b/drivers/gpu/drm/loongson/loongson_drv.c
+@@ -0,0 +1,726 @@
++/*
++ * Copyright (c) 2018 Loongson Technology Co., Ltd.
++ * Authors:
++ *	Chen Zhu <zhuchen@loongson.cn>
++ *	Yaling Fang <fangyaling@loongson.cn>
++ *	Dandan Zhang <zhangdandan@loongson.cn>
++ *	Huacai Chen <chenhc@lemote.com>
++ * This program is free software; you can redistribute  it and/or modify it
++ * under  the terms of  the GNU General  Public License as published by the
++ * Free Software Foundation;  either version 2 of the  License, or (at your
++ * option) any later version.
++ */
++
++#include <asm/addrspace.h>
++#include <linux/dma-contiguous.h>
++#include <linux/dma-mapping.h>
++#include <linux/vmalloc.h>
++#include <linux/console.h>
++#include <linux/device.h>
++#include <linux/slab.h>
++#include <linux/fs.h>
++#include <linux/pci.h>
++#include <linux/pci_ids.h>
++#include <linux/platform_device.h>
++#include <linux/module.h>
++#include <linux/kernel.h>
++#include <linux/errno.h>
++#include <linux/init.h>
++#include <linux/string.h>
++#include <linux/vga_switcheroo.h>
++#include <linux/vgaarb.h>
++
++#include <drm/drm_atomic_helper.h>
++#include <drm/drm_crtc_helper.h>
++//#include <drm/drm_probe_helper.h>
++#include <drm/drm_gem_cma_helper.h>
++#include <drm/drm_gem_framebuffer_helper.h>
++#include "loongson_drv.h"
++
++#define DEVICE_NAME	"loongson-drm"
++#define DRIVER_NAME	"loongson-drm"
++#define DRIVER_DESC	"Loongson DRM Driver"
++#define DRIVER_DATE	"20190705"
++#define DRIVER_MAJOR	1
++#define DRIVER_MINOR	0
++#define DRIVER_PATCHLEVEL	0
++
++static bool poll_connector = false;
++module_param_named(poll, poll_connector, bool, 0600);
++
++DEFINE_SPINLOCK(loongson_reglock);
++
++static void loongson_output_poll_changed(struct drm_device *dev)
++{
++	struct loongson_drm_device *ldev = dev->dev_private;
++//	loongson_fb_output_poll_changed(ldev);
++}
++
++/**
++ * loongson_mode_funcs---basic driver provided mode setting functions
++ *
++ * Some global (i.e. not per-CRTC, connector, etc) mode setting functions that
++ * involve drivers.
++ */
++static const struct drm_mode_config_funcs loongson_mode_funcs = {
++	.fb_create = drm_gem_fb_create,
++	.atomic_check = drm_atomic_helper_check,
++	.atomic_commit = drm_atomic_helper_commit,
++	.output_poll_changed = loongson_output_poll_changed
++};
++
++/**
++ *  loongson_drm_device_init  ----init drm device
++ *
++ * @dev   pointer to drm_device structure
++ * @flags start up flag
++ *
++ * RETURN
++ *   drm device init result
++ */
++static int loongson_drm_device_init(struct drm_device *dev, uint32_t flags)
++{
++	int ret;
++	struct loongson_drm_device *ldev = dev->dev_private;
++
++	loongson_vbios_init(ldev);
++	ldev->num_crtc = ldev->vbios->crtc_num;
++	ldev->fb_vram_base = 0x0;
++
++	if (ldev->dev->pdev) {
++		/*BAR 0 contains registers */
++		ldev->rmmio_base = pci_resource_start(ldev->dev->pdev, 0);
++		ldev->rmmio_size = pci_resource_len(ldev->dev->pdev, 0);
++
++		ldev->rmmio = pcim_iomap(dev->pdev, 0, 0);
++		if (ldev->rmmio == NULL)
++			return -ENOMEM;
++	} else {
++		struct resource	*res;
++
++		res = platform_get_resource(to_platform_device(dev->dev), IORESOURCE_MEM, 0);
++
++		ldev->rmmio_base = res->start;
++		ldev->rmmio_size = resource_size(res);
++
++		ldev->rmmio = ioremap(ldev->rmmio_base, ldev->rmmio_size);
++		if (ldev->rmmio == NULL)
++			return -ENOMEM;
++	}
++
++	DRM_INFO("ldev->rmmio_base = 0x%llx, ldev->rmmio_size = 0x%llx\n",
++			ldev->rmmio_base, ldev->rmmio_size);
++
++	if (!devm_request_mem_region(ldev->dev->dev, ldev->rmmio_base, ldev->rmmio_size,
++			"loongson_drmfb_mmio")) {
++		DRM_ERROR("Can't reserve mmio registers\n");
++		return -ENOMEM;
++	}
++
++	return 0;
++}
++
++/**
++ * loongson_modeset_init --- init kernel mode setting
++ *
++ * @ldev: pointer to loongson_drm_device structure
++ *
++ * RETURN
++ *  return init result
++ */
++int loongson_modeset_init(struct loongson_drm_device *ldev)
++{
++	struct drm_encoder *encoder;
++	struct drm_connector *connector;
++	int ret,i;
++
++
++	ldev->mode_info[0].mode_config_initialized = true;
++	ldev->mode_info[1].mode_config_initialized = true;
++
++	ldev->dev->mode_config.max_width = LOONGSON_MAX_FB_WIDTH;
++	ldev->dev->mode_config.max_height = LOONGSON_MAX_FB_HEIGHT;
++
++	ldev->dev->mode_config.cursor_width = 32;
++	ldev->dev->mode_config.cursor_height = 32;
++
++	ldev->dev->mode_config.allow_fb_modifiers = true;
++	ldev->dev->mode_config.fb_base = ldev->mc.vram_base;
++
++	loongson_crtc_init(ldev);
++	ldev->num_crtc = ldev->vbios->crtc_num;
++
++	for (i=0; i<ldev->num_crtc; i++) {
++		DRM_DEBUG("loongson drm encoder init\n");
++		ldev->mode_info[i].crtc = &ldev->lcrtc[i];
++		encoder = loongson_encoder_init(ldev, ldev->dev, i);
++		to_loongson_encoder(encoder)->lcrtc = &ldev->lcrtc[i];
++		if (!encoder) {
++			DRM_ERROR("loongson_encoder_init failed\n");
++			return -1;
++		}
++
++		DRM_DEBUG("loongson drm i2c init\n");
++		connector = loongson_vga_init(ldev->dev, i);
++		if (!connector) {
++			DRM_ERROR("loongson_vga_init failed\n");
++			return -1;
++		}
++
++		ldev->mode_info[i].connector = to_loongson_connector(connector);
++		drm_connector_attach_encoder(connector, encoder);
++		if (poll_connector)
++			connector->polled = DRM_CONNECTOR_POLL_CONNECT | DRM_CONNECTOR_POLL_DISCONNECT;
++	}
++
++	return 0;
++}
++
++/**
++ * loongson_modeset_fini --- deinit kernel mode setting
++ *
++ * @ldev: pointer to loongson_drm_device structure
++ *
++ * RETURN
++ */
++void loongson_modeset_fini(struct loongson_drm_device *ldev)
++{
++}
++
++/**
++ * loongson_vga_load - setup chip and create an initial config
++ * @dev: DRM device
++ * @flags: startup flags
++ *
++ * The driver load routine has to do several things:
++ *   - initialize the memory manager
++ *   - allocate initial config memory
++ *   - setup the DRM framebuffer with the allocated memory
++ */
++static int loongson_drm_load(struct drm_device *dev, unsigned long flags)
++{
++	int r, ret, irq;
++	struct loongson_drm_device *ldev;
++
++	dma_set_mask_and_coherent(dev->dev, DMA_BIT_MASK(32));
++
++	ldev = devm_kzalloc(dev->dev, sizeof(struct loongson_drm_device), GFP_KERNEL);
++	if (ldev == NULL)
++		return -ENOMEM;
++	dev->dev_private = (void *)ldev;
++	ldev->dev = dev;
++
++	ret = loongson_drm_device_init(dev, flags);
++	DRM_DEBUG("end loongson drm device init.\n");
++
++	drm_mode_config_init(dev);
++	dev->mode_config.funcs = (void *)&loongson_mode_funcs;
++	dev->mode_config.preferred_depth = 24;
++	dev->mode_config.prefer_shadow = 1;
++
++	if (dev->pdev) {
++		irq = dev->pdev->irq;
++		pci_set_drvdata(dev->pdev, dev);
++		vga_set_default_device(dev->pdev);
++	} else {
++		irq = platform_get_irq(to_platform_device(dev->dev), 0);
++		platform_set_drvdata(to_platform_device(dev->dev), dev);
++	}
++	dev_set_drvdata(dev->dev, dev);
++
++	r = drm_irq_install(dev, irq);
++	if (r)
++		dev_err(dev->dev, "Fatal error during irq install: %d\n", r);
++
++	r = loongson_modeset_init(ldev);
++	if (r)
++		dev_err(dev->dev, "Fatal error during modeset init: %d\n", r);
++
++	ldev->inited = true;
++	drm_mode_config_reset(dev);
++
++	r = drm_vblank_init(dev, ldev->num_crtc);
++	if (r)
++		dev_err(dev->dev, "Fatal error during vblank init: %d\n", r);
++
++	/* Make small buffers to store a hardware cursor (double buffered icon updates) */
++	ldev->cursor = drm_gem_cma_create(dev, roundup(32*32*4, PAGE_SIZE));
++
++	drm_kms_helper_poll_init(dev);
++
++	return 0;
++}
++
++/**
++ * loongson_drm_unload--release drm resource
++ *
++ * @dev: pointer to drm_device
++ *
++ */
++static void loongson_drm_unload(struct drm_device *dev)
++{
++        struct loongson_drm_device *ldev = dev->dev_private;
++
++	if (ldev == NULL)
++		return;
++
++	loongson_modeset_fini(ldev);
++	drm_mode_config_cleanup(dev);
++	dev->dev_private = NULL;
++	dev_set_drvdata(dev->dev, NULL);
++	ldev->inited = false;
++
++	return;
++}
++
++/**
++ * loongson_drm_open -Driver callback when a new struct drm_file is opened.
++ * Useful for setting up driver-private data structures like buffer allocators,
++ *  execution contexts or similar things.
++ *
++ * @dev DRM device
++ * @file DRM file private date
++ *
++ * RETURN
++ * 0 on success, a negative error code on failure, which will be promoted to
++ *  userspace as the result of the open() system call.
++ */
++static int loongson_drm_open(struct drm_device *dev, struct drm_file *file)
++{
++	file->driver_priv = NULL;
++
++	DRM_DEBUG("open: dev=%p, file=%p", dev, file);
++
++	return 0;
++}
++
++DEFINE_DRM_GEM_CMA_FOPS(fops);
++
++/**
++ * loongson_drm_driver - DRM device structure
++ *
++ * .load: driver callback to complete initialization steps after the driver is registered
++ * .unload:Reverse the effects of the driver load callback
++ * .open:Driver callback when a new struct drm_file is opened
++ * .fops:File operations for the DRM device node.
++ * .gem_free_object:deconstructor for drm_gem_objects
++ * .dumb_create:This creates a new dumb buffer in the driver’s backing storage manager
++ *  (GEM, TTM or something else entirely) and returns the resulting buffer handle.
++ *  This handle can then be wrapped up into a framebuffer modeset object
++ * .dumb_map_offset:Allocate an offset in the drm device node’s address space
++ *  to be able to memory map a dumb buffer
++ * .dump_destory:This destroys the userspace handle for the given dumb backing storage buffer
++ */
++static struct drm_driver loongson_drm_driver = {
++	.driver_features = DRIVER_MODESET | DRIVER_GEM | DRIVER_HAVE_IRQ | DRIVER_ATOMIC,
++	.open = loongson_drm_open,
++	.fops = &fops,
++
++	.dumb_create		= drm_gem_cma_dumb_create,
++	.gem_free_object_unlocked = drm_gem_cma_free_object,
++	.gem_vm_ops		= &drm_gem_cma_vm_ops,
++
++	.prime_handle_to_fd	= drm_gem_prime_handle_to_fd,
++	.prime_fd_to_handle	= drm_gem_prime_fd_to_handle,
++
++	.gem_prime_import	= drm_gem_prime_import,
++	.gem_prime_export	= drm_gem_prime_export,
++
++	.gem_prime_get_sg_table	= drm_gem_cma_prime_get_sg_table,
++	.gem_prime_import_sg_table = drm_gem_cma_prime_import_sg_table,
++	.gem_prime_vmap		= drm_gem_cma_prime_vmap,
++	.gem_prime_vunmap	= drm_gem_cma_prime_vunmap,
++	.gem_prime_mmap		= drm_gem_cma_prime_mmap,
++
++	.irq_handler = loongson_irq_handler,
++	.irq_preinstall = loongson_irq_preinstall,
++	.irq_postinstall = loongson_irq_postinstall,
++	.irq_uninstall = loongson_irq_uninstall,
++	.name = DRIVER_NAME,
++	.desc = DRIVER_DESC,
++	.date = DRIVER_DATE,
++	.major = DRIVER_MAJOR,
++	.minor = DRIVER_MINOR,
++	.patchlevel = DRIVER_PATCHLEVEL,
++};
++
++/**
++ * loongson_drm_pci_devices  -- pci device id info
++ *
++ * __u32 vendor, device           Vendor and device ID or PCI_ANY_ID
++ * __u32 subvendor, subdevice     Subsystem ID's or PCI_ANY_ID
++ * __u32 class, class_mask        (class,subclass,prog-if) triplet
++ * kernel_ulong_t driver_data     Data private to the driver
++ */
++static struct pci_device_id loongson_drm_pci_devices[] = {
++	{PCI_DEVICE(PCI_VENDOR_ID_LOONGSON, PCI_DEVICE_ID_LOONGSON_DC)},
++	{0, 0, 0, 0, 0, 0, 0}
++};
++
++/**
++ * loongson_drm_pci_register -- add pci device
++ *
++ * @pdev PCI device
++ * @ent pci device id
++ */
++static int loongson_drm_pci_register(struct pci_dev *pdev,
++				 const struct pci_device_id *ent)
++
++{
++	int ret;
++	struct drm_device *dev;
++
++	dev = drm_dev_alloc(&loongson_drm_driver, &pdev->dev);
++	if (IS_ERR(dev))
++		return PTR_ERR(dev);
++
++	dev->pdev = pdev;
++
++	loongson_drm_load(dev, 0x0);
++
++	ret = drm_dev_register(dev, 0);
++	if (ret)
++		goto err_free;
++
++	drm_fbdev_generic_setup(dev, 32);
++
++	return 0;
++
++err_free:
++	drm_dev_put(dev);
++	return ret;
++}
++
++/**
++ * loongson_drm_pci_unregister -- release drm device
++ *
++ * @pdev PCI device
++ */
++static void loongson_drm_pci_unregister(struct pci_dev *pdev)
++{
++	struct drm_device *dev = pci_get_drvdata(pdev);
++	loongson_drm_unload(dev);
++	drm_dev_put(dev);
++}
++
++static int loongson_drm_plat_register(struct platform_device *pdev)
++
++{
++	int ret;
++	struct drm_device *dev;
++
++	dev = drm_dev_alloc(&loongson_drm_driver, &pdev->dev);
++	if (IS_ERR(dev))
++		return PTR_ERR(dev);
++
++	loongson_drm_load(dev, 0x0);
++
++	ret = drm_dev_register(dev, 0);
++	if (ret)
++		goto err_free;
++
++	drm_fbdev_generic_setup(dev, 32);
++
++	return 0;
++
++err_free:
++	drm_dev_put(dev);
++	return ret;
++}
++
++static int loongson_drm_plat_unregister(struct platform_device *pdev)
++{
++	struct drm_device *dev = platform_get_drvdata(pdev);
++	loongson_drm_unload(dev);
++	drm_dev_put(dev);
++
++	return 0;
++}
++
++/*
++ * Suspend & resume.
++ */
++/*
++ * loongson_drm_suspend - initiate device suspend
++ *
++ * @pdev: drm dev pointer
++ * @state: suspend state
++ *
++ * Puts the hw in the suspend state (all asics).
++ * Returns 0 for success or an error on failure.
++ * Called at driver suspend.
++ */
++int loongson_drm_suspend(struct drm_device *dev, bool suspend, bool fbcon)
++{
++        int i, r;
++        struct drm_crtc *crtc;
++        struct drm_connector *connector;
++        struct loongson_drm_device *ldev;
++
++        if (dev == NULL || dev->dev_private == NULL) {
++                return -ENODEV;
++        }
++
++        ldev = dev->dev_private;
++
++        drm_kms_helper_poll_disable(dev);
++
++        drm_modeset_lock_all(dev);
++        /* turn off display hw */
++        list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
++                drm_helper_connector_dpms(connector, DRM_MODE_DPMS_OFF);
++        }
++        drm_modeset_unlock_all(dev);
++	if (dev->pdev) {
++		pci_save_state(dev->pdev);
++		if (suspend) {
++			/* Shut down the device */
++			pci_disable_device(dev->pdev);
++			pci_set_power_state(dev->pdev, PCI_D3hot);
++		}
++	}
++
++	return 0;
++}
++
++/*
++ *  * loongson_drm_resume - initiate device suspend
++ *
++ * @pdev: drm dev pointer
++ * @state: suspend state
++ *
++ * Puts the hw in the suspend state (all asics).
++ * Returns 0 for success or an error on failure.
++ * Called at driver suspend.
++ */
++
++int loongson_drm_resume(struct drm_device *dev, bool resume, bool fbcon)
++{
++        int r;
++	struct drm_crtc *crtc;
++        struct drm_connector *connector;
++	struct loongson_drm_device *ldev = dev->dev_private;
++
++	if (fbcon)
++		console_lock();
++
++	if (resume && dev->pdev) {
++		pci_set_power_state(dev->pdev, PCI_D0);
++		pci_restore_state(dev->pdev);
++		if (pci_enable_device(dev->pdev)) {
++			if (fbcon)
++				console_unlock();
++			return -1;
++		}
++	}
++
++        /* blat the mode back in */
++	if (fbcon) {
++		drm_helper_resume_force_mode(dev);
++		/* turn on display hw */
++		drm_modeset_lock_all(dev);
++		list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
++			drm_helper_connector_dpms(connector, DRM_MODE_DPMS_ON);
++		}
++		drm_modeset_unlock_all(dev);
++	}
++
++	drm_kms_helper_poll_enable(dev);
++
++	return 0;
++}
++
++/**
++ * loongson_drm_pm_suspend
++ *
++ * @dev   pointer to the device
++ *
++ * Executed before putting the system into a sleep state in which the
++ * contents of main memory are preserved.
++ */
++static int loongson_drm_pm_suspend(struct device *dev)
++{
++	struct drm_device *drm_dev = dev_get_drvdata(dev);
++
++	DRM_DEBUG("loongson_drm_pm_suspend");
++	return loongson_drm_suspend(drm_dev, true, true);
++}
++
++/**
++ * loongson_drm_pm_resume
++ *
++ * @dev pointer to the device
++ *
++ * Executed after waking the system up from a sleep state in which the
++ * contents of main memory were preserved.
++ */
++static int loongson_drm_pm_resume(struct device *dev)
++{
++	struct drm_device *drm_dev = dev_get_drvdata(dev);
++
++	DRM_DEBUG("loongson_drm_pm_resume");
++	return loongson_drm_resume(drm_dev, true, true);
++}
++
++/**
++ *  loongson_drm_pm_freeze
++ *
++ *  @dev pointer to device
++ *
++ *  Hibernation-specific, executed before creating a hibernation image.
++ *  Analogous to @suspend(), but it should not enable the device to signal
++ *  wakeup events or change its power state.
++ */
++static int loongson_drm_pm_freeze(struct device *dev)
++{
++	struct drm_device *drm_dev = dev_get_drvdata(dev);
++
++	DRM_DEBUG("loongson_drm_pm_freeze");
++	return loongson_drm_suspend(drm_dev, false, true);
++}
++
++/**
++ * loongson_drm_pm_draw
++ *
++ * @dev pointer to device
++ *
++ * Hibernation-specific, executed after creating a hibernation image OR
++ * if the creation of an image has failed.  Also executed after a failing
++ * attempt to restore the contents of main memory from such an image.
++ * Undo the changes made by the preceding @freeze(), so the device can be
++ * operated in the same way as immediately before the call to @freeze().
++ */
++static int loongson_drm_pm_thaw(struct device *dev)
++{
++	struct drm_device *drm_dev = dev_get_drvdata(dev);
++	
++	DRM_DEBUG("loongson_drm_pm_thaw");
++	return loongson_drm_resume(drm_dev, false, true);
++}
++
++/**
++ * loongson_drm_pm_restore
++ *
++ * @dev   pointer to device
++ *
++ * Hibernation-specific, executed after restoring the contents of main
++ * memory from a hibernation image, analogous to @resume()
++ */
++static int loongson_drm_pm_restore(struct device *dev)
++{
++	struct drm_device *drm_dev = dev_get_drvdata(dev);
++
++	DRM_DEBUG("loongson_drm_pm_restore");
++	return loongson_drm_resume(drm_dev, true, true);
++}
++
++/*
++ * * struct dev_pm_ops - device PM callbacks
++ *
++ *@suspend:  Executed before putting the system into a sleep state in which the
++ *           contents of main memory are preserved.
++ *@resume:   Executed after waking the system up from a sleep state in which the
++ *           contents of main memory were preserved.
++ *@freeze:   Hibernation-specific, executed before creating a hibernation image.
++ *           Analogous to @suspend(), but it should not enable the device to signal
++ *           wakeup events or change its power state.  The majority of subsystems
++ *           (with the notable exception of the PCI bus type) expect the driver-level
++ *           @freeze() to save the device settings in memory to be used by @restore()
++ *           during the subsequent resume from hibernation.
++ *@thaw:     Hibernation-specific, executed after creating a hibernation image OR
++ *           if the creation of an image has failed.  Also executed after a failing
++ *           attempt to restore the contents of main memory from such an image.
++ *           Undo the changes made by the preceding @freeze(), so the device can be
++ *           operated in the same way as immediately before the call to @freeze().
++ *@poweroff: Hibernation-specific, executed after saving a hibernation image.
++ *           Analogous to @suspend(), but it need not save the device's settings in
++ *           memory.
++ *@restore:  Hibernation-specific, executed after restoring the contents of main
++ *           memory from a hibernation image, analogous to @resume().
++ */
++static const struct dev_pm_ops loongson_drm_pm_ops = {
++	.suspend = loongson_drm_pm_suspend,
++	.resume = loongson_drm_pm_resume,
++	.freeze = loongson_drm_pm_freeze,
++	.thaw = loongson_drm_pm_thaw,
++	.poweroff = loongson_drm_pm_freeze,
++	.restore = loongson_drm_pm_restore,
++};
++
++
++/**
++ * loongson_drm_pci_driver -- pci driver structure
++ *
++ * .id_table : must be non-NULL for probe to be called
++ * .probe: New device inserted
++ * .remove: Device removed
++ * .resume: Device suspended
++ * .suspend: Device woken up
++ */
++static struct pci_driver loongson_drm_pci_driver = {
++	.name		= DRIVER_NAME,
++	.id_table	= loongson_drm_pci_devices,
++	.probe		= loongson_drm_pci_register,
++	.remove		= loongson_drm_pci_unregister,
++	.driver.pm	= &loongson_drm_pm_ops,
++};
++
++#ifdef CONFIG_OF
++static struct of_device_id loongson_drm_ids[] = {
++	{ .compatible = "loongson,ls2h-drmfb", },
++};
++#endif
++
++static struct platform_driver loongson_drm_plat_driver = {
++	.probe		= loongson_drm_plat_register,
++	.remove		= loongson_drm_plat_unregister,
++	.driver = {
++		.name	= DRIVER_NAME,
++		.pm	= &loongson_drm_pm_ops,
++#ifdef CONFIG_OF
++		.of_match_table = of_match_ptr(loongson_drm_ids),
++#endif
++	},
++};
++
++/**
++ * loongson_drm_pci_init()  -- kernel module init function
++ */
++static int __init loongson_drm_init(void)
++{
++	int ret;
++	struct pci_dev *pdev = NULL;
++
++	/* If external graphics card exist, use it as default */
++	while ((pdev = pci_get_class(PCI_CLASS_DISPLAY_VGA << 8, pdev))) {
++		if (pdev->vendor == PCI_VENDOR_ID_ATI)
++			return 0;
++		if (pdev->vendor == 0x1a03) /* ASpeed */
++			return 0;
++	}
++
++	ret = pci_register_driver(&loongson_drm_pci_driver);
++	if (ret < 0)
++		return ret;
++
++	ret = platform_driver_register(&loongson_drm_plat_driver);
++
++	return ret;
++}
++
++/**
++ * loongson_drm_pci_exit()  -- kernel module exit function
++ */
++static void __exit loongson_drm_exit(void)
++{
++	pci_unregister_driver(&loongson_drm_pci_driver);
++	platform_driver_unregister(&loongson_drm_plat_driver);
++}
++
++module_init(loongson_drm_init);
++module_exit(loongson_drm_exit);
++
++MODULE_AUTHOR("Chen Zhu <zhuchen@loongson.cn>");
++MODULE_AUTHOR("Huacai Chen <chenhc@lemote.com>");
++MODULE_DESCRIPTION("Loongson LS2H/LS7A DRM Driver");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/gpu/drm/loongson/loongson_drv.h b/drivers/gpu/drm/loongson/loongson_drv.h
+new file mode 100755
+index 000000000..183256c86
+--- /dev/null
++++ b/drivers/gpu/drm/loongson/loongson_drv.h
+@@ -0,0 +1,280 @@
++#ifndef __LOONGSON_DRV_H__
++#define __LOONGSON_DRV_H__
++
++#include <linux/delay.h>
++#include <video/vga.h>
++
++#include <drm/ttm/ttm_bo_api.h>
++#include <drm/ttm/ttm_bo_driver.h>
++#include <drm/ttm/ttm_placement.h>
++#include <drm/ttm/ttm_memory.h>
++#include <drm/ttm/ttm_module.h>
++
++#include <drm/drm_drv.h>
++#include <drm/drm_encoder.h>
++#include <drm/drm_gem.h>
++#include <drm/drm_fb_helper.h>
++#include <drm/drm_crtc.h>
++#include <drm/drm_vblank.h>
++#include <drm/drm_connector.h>
++#include <drm/drm_encoder.h>
++#include <drm/drm_probe_helper.h>
++#include <drm/drm_irq.h>
++
++
++#include <linux/i2c.h>
++#include <linux/i2c-algo-bit.h>
++
++#include <linux/module.h>
++#include <linux/types.h>
++#include "loongson_vbios.h"
++
++#define LS7A_PCH_REG_BASE		0x10000000
++/* CHIPCFG regs */
++#define LS7A_CHIPCFG_REG_BASE		(LS7A_PCH_REG_BASE + 0x00010000)
++
++#define PCI_DEVICE_ID_LOONGSON_DC	0x7a06
++
++#define to_loongson_crtc(x) container_of(x, struct loongson_crtc, base)
++#define to_loongson_encoder(x) container_of(x, struct loongson_encoder, base)
++#define to_loongson_connector(x) container_of(x, struct loongson_connector, base)
++#define to_loongson_framebuffer(x) container_of(x, struct loongson_framebuffer, base)
++
++#define LOONGSON_MAX_FB_HEIGHT 4096
++#define LOONGSON_MAX_FB_WIDTH 4096
++
++#define CUR_WIDTH_SIZE		32
++#define CUR_HEIGHT_SIZE		32
++
++#define LO_OFF	0
++#define HI_OFF	8
++
++#define LS2K_IO_REG_BASE		0x1f000000
++
++#define LS2K_CHIP_CFG_REG_BASE		(LS2K_IO_REG_BASE + 0x00e10000)
++#define LS2K_PIX0_PLL			(void *)TO_UNCAC(LS2K_CHIP_CFG_REG_BASE + 0x4b0)
++#define LS2K_PIX1_PLL			(void *)TO_UNCAC(LS2K_CHIP_CFG_REG_BASE + 0x4c0)
++
++#define LS2H_PIX0_PLL			(void *)TO_UNCAC(LS2H_CHIPCFG_REG_BASE + 0x0230)
++#define LS2H_PIX1_PLL			(void *)TO_UNCAC(LS2H_CHIPCFG_REG_BASE + 0x0238)
++#define LS7A_PIX0_PLL			(void *)TO_UNCAC(LS7A_CHIPCFG_REG_BASE + 0x04b0)
++#define LS7A_PIX1_PLL			(void *)TO_UNCAC(LS7A_CHIPCFG_REG_BASE + 0x04c0)
++
++#define CURIOSET_CORLOR		0x4607
++#define CURIOSET_POSITION	0x4608
++#define CURIOLOAD_ARGB		0x4609
++#define CURIOLOAD_IMAGE		0x460A
++#define CURIOHIDE_SHOW		0x460B
++#define FBEDID_GET			0X860C
++
++#define REG_OFF	0x10
++
++#define CFG_FMT			GENMASK(2,0)
++#define CFG_FBSWITCH		BIT(7)
++#define CFG_ENABLE		BIT(8)
++#define CFG_PANELSWITCH 	BIT(9)
++#define CFG_FBNUM_BIT		11
++#define CFG_FBNUM		BIT(11)
++#define CFG_GAMMAR		BIT(12)
++#define CFG_RESET		BIT(20)
++
++#define LS_FB_CFG_DVO0_REG			(0x1240)
++#define LS_FB_CFG_DVO1_REG			(0x1250)
++#define LS_FB_ADDR0_DVO0_REG		(0x1260)
++#define LS_FB_ADDR0_DVO1_REG		(0x1270)
++#define LS_FB_STRI_DVO0_REG			(0x1280)
++#define LS_FB_STRI_DVO1_REG			(0x1290)
++
++#define LS_FB_DITCFG_DVO0_REG		(0x1360)
++#define LS_FB_DITCFG_DVO1_REG		(0x1370)
++#define LS_FB_DITTAB_LO_DVO0_REG	(0x1380)
++#define LS_FB_DITTAB_LO_DVO1_REG	(0x1390)
++#define LS_FB_DITTAB_HI_DVO0_REG	(0x13a0)
++#define LS_FB_DITTAB_HI_DVO1_REG	(0x13b0)
++#define LS_FB_PANCFG_DVO0_REG		(0x13c0)
++#define LS_FB_PANCFG_DVO1_REG		(0x13d0)
++#define LS_FB_PANTIM_DVO0_REG		(0x13e0)
++#define LS_FB_PANTIM_DVO1_REG		(0x13f0)
++
++#define LS_FB_HDISPLAY_DVO0_REG		(0x1400)
++#define LS_FB_HDISPLAY_DVO1_REG		(0x1410)
++#define LS_FB_HSYNC_DVO0_REG		(0x1420)
++#define LS_FB_HSYNC_DVO1_REG		(0x1430)
++
++#define LS_FB_VDISPLAY_DVO0_REG		(0x1480)
++#define LS_FB_VDISPLAY_DVO1_REG		(0x1490)
++#define LS_FB_VSYNC_DVO0_REG		(0x14a0)
++#define LS_FB_VSYNC_DVO1_REG		(0x14b0)
++
++#define LS_FB_GAMINDEX_DVO0_REG		(0x14e0)
++#define LS_FB_GAMINDEX_DVO1_REG		(0x14f0)
++#define LS_FB_GAMDATA_DVO0_REG		(0x1500)
++#define LS_FB_GAMDATA_DVO1_REG		(0x1510)
++
++#define LS_FB_CUR_CFG_REG			(0x1520)
++#define LS_FB_CUR_ADDR_REG			(0x1530)
++#define LS_FB_CUR_LOC_ADDR_REG		(0x1540)
++#define LS_FB_CUR_BACK_REG			(0x1550)
++#define LS_FB_CUR_FORE_REG			(0x1560)
++
++#define LS_FB_INT_REG				(0x1570)
++
++#define LS_INT_DVO1_VSYNC	0
++#define LS_INT_DVO1_HSYNC	1
++#define LS_INT_DVO0_VSYNC	2
++#define LS_INT_DVO0_HSYNC	3
++#define LS_INT_CURSOR_FB_END	4
++#define LS_INT_DVO1_FB_END	5
++#define LS_INT_DVO0_FB_END	6
++
++#define LS_FB_ADDR1_DVO0_REG		(0x1580)
++#define LS_FB_ADDR1_DVO1_REG		(0x1590)
++
++#define MAX_CRTC 2
++
++struct pll_config {
++	unsigned int l2_div0;
++	unsigned int l2_div1;
++	unsigned int l2_div2;
++	unsigned int l1_loopc;
++	unsigned int l1_frefc;
++};
++
++
++struct loongson_mc {
++	resource_size_t			vram_size;
++	resource_size_t			vram_base;
++	resource_size_t			vram_window;
++};
++
++struct loongson_framebuffer {
++	struct drm_framebuffer base;
++	struct drm_gem_object *obj;
++};
++
++struct loongson_crtc {
++	struct drm_crtc base;
++	struct loongson_drm_device *ldev;
++	unsigned int crtc_id;
++	uint32_t cfg_reg;
++	int width;
++	int height;
++	int last_dpms;
++	bool enabled;
++	struct drm_plane *primary; /* Primary panel belongs to this crtc */
++	struct drm_pending_vblank_event *event;
++};
++
++struct loongson_mode_info {
++	bool mode_config_initialized;
++	struct loongson_crtc *crtc;
++	struct loongson_connector *connector;
++};
++
++struct loongson_encoder {
++	struct drm_encoder base;
++	struct loongson_crtc *lcrtc;
++	int encoder_id;
++	int last_dpms;
++};
++
++
++struct loongson_drm_device {
++	struct drm_device		*dev;
++
++	resource_size_t			rmmio_base;
++	resource_size_t			rmmio_size;
++	void __iomem			*rmmio;
++
++	struct loongson_mc			mc;
++	struct loongson_mode_info		mode_info[2];
++
++//	struct loongson_fbdev *lfbdev;
++	struct drm_gem_cma_object *cursor;
++
++	struct pci_dev *vram_pdev;		/**< PCI device structure */
++
++	bool				suspended;
++	int				num_crtc;
++	int				cursor_crtc_id;
++	int				has_sdram;
++	struct loongson_crtc lcrtc[MAX_CRTC];
++	struct drm_display_mode		mode;
++
++	struct drm_property *rotation_prop;
++	struct loongson_vbios *vbios;
++	struct loongson_vbios_crtc *crtc_vbios[2];
++	struct loongson_vbios_connector *connector_vbios[2];
++	struct loongson_vbios_phy *phy_vbios[4];
++	int fb_mtrr;
++
++	struct {
++		struct ttm_bo_device bdev;
++	} ttm;
++	struct {
++		resource_size_t start;
++		resource_size_t size;
++	} vram;
++	uint64_t fb_vram_base;
++	bool	clone_mode;
++	bool	cursor_showed;
++	bool	inited;
++	uint32_t int_reg;
++};
++
++
++struct loongson_i2c_chan {
++	struct i2c_adapter adapter;
++	struct drm_device *dev;
++	struct i2c_algo_bit_data bit;
++	int data, clock;
++};
++
++struct loongson_connector {
++	struct drm_connector base;
++	struct loongson_i2c_chan *i2c;
++};
++
++extern spinlock_t loongson_reglock;
++
++void ls_config_pll(int id, unsigned int pix_freq);
++
++int loongson_irq_enable_vblank(struct drm_device *dev,unsigned int crtc_id);
++void loongson_irq_disable_vblank(struct drm_device *dev,unsigned int crtc_id);
++irqreturn_t loongson_irq_handler(int irq,void *arg);
++void loongson_irq_preinstall(struct drm_device *dev);
++int loongson_irq_postinstall(struct drm_device *dev);
++void loongson_irq_uninstall(struct drm_device *dev);
++
++u32 ls_crtc_read(struct loongson_crtc *lcrtc, u32 offset);
++
++void ls_crtc_write(struct loongson_crtc *lcrtc, u32 offset, u32 val);
++
++int loongson_ttm_init(struct loongson_drm_device *ldev);
++void loongson_ttm_fini(struct loongson_drm_device *ldev);
++
++int loongson_drm_mmap(struct file *filp, struct vm_area_struct *vma);
++struct drm_encoder *loongson_encoder_init(struct loongson_drm_device *ldev, struct drm_device *dev,unsigned int encoder_id);
++void loongson_crtc_init(struct loongson_drm_device *ldev);
++struct drm_connector *loongson_vga_init(struct drm_device *dev,unsigned int connector_id);
++int loongson_gem_create(struct drm_device *dev, u32 size, bool iskernel,struct drm_gem_object **obj);
++int loongson_framebuffer_init(struct drm_device *dev,struct loongson_framebuffer *lfb,const struct drm_mode_fb_cmd2 *mode_cmd,struct drm_gem_object *obj);
++
++int loongson_fbdev_init(struct loongson_drm_device *ldev);
++void loongson_fbdev_fini(struct loongson_drm_device *ldev);
++void loongson_fbdev_restore_mode(struct loongson_drm_device *ldev);
++void loongson_fbdev_set_suspend(struct loongson_drm_device *ldev, int state);
++void loongson_fb_output_poll_changed(struct loongson_drm_device *ldev);
++
++int loongson_drm_drm_suspend(struct drm_device *dev, bool suspend,
++                                   bool fbcon, bool freeze);
++int loongson_drm_drm_resume(struct drm_device *dev, bool resume, bool fbcon);
++			   /* loongson_cursor.c */
++int loongson_crtc_cursor_set2(struct drm_crtc *crtc, struct drm_file *file_priv,
++					uint32_t handle, uint32_t width, uint32_t height, int32_t hot_x, int32_t hot_y);
++int loongson_crtc_cursor_move(struct drm_crtc *crtc, int x, int y);
++
++int loongson_vbios_init(struct loongson_drm_device *ldev);
++int loongson_vbios_information_display(struct loongson_drm_device *ldev);
++
++#endif
+diff --git a/drivers/gpu/drm/loongson/loongson_encoder.c b/drivers/gpu/drm/loongson/loongson_encoder.c
+new file mode 100755
+index 000000000..1aaf968ce
+--- /dev/null
++++ b/drivers/gpu/drm/loongson/loongson_encoder.c
+@@ -0,0 +1,100 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * Copyright (C) 2019 Lemote Inc.
++ * Author : Jiaxun Yang <jisxun.yang@flygoat.com>
++ */
++
++#include <drm/drm_crtc_helper.h>
++#include "loongson_drv.h"
++
++
++
++static void loongson_encoder_destroy(struct drm_encoder *encoder)
++{
++	struct loongson_encoder *loongson_encoder = to_loongson_encoder(encoder);
++	drm_encoder_cleanup(encoder);
++	kfree(loongson_encoder);
++}
++
++static int loongson_encoder_atomic_check(struct drm_encoder *encoder,
++				    struct drm_crtc_state *crtc_state,
++				    struct drm_connector_state *conn_state)
++{
++	/* do nothing */
++	return 0;
++}
++
++static void loongson_encoder_atomic_mode_set(struct drm_encoder *encoder,
++				struct drm_crtc_state *crtc_state,
++				struct drm_connector_state *conn_state)
++
++{
++	struct loongson_encoder *lenc = to_loongson_encoder(encoder);
++	struct loongson_crtc *lcrtc_new = to_loongson_crtc(crtc_state->crtc);
++	struct loongson_crtc *lcrtc_orig = lenc->lcrtc;
++
++	if(lcrtc_orig->crtc_id == lcrtc_new->crtc_id) {
++		pr_info("encoder: crtc %x, direct pipe\n", lcrtc_orig->crtc_id);
++		/* Display from this CRTC */
++		lcrtc_orig->cfg_reg &= ~CFG_PANELSWITCH;
++		lcrtc_orig->cfg_reg |= CFG_RESET;
++	} else {
++		pr_info("encoder: crtc %x, clone mode\n", lcrtc_orig->crtc_id);
++		/* Set up clone mode */
++		lcrtc_orig->cfg_reg |= CFG_PANELSWITCH;
++		lcrtc_orig->cfg_reg |= CFG_RESET;
++	}
++	ls_crtc_write(lcrtc_orig, LS_FB_CFG_DVO0_REG, lcrtc_orig->cfg_reg);
++}
++
++
++/**
++ * These provide the minimum set of functions required to handle a encoder
++ *
++ * Helper operations for encoders
++ */
++static const struct drm_encoder_helper_funcs loongson_encoder_helper_funcs = {
++	.atomic_check	= loongson_encoder_atomic_check,
++	.atomic_mode_set = loongson_encoder_atomic_mode_set,
++};
++
++/**
++ * These provide the minimum set of functions required to handle a encoder
++ *
++ * Encoder controls,encoder sit between CRTCs and connectors
++ */
++static const struct drm_encoder_funcs loongson_encoder_encoder_funcs = {
++	.destroy = loongson_encoder_destroy,
++};
++
++
++/**
++ * loongson_encoder_init
++ *
++ * @dev: point to the drm_device structure
++ *
++ * Init encoder
++ */
++struct drm_encoder *loongson_encoder_init(struct loongson_drm_device *ldev, struct drm_device *dev,unsigned int encoder_id)
++{
++	struct drm_encoder *encoder;
++	struct loongson_encoder *loongson_encoder;
++
++	loongson_encoder = kzalloc(sizeof(struct loongson_encoder), GFP_KERNEL);
++	if (!loongson_encoder)
++		return NULL;
++
++	loongson_encoder->encoder_id = encoder_id;
++	loongson_encoder->lcrtc = &ldev->lcrtc[encoder_id];
++	encoder = &loongson_encoder->base;
++	pr_info("init encoder %d",encoder_id);
++
++	encoder->possible_crtcs = BIT(0) | BIT(1);
++	encoder->possible_clones = BIT(0) | BIT(1);
++
++	drm_encoder_helper_add(encoder, &loongson_encoder_helper_funcs);
++	drm_encoder_init(dev, encoder, &loongson_encoder_encoder_funcs,
++			 DRM_MODE_ENCODER_DAC, NULL);
++
++	return encoder;
++}
+diff --git a/drivers/gpu/drm/loongson/loongson_irq.c b/drivers/gpu/drm/loongson/loongson_irq.c
+new file mode 100755
+index 000000000..0f7fcd65c
+--- /dev/null
++++ b/drivers/gpu/drm/loongson/loongson_irq.c
+@@ -0,0 +1,120 @@
++/*
++ * Copyright (c) 2018 Loongson Technology Co., Ltd.
++ * Authors:
++ *	Chen Zhu <zhuchen@loongson.cn>
++ *	Yaling Fang <fangyaling@loongson.cn>
++ *	Dandan Zhang <zhangdandan@loongson.cn>
++ *	Huacai Chen <chenhc@lemote.com>
++ * This program is free software; you can redistribute  it and/or modify it
++ * under  the terms of  the GNU General  Public License as published by the
++ * Free Software Foundation;  either version 2 of the  License, or (at your
++ * option) any later version.
++ */
++
++
++#include "loongson_drv.h"
++
++static DEFINE_SPINLOCK(drmfb_lock);
++
++/**
++ * enable_vblank - enable vblank interrupt events
++ * @dev: DRM device
++ * @crtc: which irq to enable
++ *
++ * Enable vblank interrupts for @crtc.  If the device doesn't have
++ * a hardware vblank counter, this routine should be a no-op, since
++ * interrupts will have to stay on to keep the count accurate.
++ *
++ * RETURNS
++ * Zero on success, appropriate errno if the given @crtc's vblank
++ * interrupt cannot be enabled.
++ */
++int loongson_irq_enable_vblank(struct drm_device *dev,unsigned int crtc_id)
++{
++	return 0;
++}
++
++/**
++ * disable_vblank - disable vblank interrupt events
++ * @dev: DRM device
++ * @crtc: which irq to enable
++ *
++ * Disable vblank interrupts for @crtc.  If the device doesn't have
++ * a hardware vblank counter, this routine should be a no-op, since
++ * interrupts will have to stay on to keep the count accurate.
++ */
++void loongson_irq_disable_vblank(struct drm_device *dev,unsigned int crtc_id)
++{
++}
++
++static void crtc_irq(struct drm_crtc *crtc)
++{
++	struct drm_pending_vblank_event *event = crtc->state->event;
++
++	drm_crtc_handle_vblank(crtc);
++
++	if (event) {
++		crtc->state->event = NULL;
++
++		spin_lock_irq(&crtc->dev->event_lock);
++		drm_crtc_send_vblank_event(crtc, event);
++		drm_crtc_vblank_put(crtc);
++		spin_unlock_irq(&crtc->dev->event_lock);
++	}
++}
++
++irqreturn_t loongson_irq_handler(int irq, void *arg)
++{
++	unsigned int val, cfg;
++	struct drm_device *dev = (struct drm_device *) arg;
++	struct loongson_drm_device *ldev = dev->dev_private;
++	void __iomem *base = ldev->rmmio;
++
++	val = readl(base + LS_FB_INT_REG);
++	spin_lock(&loongson_reglock);
++	writel(0x0, base + LS_FB_INT_REG);
++	spin_unlock(&loongson_reglock);
++
++	if (val & BIT(LS_INT_DVO0_FB_END)){
++		crtc_irq(&ldev->lcrtc[0].base);
++	}
++
++	if (val & BIT(LS_INT_DVO1_FB_END)){
++		crtc_irq(&ldev->lcrtc[1].base);
++	}
++
++	spin_lock(&loongson_reglock);
++	writel(ldev->int_reg, base + LS_FB_INT_REG);
++	spin_unlock(&loongson_reglock);
++
++	return IRQ_HANDLED;
++}
++
++void loongson_irq_preinstall(struct drm_device *dev)
++{
++	unsigned long flags;
++	struct loongson_drm_device *ldev = dev->dev_private;
++	volatile void *base = ldev->rmmio;
++
++	/* disable interupt */
++	spin_lock_irqsave(&loongson_reglock, flags);
++	writel(0x0000 << 16, base + LS_FB_INT_REG);
++	spin_unlock_irqrestore(&loongson_reglock, flags);
++}
++
++int loongson_irq_postinstall(struct drm_device *dev)
++{
++	return 0;
++}
++
++void loongson_irq_uninstall(struct drm_device *dev)
++{
++	unsigned long flags;
++	struct loongson_drm_device *ldev = dev->dev_private;
++	volatile void *base = ldev->rmmio;
++
++	/* disable interupt */
++	spin_lock_irqsave(&loongson_reglock, flags);
++	writel(0x0000 << 16, base + LS_FB_INT_REG);
++	spin_unlock_irqrestore(&loongson_reglock, flags);
++}
+diff --git a/drivers/gpu/drm/loongson/loongson_pll.c b/drivers/gpu/drm/loongson/loongson_pll.c
+new file mode 100644
+index 000000000..8fb255578
+--- /dev/null
++++ b/drivers/gpu/drm/loongson/loongson_pll.c
+@@ -0,0 +1,226 @@
++#include <linux/io.h>
++#include <loongson.h>
++#include "loongson_drv.h"
++
++#define PLL_REF_CLK_MHZ    100
++#define PCLK_PRECISION_INDICATOR 10000
++
++static void ls2k_config_pll(void *pll_base, struct pll_config *pll_cfg)
++{
++	unsigned long val;
++
++	/* set sel_pll_out0 0 */
++	val = readq(pll_base);
++	val &= ~BIT(0);
++	writeq(val, pll_base);
++
++	/* pll_pd 1 */
++	val = readq(pll_base);
++	val |= BIT(19);
++	writeq(val, pll_base);
++
++	/* set_pll_param 0 */
++	val = readq(pll_base);
++	val &= ~BIT(2);
++	writeq(val, pll_base);
++
++	/* set new div ref, loopc, div out */
++	/* clear old value first*/
++	val = BIT(7) | (BIT(10) | BIT(11)) | BIT(42) |
++		((u64)(pll_cfg->l1_loopc) << 32) |
++		((u64)(pll_cfg->l1_frefc) << 26);
++	writeq(val, pll_base);
++	writeq(pll_cfg->l2_div0, pll_base + 8);
++
++	/* set_pll_param 1 */
++	val = readq(pll_base);
++	val |= BIT(2);
++	writeq(val, pll_base);
++
++	/* pll_pd 0 */
++	val = readq(pll_base);
++	val &= ~BIT(19);
++	writeq(val, pll_base);
++
++	/* wait pll lock */
++	while(!(readl(pll_base) & BIT(16)));
++	/* set sel_pll_out0 1 */
++	val = readq(pll_base);
++	val |= BIT(0);
++	writeq(val, pll_base);
++}
++
++
++/**
++ * ls7a_cal_freq
++ *
++ * @pixclock: unsigned int
++ * @pll_config: point to the pll_config structure
++ *
++ * Calculate frequency
++ */
++static unsigned int ls7a_cal_freq(unsigned int pixclock, struct pll_config *pll_config)
++{
++	int i, j, loopc_offset;
++	unsigned int refc_set[] = {4, 5, 3};
++	unsigned int prec_set[] = {1, 5, 10, 50, 100};   /*in 1/PCLK_PRECISION_INDICATOR*/
++	unsigned int pstdiv, loopc, refc;
++	unsigned int precision_req, precision;
++	unsigned int loopc_min, loopc_max, loopc_mid;
++	unsigned long long real_dvo, req_dvo;
++
++	/*try precision from high to low*/
++	for (j = 0; j < sizeof(prec_set)/sizeof(int); j++){
++		precision_req = prec_set[j];
++
++		/*try each refc*/
++		for (i = 0; i < sizeof(refc_set)/sizeof(int); i++) {
++			refc = refc_set[i];
++			loopc_min = (1200 / PLL_REF_CLK_MHZ) * refc;  /*1200 / (PLL_REF_CLK_MHZ / refc)*/
++			loopc_max = (3200 / PLL_REF_CLK_MHZ) * refc;  /*3200 / (PLL_REF_CLK_MHZ / refc)*/
++			loopc_mid = (2200 / PLL_REF_CLK_MHZ) * refc;  /*(loopc_min + loopc_max) / 2;*/
++			loopc_offset = -1;
++
++			/*try each loopc*/
++			for (loopc = loopc_mid; (loopc <= loopc_max) && (loopc >= loopc_min); loopc += loopc_offset) {
++				if(loopc_offset < 0)
++					loopc_offset = -loopc_offset;
++				else
++					loopc_offset = -(loopc_offset+1);
++
++				pstdiv = loopc * PLL_REF_CLK_MHZ * 1000 / refc / pixclock;
++				if((pstdiv > 127) || (pstdiv < 1))
++					continue;
++
++				/*real_freq is float type which is not available, but read_freq * pstdiv is available.*/
++				req_dvo  = (pixclock * pstdiv);
++				real_dvo = (loopc * PLL_REF_CLK_MHZ * 1000 / refc);
++				precision = abs(real_dvo * PCLK_PRECISION_INDICATOR / req_dvo - PCLK_PRECISION_INDICATOR);
++
++				if(precision < precision_req){
++					pll_config->l2_div0 = pstdiv;
++					pll_config->l2_div1 = 0x0;
++					pll_config->l2_div2 = 0x0;
++					pll_config->l1_loopc = loopc;
++					pll_config->l1_frefc = refc;
++					if(j > 1)
++						printk("Warning: PIX clock precision degraded to %d / %d\n", precision_req, PCLK_PRECISION_INDICATOR);
++					return 1;
++				}
++			}
++		}
++	}
++	return 0;
++}
++
++
++
++void ls7a_read_cur_pll(void __iomem *pll_base,struct pll_config *pll_config)
++{
++	uint32_t val;
++	uint32_t out0, out1, out2;
++	val = readl(pll_base);
++	pr_info("pll_val0: %lx", val);
++	pll_config->l1_frefc = val & GENMASK(6,0);
++	pr_info("pll_config->l1_frefc: %d", pll_config->l1_frefc);
++	val = readl(pll_base + 4);
++	pr_info("pll_val1: %lx", val);
++
++	pll_config->l2_div0 = val & GENMASK(6,0);
++	pll_config->l2_div1 = (val & GENMASK(13,7)) >> 7;
++	pll_config->l2_div2 = (val & GENMASK(20,14)) >> 14;
++	pll_config->l1_loopc = (val & GENMASK(29,21)) >> 21;
++	pr_info("pll_config->l1_div0: %d", pll_config->l2_div0);
++	pr_info("pll_config->l1_div1: %d", pll_config->l2_div1);
++	pr_info("pll_config->l1_div2: %d", pll_config->l2_div2);
++	pr_info("pll_config->l1_loopc: %d", pll_config->l1_loopc);
++
++
++	out0 = 100000000 / pll_config->l1_frefc * pll_config->l1_loopc / pll_config->l2_div0;
++	out1 = 100000000 / pll_config->l1_frefc * pll_config->l1_loopc / pll_config->l2_div1;
++	out2 = 100000000 / pll_config->l1_frefc * pll_config->l1_loopc / pll_config->l2_div2;
++
++	pr_info("cur_pll: out0: %d, out1: %d, out2: %d", out0, out1, out2);
++}
++
++/**
++ * ls7a_config_pll
++ *
++ * @pll_base: represent a long type
++ * @pll_cfg: point to the pll_config srtucture
++ *
++ * Config pll apply to ls7a
++ */
++void ls7a_config_pll(void *pll_base, struct pll_config *pll_cfg)
++{
++	unsigned long val;
++
++	/* clear sel_pll_out0 */
++	val = readl(pll_base + 0x4);
++	val &= ~(1UL << 8);
++	writel(val, pll_base + 0x4);
++	/* set pll_pd */
++	val = readl(pll_base + 0x4);
++	val |= (1UL << 13);
++	writel(val, pll_base + 0x4);
++	/* clear set_pll_param */
++	val = readl(pll_base + 0x4);
++	val &= ~(1UL << 11);
++	writel(val, pll_base + 0x4);
++	/* clear old value & config new value */
++	val = readl(pll_base + 0x4);
++	val &= ~(0x7fUL << 0);
++	val |= (pll_cfg->l1_frefc << 0); /* refc */
++	writel(val, pll_base + 0x4);
++	val = readl(pll_base + 0x0);
++	val &= ~(GENMASK(20, 0) << 0);
++	if(pll_cfg->l2_div0)
++		val |= (pll_cfg->l2_div0 << 0);   /* div 0*/
++	if(pll_cfg->l2_div1)
++		val |= (pll_cfg->l2_div1 << 7);   /* div 1*/
++	if(pll_cfg->l2_div2)
++		val |= (pll_cfg->l2_div2 << 14);   /* div 2*/
++	val &= ~(0x1ffUL << 21);
++	val |= (pll_cfg->l1_loopc << 21);/* loopc */
++	writel(val, pll_base + 0x0);
++	/* set set_pll_param */
++	val = readl(pll_base + 0x4);
++	val |= (1UL << 11);
++	writel(val, pll_base + 0x4);
++	/* clear pll_pd */
++	val = readl(pll_base + 0x4);
++	val &= ~(1UL << 13);
++	writel(val, pll_base + 0x4);
++	/* wait pll lock */
++	while(!(readl(pll_base + 0x4) & 0x80))
++		cpu_relax();
++	/* set sel_pll_out0 1 2*/
++	val = readl(pll_base + 0x4);
++	if(pll_cfg->l2_div0)
++		val |= (1UL << 8);
++	if(pll_cfg->l2_div1)
++		val |= (1UL << 9);
++	if(pll_cfg->l2_div2)
++		val |= (1UL << 10);
++	writel(val, pll_base + 0x4);
++}
++
++void ls_config_pll(int id, unsigned int pix_freq)
++{
++	unsigned int out;
++	struct pll_config pll_cfg;
++
++	if ((read_c0_prid() & PRID_IMP_MASK) == PRID_IMP_LOONGSON_64R) {
++		out = ls7a_cal_freq(pix_freq, &pll_cfg);
++		if (id == 0)
++			ls2k_config_pll(TO_UNCAC(0x1fe104b0), &pll_cfg);
++		else
++			ls2k_config_pll(TO_UNCAC(0x1fe104c0), &pll_cfg);
++	} else {
++		out = ls7a_cal_freq(pix_freq, &pll_cfg);
++		if (id == 0)
++			ls7a_config_pll(LS7A_PIX0_PLL, &pll_cfg);
++		else
++			ls7a_config_pll(LS7A_PIX1_PLL, &pll_cfg);
++	}
++}
+\ No newline at end of file
+diff --git a/drivers/gpu/drm/loongson/loongson_vbios.c b/drivers/gpu/drm/loongson/loongson_vbios.c
+new file mode 100755
+index 000000000..43bd09e76
+--- /dev/null
++++ b/drivers/gpu/drm/loongson/loongson_vbios.c
+@@ -0,0 +1,259 @@
++/*
++ * Copyright (c) 2018 Loongson Technology Co., Ltd.
++ * Authors:
++ *	Chen Zhu <zhuchen@loongson.cn>
++ *	Yaling Fang <fangyaling@loongson.cn>
++ *	Dandan Zhang <zhangdandan@loongson.cn>
++ *	Huacai Chen <chenhc@lemote.com>
++ * This program is free software; you can redistribute  it and/or modify it
++ * under  the terms of  the GNU General  Public License as published by the
++ * Free Software Foundation;  either version 2 of the  License, or (at your
++ * option) any later version.
++ */
++
++#include "loongson_drv.h"
++
++#define VBIOS_START_ADDR	0x1000
++#define VBIOS_SIZE 		0x1E000
++
++static const char *phy_type_names[1] = {
++	"NONE or TRANSPARENT PHY",
++};
++
++static const char *get_edid_method_names[4] = {
++	"No EDID",
++	"Reading EDID via built-in I2C",
++	"Use the VBIOS built-in EDID information",
++	"Get EDID via phy chip",
++};
++
++static const char *crtc_version_name[] = {
++	"default version",
++};
++
++int have_table = 0;
++uint32_t table[256];
++uint32_t POLYNOMIAL = 0xEDB88320;
++
++void make_table(void)
++{
++	int i, j;
++
++	have_table = 1;
++	for (i = 0 ; i < 256 ; i++)
++		for (j = 0, table[i] = i; j < 8; j++)
++			table[i] = (table[i]>>1)^((table[i]&1)?POLYNOMIAL:0);
++}
++
++uint lscrc32(uint crc, char *buff, int len)
++{
++	int i;
++
++	if (!have_table)
++		make_table();
++
++	crc = ~crc;
++	for (i = 0; i < len; i++)
++		crc = (crc >> 8) ^ table[(crc ^ buff[i]) & 0xff];
++
++	return ~crc;
++}
++
++void *loongson_vbios_default(void)
++{
++	int i;
++	unsigned char *vbios_start;
++	char *title = "Loongson-VBIOS";
++	struct loongson_vbios *vbios;
++	struct loongson_vbios_crtc *crtc_vbios[2];
++	struct loongson_vbios_connector *connector_vbios[2];
++	struct loongson_vbios_phy *phy_vbios[2];
++
++	vbios = kzalloc(120*1024,GFP_KERNEL);
++	vbios_start = (unsigned char *)vbios;
++
++	i = 0;
++	while (*title != '\0') {
++		if(i > 15){
++			vbios->title[15] = '\0';
++			break;
++		}
++		vbios->title[i++] = *title;
++		title++;
++	}
++
++	/* Build loongson_vbios struct */
++	vbios->version_major = 0;
++	vbios->version_minor = 1;
++	vbios->crtc_num = 2;
++	vbios->crtc_offset = sizeof(struct loongson_vbios);
++	vbios->connector_num = 2;
++	vbios->connector_offset = sizeof(struct loongson_vbios) + 2 * sizeof(struct loongson_vbios_crtc);
++	vbios->phy_num = 2;
++	vbios->phy_offset =
++		sizeof(struct loongson_vbios) + 2 * sizeof(struct loongson_vbios_crtc) + 2 * sizeof(struct loongson_vbios_connector);
++
++
++	/* Build loongson_vbios_crtc struct */
++	crtc_vbios[0] = (struct loongson_vbios_crtc *)(vbios_start + vbios->crtc_offset);
++	crtc_vbios[1] = (struct loongson_vbios_crtc *)(vbios_start + vbios->crtc_offset + sizeof(struct loongson_vbios_crtc));
++
++	crtc_vbios[0]->next_crtc_offset = sizeof(struct loongson_vbios) + sizeof(struct loongson_vbios_crtc);
++	crtc_vbios[0]->crtc_id = 0;
++	crtc_vbios[0]->crtc_version = default_version;
++	crtc_vbios[0]->crtc_max_width = 2048;
++	crtc_vbios[0]->crtc_max_height = 2048;
++	crtc_vbios[0]->connector_id = 0;
++	crtc_vbios[0]->phy_num = 1;
++	crtc_vbios[0]->phy_id[0] = 0;
++
++	crtc_vbios[1]->next_crtc_offset = NULL;
++	crtc_vbios[1]->crtc_id = 1;
++	crtc_vbios[1]->crtc_version = default_version;
++	crtc_vbios[1]->crtc_max_width = 2048;
++	crtc_vbios[1]->crtc_max_height = 2048;
++	crtc_vbios[1]->connector_id = 1;
++	crtc_vbios[1]->phy_num = 1;
++	crtc_vbios[1]->phy_id[0] = 1;
++
++	/* Build loongson_vbios_connector struct */
++	connector_vbios[0] = (struct loongson_vbios_connector *)(vbios_start + vbios->connector_offset);
++	connector_vbios[1] = (struct loongson_vbios_connector *)(vbios_start + vbios->connector_offset + sizeof(struct loongson_vbios_connector));
++
++	connector_vbios[0]->next_connector_offset = vbios->connector_offset + sizeof(struct loongson_vbios_connector);
++	connector_vbios[1]->next_connector_offset = NULL;
++
++	connector_vbios[0]->crtc_id = 0;
++	connector_vbios[1]->crtc_id = 1;
++
++	connector_vbios[0]->edid_method = edid_method_i2c;
++	connector_vbios[1]->edid_method = edid_method_i2c;
++
++
++	connector_vbios[0]->i2c_type = i2c_type_gpio;
++	connector_vbios[1]->i2c_type = i2c_type_gpio;
++		
++	/* Build loongson_vbios_phy struct */
++	phy_vbios[0] = (struct loongson_vbios_phy *)(vbios_start + vbios->phy_offset);
++	phy_vbios[1] = (struct loongson_vbios_phy *)(vbios_start + vbios->phy_offset + sizeof(struct loongson_vbios_phy));
++		
++	phy_vbios[0]->next_phy_offset = vbios->phy_offset + sizeof(struct loongson_vbios_phy);
++	phy_vbios[1]->next_phy_offset = NULL;
++
++	phy_vbios[0]->phy_type = phy_transparent;
++	phy_vbios[1]->phy_type = phy_transparent;
++
++	phy_vbios[0]->crtc_id = 0;
++	phy_vbios[1]->crtc_id = 1;
++
++	phy_vbios[0]->connector_id = 0;
++	phy_vbios[1]->connector_id = 1;
++
++	return (void *)vbios;
++}
++
++int loongson_vbios_check(struct loongson_vbios *vbios)
++{
++	int i = 0;
++	unsigned int crc;
++	char *title="Loongson-VBIOS";
++
++	while (*title != '\0' && i <= 15) {
++		if(vbios->title[i++] != *title){
++			DRM_ERROR("VBIOS title is wrong!\n");
++			return -EINVAL;
++		}
++		title++;
++	}
++
++	crc = lscrc32(0,(unsigned char *)vbios, VBIOS_SIZE - 0x4);
++	if(*(unsigned int *)((unsigned char *)vbios + VBIOS_SIZE - 0x4) != crc){
++		DRM_ERROR("VBIOS crc is wrong!\n");
++		return -EINVAL;
++	}
++
++	return 0;
++}
++
++int loongson_vbios_init(struct loongson_drm_device *ldev){
++	int i;
++	unsigned char *vbios_start;
++	struct loongson_vbios *vbios;
++
++	DRM_INFO("Use default VBIOS!\n");
++	ldev->vbios = (struct loongson_vbios *)loongson_vbios_default();
++
++	vbios = ldev->vbios;
++	if(vbios == NULL)
++		return -1;
++
++	vbios_start = (unsigned char *)vbios;
++
++	/*get crtc struct points*/
++	ldev->crtc_vbios[0] = (struct loongson_vbios_crtc *)(vbios_start + vbios->crtc_offset);
++	if(vbios->crtc_num > 1)
++	{
++		for(i = 1;i < vbios->crtc_num; i++)
++			ldev->crtc_vbios[i] = (struct loongson_vbios_crtc *)(vbios_start + ldev->crtc_vbios[i - 1]->next_crtc_offset);
++	}
++
++	/*get connector struct points*/
++	ldev->connector_vbios[0] = (struct loongson_vbios_connector *)(vbios_start + vbios->connector_offset);
++	if(vbios->connector_num > 1){
++		for(i = 1;i < vbios->connector_num; i++)
++			ldev->connector_vbios[i] = (struct loongson_vbios_connector *)(vbios_start + ldev->connector_vbios[i - 1]->next_connector_offset);
++	}
++
++	/*get phy struct points*/
++	ldev->phy_vbios[0] = (struct loongson_vbios_phy *)(vbios_start + vbios->phy_offset);
++	if(vbios->phy_num > 1){
++		for(i = 1;i < vbios->phy_num; i++)
++			ldev->phy_vbios[1] = (struct loongson_vbios_phy *)(vbios_start + ldev->phy_vbios[0]->next_phy_offset);
++	}
++	loongson_vbios_information_display(ldev);
++
++	return 0;
++}
++
++int loongson_vbios_information_display(struct loongson_drm_device *ldev)
++{
++	int i, j, k;
++
++	DRM_INFO("===========================LOONGSON VBIOS INFO=================================\n");
++	DRM_INFO("Title: %s\n", ldev->vbios->title);
++	DRM_INFO("Loongson VBIOS version: %d.%d\n", ldev->vbios->version_major,ldev->vbios->version_minor);
++	DRM_INFO("VBIOS information: %s\n", (char *)ldev->vbios->information);
++	DRM_INFO("CRTC num: %d\n", ldev->vbios->crtc_num);
++	DRM_INFO("Connector num: %d\n", ldev->vbios->connector_num);
++	DRM_INFO("PHY num: %d\n", ldev->vbios->phy_num);
++	DRM_INFO("================================CRTC INFO=====================================\n");
++	for(i=0;i<ldev->vbios->crtc_num;i++){
++		DRM_INFO("CRTC-%d: max_width=%d, max_height=%d\n",
++				ldev->crtc_vbios[i]->crtc_id,ldev->crtc_vbios[i]->crtc_max_width,ldev->crtc_vbios[i]->crtc_max_height);
++		DRM_INFO("CRTC-%d type is %s\n",
++				ldev->crtc_vbios[i]->crtc_id,crtc_version_name[ldev->crtc_vbios[i]->crtc_version]);
++		DRM_INFO("Bind connector id is %d\n",ldev->crtc_vbios[i]->connector_id);
++		DRM_INFO("Bind phy number is %d\n",ldev->crtc_vbios[i]->phy_num);
++		j = ldev->crtc_vbios[i]->phy_num;
++		k = 0;
++		while(j-- > 0){
++			DRM_INFO("Bind phy[%d] ID is:%d\n",k,ldev->crtc_vbios[i]->phy_id[k]);
++			k++;
++		}
++	}
++	DRM_INFO("=============================CONNECTOR INFO===================================\n");
++	for(i=0;i<ldev->vbios->connector_num;i++){
++		DRM_INFO("Connector-%d: %s\n", i, get_edid_method_names[ldev->connector_vbios[i]->edid_method]);
++		if(ldev->connector_vbios[i]->edid_method == edid_method_i2c){
++			DRM_INFO("Connector-%d use i2c: %d", i, ldev->connector_vbios[i]->i2c_id);
++		}
++	}
++	DRM_INFO("===============================PHY INFO=======================================\n");
++	for(i=0;i<ldev->vbios->phy_num;i++){
++		DRM_INFO("PHY-%d: %s\n", i, phy_type_names[ldev->phy_vbios[i]->phy_type]);
++		DRM_INFO("PHY-%d: bind with CRTC %d\n", i, ldev->phy_vbios[i]->crtc_id);
++		DRM_INFO("PHY-%d: bind with connector %d\n", i, ldev->phy_vbios[i]->connector_id);
++	}
++	DRM_INFO("=================================END==========================================\n");
++	return 0;
++}
+diff --git a/drivers/gpu/drm/loongson/loongson_vbios.h b/drivers/gpu/drm/loongson/loongson_vbios.h
+new file mode 100755
+index 000000000..43ea4fbd9
+--- /dev/null
++++ b/drivers/gpu/drm/loongson/loongson_vbios.h
+@@ -0,0 +1,80 @@
++/**
++ * struct loongson_vbios - loongson vbios structure
++ *
++ * @driver_priv: Pointer to driver-private information.
++ */
++struct loongson_vbios {
++	char title[16];
++	uint32_t version_major;
++	uint32_t version_minor;
++	char information[20];
++	uint32_t crtc_num;
++	uint32_t crtc_offset;
++	uint32_t connector_num;
++	uint32_t connector_offset;
++	uint32_t phy_num;
++	uint32_t phy_offset;
++} __packed;
++
++enum loongson_crtc_version {
++	default_version = 0,
++};
++
++struct loongson_vbios_crtc {
++	uint32_t next_crtc_offset;
++	uint32_t crtc_id;
++	enum loongson_crtc_version crtc_version;
++	uint32_t crtc_max_freq;
++	uint32_t crtc_max_width;
++	uint32_t crtc_max_height;
++	uint32_t connector_id;
++	uint32_t phy_num;
++	uint32_t phy_id[2];
++} __packed;
++
++enum loongson_edid_method {
++	edid_method_null = 0,
++	edid_method_i2c = 1,
++	edid_method_vbios = 2,
++	edid_method_phy = 3,
++};
++
++enum loongson_vbios_i2c_type {
++	i2c_type_null = 0,
++	i2c_type_gpio = 1,
++	i2c_type_cpu  = 2,
++	i2c_type_phy  = 3,
++};
++
++struct loongson_vbios_connector {
++	uint32_t next_connector_offset;
++	uint32_t crtc_id;
++	enum loongson_edid_method edid_method;
++	enum loongson_vbios_i2c_type i2c_type;
++	uint32_t i2c_id;
++	uint32_t edid_version;
++	uint32_t edid_offset;
++} __packed;
++
++enum loongson_phy_type {
++	phy_transparent = 0,
++};
++
++enum hot_swap_method {
++	hot_swap_disable = 0,
++	hot_swap_polling = 1,
++	hot_swap_irq = 2,
++};
++
++struct loongson_vbios_phy {
++	uint32_t next_phy_offset;
++	uint32_t crtc_id;
++	uint32_t connector_id;
++	uint32_t use_internal_edid;
++	enum loongson_phy_type phy_type;
++	enum loongson_vbios_i2c_type i2c_type;
++	uint32_t i2c_id;
++	enum hot_swap_method hot_swap_method;
++	uint32_t hot_swap_irq;
++} __packed;
++
+-- 
+2.17.1
+

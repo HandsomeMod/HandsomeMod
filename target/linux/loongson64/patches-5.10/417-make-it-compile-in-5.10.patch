@@ -1,0 +1,82 @@
+From 7c4500976e4a7b1c1bab4a409e2bd1d451ef128d Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sat, 1 May 2021 23:11:11 +0800
+Subject: [PATCH 17/17] make it compile in 5.10
+
+---
+ arch/mips/loongson64/builtin-dtbs.c     | 10 +++++-----
+ drivers/gpu/drm/loongson/loongson_drv.c |  2 +-
+ sound/pci/hda/hda_loongson.c            | 12 ------------
+ 3 files changed, 6 insertions(+), 18 deletions(-)
+
+diff --git a/arch/mips/loongson64/builtin-dtbs.c b/arch/mips/loongson64/builtin-dtbs.c
+index d19365f40..e6ec8a3e4 100644
+--- a/arch/mips/loongson64/builtin-dtbs.c
++++ b/arch/mips/loongson64/builtin-dtbs.c
+@@ -148,16 +148,16 @@ void __init *get_builtin_dtb(void)
+         fdt = __dtb_loongson2k_begin;
+ 
+     if (cpu == CPU_LS3_4CORES && pch == PCH_RS780E)
+-        fdt = __dtb_loongson3_4core_rs780e_begin;
++        fdt = __dtb_loongson64c_4core_rs780e_begin;
+ 
+     if (cpu == CPU_LS3_8CORES && pch == PCH_RS780E)
+-        fdt = __dtb_loongson3_8core_rs780e_begin;
++        fdt = __dtb_loongson64c_8core_rs780e_begin;
+     
+     if (cpu == CPU_LS3_4CORES && pch == PCH_LS7A)
+-        fdt = __dtb_loongson3_4core_ls7a_begin;
++        fdt = __dtb_loongson64g_4core_ls7a_begin;
+ 
+     if (cpu == CPU_LS3_R4 && pch == PCH_LS7A)
+-        fdt = __dtb_loongson3_r4_ls7a_begin;
++        fdt = __dtb_loongson64g_4core_ls7a_begin;
+ 
+     if (!fdt) {
+         pr_err("Builtin-dtbs: No matching model\n");
+@@ -167,4 +167,4 @@ void __init *get_builtin_dtb(void)
+     patch_pci_ranges(fdt);
+ 
+     return fdt;
+-}
+\ No newline at end of file
++}
+diff --git a/drivers/gpu/drm/loongson/loongson_drv.c b/drivers/gpu/drm/loongson/loongson_drv.c
+index 4524baa63..c2ea28bca 100755
+--- a/drivers/gpu/drm/loongson/loongson_drv.c
++++ b/drivers/gpu/drm/loongson/loongson_drv.c
+@@ -12,7 +12,7 @@
+  */
+ 
+ #include <asm/addrspace.h>
+-#include <linux/dma-contiguous.h>
++#include <linux/dma-map-ops.h>
+ #include <linux/dma-mapping.h>
+ #include <linux/vmalloc.h>
+ #include <linux/console.h>
+diff --git a/sound/pci/hda/hda_loongson.c b/sound/pci/hda/hda_loongson.c
+index 9d945283a..22050dc00 100644
+--- a/sound/pci/hda/hda_loongson.c
++++ b/sound/pci/hda/hda_loongson.c
+@@ -749,18 +749,6 @@ static int azx_first_init(struct azx *chip)
+ }
+ 
+ 
+-/* DMA page allocation helpers.  */
+-static int dma_alloc_pages(struct hdac_bus *bus, int type, size_t size,
+-			   struct snd_dma_buffer *buf)
+-{
+-	return snd_dma_alloc_pages(type, bus->dev, size, buf);
+-}
+-
+-static void dma_free_pages(struct hdac_bus *bus, struct snd_dma_buffer *buf)
+-{
+-	snd_dma_free_pages(buf);
+-}
+-
+ static int substream_alloc_pages(struct azx *chip,
+ 				 struct snd_pcm_substream *substream,
+ 				 size_t size)
+-- 
+2.17.1
+

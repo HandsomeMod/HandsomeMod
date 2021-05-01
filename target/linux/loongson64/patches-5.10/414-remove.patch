@@ -1,0 +1,52 @@
+From ac9aed557169b8257dbbbb0f9429723fc461c1cb Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sat, 1 May 2021 22:32:45 +0800
+Subject: [PATCH 14/17] remove
+
+---
+ sound/hda/hdac_controller.c.rej | 10 ----------
+ sound/hda/hdac_stream.c.rej     | 15 ---------------
+ 2 files changed, 25 deletions(-)
+ delete mode 100644 sound/hda/hdac_controller.c.rej
+ delete mode 100644 sound/hda/hdac_stream.c.rej
+
+diff --git a/sound/hda/hdac_controller.c.rej b/sound/hda/hdac_controller.c.rej
+deleted file mode 100644
+index 8fba74f8d..000000000
+--- a/sound/hda/hdac_controller.c.rej
++++ /dev/null
+@@ -1,10 +0,0 @@
+---- sound/hda/hdac_controller.c
+-+++ sound/hda/hdac_controller.c
+-@@ -9,6 +9,7 @@
+- #include <sound/core.h>
+- #include <sound/hdaudio.h>
+- #include <sound/hda_register.h>
+-+#include "../pci/hda/hda_controller.h"
+- 
+- /* clear CORB read pointer properly */
+- static void azx_clear_corbrp(struct hdac_bus *bus)
+diff --git a/sound/hda/hdac_stream.c.rej b/sound/hda/hdac_stream.c.rej
+deleted file mode 100644
+index 8bc5981dd..000000000
+--- a/sound/hda/hdac_stream.c.rej
++++ /dev/null
+@@ -1,15 +0,0 @@
+---- sound/hda/hdac_stream.c
+-+++ sound/hda/hdac_stream.c
+-@@ -175,9 +200,11 @@ void snd_hdac_stream_reset(struct hdac_stream *azx_dev)
+- {
+- 	unsigned char val;
+- 	int timeout;
+-+	struct azx *chip = bus_to_azx(azx_dev->bus);
+-+	if (chip->driver_caps & AZX_DCAPS_LS_HDA_WORKAROUND)
+-+		goto out;
+- 
+- 	snd_hdac_stream_clear(azx_dev);
+--
+- 	snd_hdac_stream_updateb(azx_dev, SD_CTL, 0, SD_CTL_STREAM_RESET);
+- 	udelay(3);
+- 	timeout = 300;
+-- 
+2.17.1
+

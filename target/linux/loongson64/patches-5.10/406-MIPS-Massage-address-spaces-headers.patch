@@ -1,0 +1,273 @@
+From e09336ca2d166157f2a225fc3f57bf765b2b2a34 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sat, 1 May 2021 21:44:55 +0800
+Subject: [PATCH 06/17] MIPS: Massage address spaces headers
+
+---
+ arch/mips/include/asm/addrspace.h           |  4 +--
+ arch/mips/include/asm/mach-generic/spaces.h | 30 ++++++++++++++-------
+ arch/mips/include/asm/page-def.h            | 28 +++++++++++++++++++
+ arch/mips/include/asm/page.h                | 20 --------------
+ arch/mips/include/asm/pgtable-32.h          |  1 -
+ arch/mips/include/asm/pgtable-64.h          | 10 ++-----
+ arch/mips/include/asm/sync.h                |  2 ++
+ arch/mips/kernel/cps-vec.S                  |  2 +-
+ arch/mips/lib/uncached.c                    |  5 +---
+ 9 files changed, 56 insertions(+), 46 deletions(-)
+ create mode 100644 arch/mips/include/asm/page-def.h
+
+diff --git a/arch/mips/include/asm/addrspace.h b/arch/mips/include/asm/addrspace.h
+index 59a48c60a..4fa8ee48e 100644
+--- a/arch/mips/include/asm/addrspace.h
++++ b/arch/mips/include/asm/addrspace.h
+@@ -10,7 +10,7 @@
+ #ifndef _ASM_ADDRSPACE_H
+ #define _ASM_ADDRSPACE_H
+ 
+-#include <spaces.h>
++#include <linux/const.h>
+ 
+ /*
+  *  Configure language
+@@ -67,7 +67,7 @@
+ #define XKSEG			_CONST64_(0xc000000000000000)
+ #define CKSEG0			_CONST64_(0xffffffff80000000)
+ #define CKSEG1			_CONST64_(0xffffffffa0000000)
+-#define CKSSEG			_CONST64_(0xffffffffc0000000)
++#define CKSEG2			_CONST64_(0xffffffffc0000000)
+ #define CKSEG3			_CONST64_(0xffffffffe0000000)
+ 
+ #define CKSEG0ADDR(a)		(CPHYSADDR(a) | CKSEG0)
+diff --git a/arch/mips/include/asm/mach-generic/spaces.h b/arch/mips/include/asm/mach-generic/spaces.h
+index c3ac06a6a..ef7a8cf9c 100644
+--- a/arch/mips/include/asm/mach-generic/spaces.h
++++ b/arch/mips/include/asm/mach-generic/spaces.h
+@@ -10,9 +10,9 @@
+ #ifndef _ASM_MACH_GENERIC_SPACES_H
+ #define _ASM_MACH_GENERIC_SPACES_H
+ 
+-#include <linux/const.h>
+-
++#include <asm/addrspace.h>
+ #include <asm/mipsregs.h>
++#include <asm/page-def.h>
+ 
+ #ifndef IO_SPACE_LIMIT
+ #define IO_SPACE_LIMIT 0xffff
+@@ -33,20 +33,20 @@
+ #ifdef CONFIG_KVM_GUEST
+ #define CAC_BASE		_AC(0x40000000, UL)
+ #else
+-#define CAC_BASE		_AC(0x80000000, UL)
++#define CAC_BASE		CKSEG0
+ #endif
+ #ifndef IO_BASE
+-#define IO_BASE			_AC(0xa0000000, UL)
++#define IO_BASE			CKSEG1
+ #endif
+ #ifndef UNCAC_BASE
+-#define UNCAC_BASE		_AC(0xa0000000, UL)
++#define UNCAC_BASE		CKSEG1
+ #endif
+ 
+ #ifndef MAP_BASE
+ #ifdef CONFIG_KVM_GUEST
+ #define MAP_BASE		_AC(0x60000000, UL)
+ #else
+-#define MAP_BASE		_AC(0xc0000000, UL)
++#define MAP_BASE		CKSEG2
+ #endif
+ #endif
+ 
+@@ -66,15 +66,15 @@
+ #endif
+ 
+ #ifndef IO_BASE
+-#define IO_BASE			_AC(0x9000000000000000, UL)
++#define IO_BASE			PHYS_TO_XKPHYS(K_CALG_UNCACHED, 0)
+ #endif
+ 
+ #ifndef UNCAC_BASE
+-#define UNCAC_BASE		_AC(0x9000000000000000, UL)
++#define UNCAC_BASE		PHYS_TO_XKPHYS(K_CALG_UNCACHED, 0)
+ #endif
+ 
+ #ifndef MAP_BASE
+-#define MAP_BASE		_AC(0xc000000000000000, UL)
++#define MAP_BASE		XKSEG
+ #endif
+ 
+ /*
+@@ -103,8 +103,18 @@
+ #ifdef CONFIG_KVM_GUEST
+ #define FIXADDR_TOP		((unsigned long)(long)(int)0x7ffe0000)
+ #else
+-#define FIXADDR_TOP		((unsigned long)(long)(int)0xfffe0000)
++#define FIXADDR_TOP		(CKSEG3 + 0x1ffe0000)
++#endif
+ #endif
++#ifdef CONFIG_64BIT
++/*
++ * TLB refill handlers also map the vmalloc area into xuseg.  Avoid
++ * the first couple of pages so NULL pointer dereferences will still
++ * reliably trap.
++ */
++#define VMALLOC_START		(MAP_BASE + (2 * PAGE_SIZE))
++#else
++#define VMALLOC_START	  MAP_BASE
+ #endif
+ 
+ #endif /* __ASM_MACH_GENERIC_SPACES_H */
+diff --git a/arch/mips/include/asm/page-def.h b/arch/mips/include/asm/page-def.h
+new file mode 100644
+index 000000000..6506b611f
+--- /dev/null
++++ b/arch/mips/include/asm/page-def.h
+@@ -0,0 +1,28 @@
++/* SPDX-License-Identifier: GPL-2.0-only */
++#ifndef __ASM_PAGE_DEF_H
++#define __ASM_PAGE_DEF_H
++
++#include <linux/const.h>
++
++/*
++ * PAGE_SHIFT determines the page size
++ */
++#ifdef CONFIG_PAGE_SIZE_4KB
++#define PAGE_SHIFT	12
++#endif
++#ifdef CONFIG_PAGE_SIZE_8KB
++#define PAGE_SHIFT	13
++#endif
++#ifdef CONFIG_PAGE_SIZE_16KB
++#define PAGE_SHIFT	14
++#endif
++#ifdef CONFIG_PAGE_SIZE_32KB
++#define PAGE_SHIFT	15
++#endif
++#ifdef CONFIG_PAGE_SIZE_64KB
++#define PAGE_SHIFT	16
++#endif
++#define PAGE_SIZE	(_AC(1, UL) << PAGE_SHIFT)
++#define PAGE_MASK	(~((1 << PAGE_SHIFT) - 1))
++
++#endif /* __ASM_PAGE_DEF_H */
+diff --git a/arch/mips/include/asm/page.h b/arch/mips/include/asm/page.h
+index 6a77bc4a6..de2204fac 100644
+--- a/arch/mips/include/asm/page.h
++++ b/arch/mips/include/asm/page.h
+@@ -14,26 +14,6 @@
+ #include <linux/kernel.h>
+ #include <asm/mipsregs.h>
+ 
+-/*
+- * PAGE_SHIFT determines the page size
+- */
+-#ifdef CONFIG_PAGE_SIZE_4KB
+-#define PAGE_SHIFT	12
+-#endif
+-#ifdef CONFIG_PAGE_SIZE_8KB
+-#define PAGE_SHIFT	13
+-#endif
+-#ifdef CONFIG_PAGE_SIZE_16KB
+-#define PAGE_SHIFT	14
+-#endif
+-#ifdef CONFIG_PAGE_SIZE_32KB
+-#define PAGE_SHIFT	15
+-#endif
+-#ifdef CONFIG_PAGE_SIZE_64KB
+-#define PAGE_SHIFT	16
+-#endif
+-#define PAGE_SIZE	(_AC(1,UL) << PAGE_SHIFT)
+-#define PAGE_MASK	(~((1 << PAGE_SHIFT) - 1))
+ 
+ /*
+  * This is used for calculating the real page sizes
+diff --git a/arch/mips/include/asm/pgtable-32.h b/arch/mips/include/asm/pgtable-32.h
+index 6c0532d7b..ddc18984b 100644
+--- a/arch/mips/include/asm/pgtable-32.h
++++ b/arch/mips/include/asm/pgtable-32.h
+@@ -95,7 +95,6 @@ extern int add_temporary_entry(unsigned long entrylo0, unsigned long entrylo1,
+ #define USER_PTRS_PER_PGD	(0x80000000UL/PGDIR_SIZE)
+ #define FIRST_USER_ADDRESS	0UL
+ 
+-#define VMALLOC_START	  MAP_BASE
+ 
+ #define PKMAP_END	((FIXADDR_START) & ~((LAST_PKMAP << PAGE_SHIFT)-1))
+ #define PKMAP_BASE	(PKMAP_END - PAGE_SIZE * LAST_PKMAP)
+diff --git a/arch/mips/include/asm/pgtable-64.h b/arch/mips/include/asm/pgtable-64.h
+index d5ef89552..95aaa8f7f 100644
+--- a/arch/mips/include/asm/pgtable-64.h
++++ b/arch/mips/include/asm/pgtable-64.h
+@@ -139,21 +139,15 @@
+ #define USER_PTRS_PER_PGD       ((TASK_SIZE64 / PGDIR_SIZE)?(TASK_SIZE64 / PGDIR_SIZE):1)
+ #define FIRST_USER_ADDRESS	0UL
+ 
+-/*
+- * TLB refill handlers also map the vmalloc area into xuseg.  Avoid
+- * the first couple of pages so NULL pointer dereferences will still
+- * reliably trap.
+- */
+-#define VMALLOC_START		(MAP_BASE + (2 * PAGE_SIZE))
+ #define VMALLOC_END	\
+ 	(MAP_BASE + \
+ 	 min(PTRS_PER_PGD * PTRS_PER_PUD * PTRS_PER_PMD * PTRS_PER_PTE * PAGE_SIZE, \
+ 	     (1UL << cpu_vmbits)) - (1UL << 32))
+ 
+ #if defined(CONFIG_MODULES) && defined(KBUILD_64BIT_SYM32) && \
+-	VMALLOC_START != CKSSEG
++	VMALLOC_START != CKSEG2
+ /* Load modules into 32bit-compatible segment. */
+-#define MODULE_START	CKSSEG
++#define MODULE_START	CKSEG2
+ #define MODULE_END	(FIXADDR_START-2*PAGE_SIZE)
+ #endif
+ 
+diff --git a/arch/mips/include/asm/sync.h b/arch/mips/include/asm/sync.h
+index aabd09793..8b2972558 100644
+--- a/arch/mips/include/asm/sync.h
++++ b/arch/mips/include/asm/sync.h
+@@ -2,6 +2,8 @@
+ #ifndef __MIPS_ASM_SYNC_H__
+ #define __MIPS_ASM_SYNC_H__
+ 
++#include <linux/stringify.h>
++
+ /*
+  * sync types are defined by the MIPS64 Instruction Set documentation in Volume
+  * II-A of the MIPS Architecture Reference Manual, which can be found here:
+diff --git a/arch/mips/kernel/cps-vec.S b/arch/mips/kernel/cps-vec.S
+index 4db7ff055..a2d9387c1 100644
+--- a/arch/mips/kernel/cps-vec.S
++++ b/arch/mips/kernel/cps-vec.S
+@@ -4,7 +4,7 @@
+  * Author: Paul Burton <paul.burton@mips.com>
+  */
+ 
+-#include <asm/addrspace.h>
++#include <spaces.h>
+ #include <asm/asm.h>
+ #include <asm/asm-offsets.h>
+ #include <asm/asmmacro.h>
+diff --git a/arch/mips/lib/uncached.c b/arch/mips/lib/uncached.c
+index f80a67c09..040a4c60d 100644
+--- a/arch/mips/lib/uncached.c
++++ b/arch/mips/lib/uncached.c
+@@ -9,13 +9,10 @@
+  */
+ 
+ 
+-#include <asm/addrspace.h>
++#include <spaces.h>
+ #include <asm/bug.h>
+ #include <asm/cacheflush.h>
+ 
+-#ifndef CKSEG2
+-#define CKSEG2 CKSSEG
+-#endif
+ #ifndef TO_PHYS_MASK
+ #define TO_PHYS_MASK -1
+ #endif
+-- 
+2.17.1
+

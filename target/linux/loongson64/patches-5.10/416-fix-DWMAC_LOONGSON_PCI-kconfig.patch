@@ -1,0 +1,25 @@
+From 05d1698de972cd2cbc4785dbf9b0ef274551413c Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sat, 1 May 2021 22:38:04 +0800
+Subject: [PATCH 16/17] fix DWMAC_LOONGSON_PCI kconfig
+
+---
+ drivers/net/ethernet/stmicro/stmmac/Kconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/net/ethernet/stmicro/stmmac/Kconfig b/drivers/net/ethernet/stmicro/stmmac/Kconfig
+index 060ec6f51..f44f66980 100644
+--- a/drivers/net/ethernet/stmicro/stmmac/Kconfig
++++ b/drivers/net/ethernet/stmicro/stmmac/Kconfig
+@@ -91,7 +91,7 @@ config DWMAC_LOONGSON_PCI
+ 	tristate "Loongson PCI DWMAC support"
+ 	default MACH_LOONGSON64
+ 	depends on OF && (MACH_LOONGSON64 || COMPILE_TEST)
+-	---help---
++	help
+ 	  Support for Loongson PCI DWMAC Ethernet.
+ 
+ config DWMAC_MEDIATEK
+-- 
+2.17.1
+

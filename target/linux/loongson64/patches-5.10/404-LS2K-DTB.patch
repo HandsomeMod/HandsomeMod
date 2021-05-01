@@ -1,0 +1,398 @@
+From 328975e8d02ff1de39fc4cd4946bd62cdf7f0e0f Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sat, 1 May 2021 21:20:51 +0800
+Subject: [PATCH 04/17] LS2K DTB
+
+---
+ arch/mips/boot/dts/loongson/Makefile          |   1 +
+ arch/mips/boot/dts/loongson/loongson2k.dts    | 354 ++++++++++++++++++
+ .../asm/mach-loongson64/builtin_dtbs.h        |   1 +
+ 3 files changed, 356 insertions(+)
+ create mode 100644 arch/mips/boot/dts/loongson/loongson2k.dts
+
+diff --git a/arch/mips/boot/dts/loongson/Makefile b/arch/mips/boot/dts/loongson/Makefile
+index 8fd0efb37..fe9cdf0de 100644
+--- a/arch/mips/boot/dts/loongson/Makefile
++++ b/arch/mips/boot/dts/loongson/Makefile
+@@ -4,5 +4,6 @@ dtb-$(CONFIG_MACH_LOONGSON64)	+= loongson64c_4core_rs780e.dtb
+ dtb-$(CONFIG_MACH_LOONGSON64)	+= loongson64c_8core_rs780e.dtb
+ dtb-$(CONFIG_MACH_LOONGSON64)	+= loongson64g_4core_ls7a.dtb
+ dtb-$(CONFIG_MACH_LOONGSON64)	+= loongson64v_4core_virtio.dtb
++dtb-$(CONFIG_MACH_LOONGSON64)	+= loongson2k.dtb
+ 
+ obj-$(CONFIG_BUILTIN_DTB)	+= $(addsuffix .o, $(dtb-y))
+diff --git a/arch/mips/boot/dts/loongson/loongson2k.dts b/arch/mips/boot/dts/loongson/loongson2k.dts
+new file mode 100644
+index 000000000..a6ae83bc6
+--- /dev/null
++++ b/arch/mips/boot/dts/loongson/loongson2k.dts
+@@ -0,0 +1,354 @@
++// SPDX-License-Identifier: GPL-2.0
++
++/dts-v1/;
++
++#include <dt-bindings/interrupt-controller/irq.h>
++
++/ {
++	compatible = "loongson,loongson2k";
++
++	#address-cells = <2>;
++	#size-cells = <2>;
++
++	cpuintc: interrupt-controller {
++		#address-cells = <0>;
++		#interrupt-cells = <1>;
++		interrupt-controller;
++		compatible = "mti,cpu-interrupt-controller";
++	};
++
++	apb_clk: apb_clk {
++		#clock-cells = <0>;
++		compatible = "fixed-clock";
++		clock-frequency = <125000000>;
++	};
++
++	package0: bus@10000000 {
++		compatible = "simple-bus";
++		#address-cells = <2>;
++		#size-cells = <2>;
++		ranges = <0 0x10000000 0 0x10000000 0 0x10000000
++			0 0x40000000 0 0x40000000 0 0x40000000
++			0x40 0x00000000 0x40 0x00000000 0x10 0x00000000
++			0xfe 0x00000000 0xfe 0x00000000 0 0x20000000>;
++
++		uart0: serial@1fe00000 {
++			compatible = "ns16550a";
++			reg = <0 0x1fe00000 0 0x8>;
++			clock-frequency = <125000000>;
++			interrupt-parent = <&liointc0>;
++			interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
++			no-loopback-test;
++		};
++
++		can0: can@1fe00c00{
++			compatible = "nxp,sja1000";
++			reg = <0 0x1fe00c00 0 0xff>;
++			interrupt-parent = <&liointc0>;
++			interrupts = <16 IRQ_TYPE_LEVEL_LOW>;
++		};
++
++		can1: can@1fe00d00{
++			compatible = "nxp,sja1000";
++			reg = <0 0x1fe00d00 0 0xff>;
++			interrupt-parent = <&liointc0>;
++			interrupts = <17 IRQ_TYPE_LEVEL_LOW>;
++		};
++
++		i2c0: i2c@1fe01000 {
++			compatible = "loongson,i2cmst-1.2";
++			reg = <0 0x1fe01000 0 0x8>;
++			interrupt-parent = <&liointc0>;
++			interrupts = <22 IRQ_TYPE_LEVEL_LOW>;
++			clocks = <&apb_clk>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++
++		i2c1: i2c@1fe01800 {
++			compatible = "loongson,i2cmst-1.2";
++			reg = <0x0 0x1fe01800 0x0 0x8>;
++			interrupt-parent = <&liointc0>;
++			interrupts = <23 IRQ_TYPE_LEVEL_LOW>;
++			clocks = <&apb_clk>;
++			#address-cells = <1>;
++			#size-cells = <0>;
++		};
++
++		pwm0: pwm@1fe02000{
++			compatible = "loongson,ls2k-pwm";
++			reg = <0 0x1fe02000 0 0x10>;
++			interrupt-parent = <&liointc0>;
++			interrupts = <24 IRQ_TYPE_LEVEL_LOW>;
++		};
++
++		pwm1: pwm@1fe02010{
++			compatible = "loongson,ls2k-pwm";
++			reg = <0 0x1fe02010 0 0x10>;
++			interrupt-parent = <&liointc0>;
++			interrupts = <25 IRQ_TYPE_LEVEL_LOW>;
++		};
++
++		pwm2: pwm@1fe02020{
++			compatible = "loongson,ls2k-pwm";
++			reg = <0 0x1fe02020 0 0x10>;
++			interrupt-parent = <&liointc0>;
++			interrupts = <26 IRQ_TYPE_LEVEL_LOW>;
++		};
++
++		pwm3: pwm@1fe02030{
++			compatible = "loongson,ls2k-pwm";
++			reg = <0 0x1fe02030 0 0x10>;
++			interrupt-parent = <&liointc0>;
++			interrupts = <27 IRQ_TYPE_LEVEL_LOW>;
++		};
++
++		gpio: gpio@1fe10500{
++			compatible = "ls,ls2k-gpio", "ls,ls-gpio";
++			reg = <0 0x1fe10500 0 0x38>;
++			ngpios = <64>;
++			gpio-controller;
++			#gpio-cells = <2>;
++		};
++
++		rtc0: rtc@1fe07800 {
++			compatible = "loongson,ls2k-rtc";
++			reg = <0 0x1fe07800 0 0x78>;
++		};
++
++		liointc0: interrupt-controller@1fe11400 {
++			compatible = "loongson,liointc-2.0";
++			reg = <0 0x1fe11400 0 0x40>,
++				<0 0x1fe11040 0 0x8>,
++				<0 0x1fe11140 0 0x8>;
++			reg-names = "main", "isr0", "isr1";
++
++			interrupt-controller;
++			#interrupt-cells = <2>;
++
++			interrupt-parent = <&cpuintc>;
++			interrupts = <2>;
++			interrupt-names = "int0";
++
++			loongson,parent_int_map = <0xffffffff>, /* int0 */
++						<0x00000000>, /* int1 */
++						<0x00000000>, /* int2 */
++						<0x00000000>; /* int3 */
++		};
++
++		liointc1: interrupt-controller@1fe11440 {
++			compatible = "loongson,liointc-2.0";
++			reg = <0 0x1fe11440 0 0x40>,
++				<0 0x1fe11048 0 0x8>,
++				<0 0x1fe11148 0 0x8>;
++			reg-names = "main", "isr0", "isr1";
++
++			interrupt-controller;
++			#interrupt-cells = <2>;
++
++			interrupt-parent = <&cpuintc>;
++			interrupts = <3>;
++			interrupt-names = "int1";
++
++			loongson,parent_int_map = <0x00000000>, /* int0 */
++						<0xffffffff>, /* int1 */
++						<0x00000000>, /* int2 */
++						<0x00000000>; /* int3 */
++		};
++
++		pci@1a000000 {
++			compatible = "loongson,ls2k-pci";
++			device_type = "pci";
++			#address-cells = <3>;
++			#size-cells = <2>;
++			#interrupt-cells = <2>;
++
++			reg = <0 0x1a000000 0 0x02000000>,
++				<0xfe 0x00000000 0 0x20000000>;
++
++			ranges = <0x81000000 0x0 0x00000000 0x0 0x18000000  0x0 0x00010000>,
++					<0x82000000 0x0 0x40000000 0x0 0x40000000  0x0 0x40000000>,
++					<0xc2000000 0x40 0x00000000 0x40 0x00000000 0x10 0x00000000>;
++
++			gmac0: gmac@3,0 {
++				compatible = "pci0014,7a03.0",
++						   "pci0014,7a03",
++						   "pciclass0c0320",
++						   "pciclass0c03",
++						   "loongson,pci-gmac";
++
++				reg = <0x1800 0x0 0x0 0x0 0x0>;
++				interrupts = <12 IRQ_TYPE_LEVEL_LOW>,
++						<13 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-names = "macirq", "eth_lpi";
++				interrupt-parent = <&liointc0>;
++				phy-mode = "rgmii";
++				mdio {
++					#address-cells = <1>;
++					#size-cells = <0>;
++					compatible = "snps,dwmac-mdio";
++					phy0: ethernet-phy@0 {
++						reg = <0>;
++					};
++				};
++			};
++
++			ehci@4,1 {
++				compatible = "pci0014,7a14.0",
++						   "pci0014,7a14",
++						   "pciclass0c0320",
++						   "pciclass0c03";
++
++				reg = <0x2100 0x0 0x0 0x0 0x0>;
++				interrupts = <18 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-parent = <&liointc1>;
++			};
++
++			ohci@4,2 {
++				compatible = "pci0014,7a24.0",
++						   "pci0014,7a24",
++						   "pciclass0c0310",
++						   "pciclass0c03";
++
++				reg = <0x2200 0x0 0x0 0x0 0x0>;
++				interrupts = <19 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-parent = <&liointc1>;
++			};
++
++			gpu@5,0 {
++				compatible = "pci0014,7a05.0",
++						   "pci0014,7a05",
++						   "pciclass010601",
++						   "pciclass0106";
++
++				reg = <0x2800 0x0 0x0 0x0 0x0>;
++				interrupts = <29 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-parent = <&liointc0>;
++			};
++
++			dc@6,0 {
++				compatible = "pci0014,7a06.0",
++						   "pci0014,7a06",
++						   "pciclass010601",
++						   "pciclass0106";
++
++				reg = <0x3000 0x0 0x0 0x0 0x0>;
++				interrupts = <28 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-parent = <&liointc0>;
++			};
++
++			hda@7,0 {
++				compatible = "pci0014,7a07.0",
++						   "pci0014,7a07",
++						   "pciclass010601",
++						   "pciclass0106";
++
++				reg = <0x3800 0x0 0x0 0x0 0x0>;
++				interrupts = <4 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-parent = <&liointc0>;
++			};
++
++			sata@8,0 {
++				compatible = "pci0014,7a08.0",
++						   "pci0014,7a08",
++						   "pciclass010601",
++						   "pciclass0106";
++
++				reg = <0x4000 0x0 0x0 0x0 0x0>;
++				interrupts = <19 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-parent = <&liointc0>;
++			};
++
++			pci_bridge@9,0 {
++				compatible = "pci0014,7a19.0",
++						   "pci0014,7a19",
++						   "pciclass060400",
++						   "pciclass0604";
++
++				reg = <0x4800 0x0 0x0 0x0 0x0>;
++				#interrupt-cells = <1>;
++				interrupts = <0 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-parent = <&liointc1>;
++				interrupt-map-mask = <0 0 0 0>;
++				interrupt-map = <0 0 0 0 &liointc1 0 IRQ_TYPE_LEVEL_LOW>;
++				external-facing;
++			};
++
++			pci_bridge@a,0 {
++				compatible = "pci0014,7a19.0",
++						   "pci0014,7a19",
++						   "pciclass060400",
++						   "pciclass0604";
++
++				reg = <0x5000 0x0 0x0 0x0 0x0>;
++				#interrupt-cells = <1>;
++				interrupts = <1 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-parent = <&liointc1>;
++				interrupt-map-mask = <0 0 0 0>;
++				interrupt-map = <0 0 0 0 &liointc1 1 IRQ_TYPE_LEVEL_LOW>;
++				external-facing;
++			};
++
++			pci_bridge@b,0 {
++				compatible = "pci0014,7a19.0",
++						   "pci0014,7a19",
++						   "pciclass060400",
++						   "pciclass0604";
++
++				reg = <0x5800 0x0 0x0 0x0 0x0>;
++				#interrupt-cells = <1>;
++				interrupts = <2 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-parent = <&liointc1>;
++				interrupt-map-mask = <0 0 0 0>;
++				interrupt-map = <0 0 0 0 &liointc1 2 IRQ_TYPE_LEVEL_LOW>;
++				external-facing;
++			};
++
++			pci_bridge@c,0 {
++				compatible = "pci0014,7a19.0",
++						   "pci0014,7a19",
++						   "pciclass060400",
++						   "pciclass0604";
++
++				reg = <0x6000 0x0 0x0 0x0 0x0>;
++				#interrupt-cells = <1>;
++				interrupts = <3 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-parent = <&liointc1>;
++				interrupt-map-mask = <0 0 0 0>;
++				interrupt-map = <0 0 0 0 &liointc1 3 IRQ_TYPE_LEVEL_LOW>;
++				external-facing;
++			};
++
++			pci_bridge@d,0 {
++				compatible = "pci0014,7a19.0",
++						   "pci0014,7a19",
++						   "pciclass060400",
++						   "pciclass0604";
++
++				reg = <0x6800 0x0 0x0 0x0 0x0>;
++				#interrupt-cells = <1>;
++				interrupts = <4 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-parent = <&liointc1>;
++				interrupt-map-mask = <0 0 0 0>;
++				interrupt-map = <0 0 0 0 &liointc1 4 IRQ_TYPE_LEVEL_LOW>;
++				external-facing;
++			};
++
++			pci_bridge@e,0 {
++				compatible = "pci0014,7a19.0",
++						   "pci0014,7a19",
++						   "pciclass060400",
++						   "pciclass0604";
++
++				reg = <0x7000 0x0 0x0 0x0 0x0>;
++				#interrupt-cells = <1>;
++				interrupts = <5 IRQ_TYPE_LEVEL_LOW>;
++				interrupt-parent = <&liointc1>;
++				interrupt-map-mask = <0 0 0 0>;
++				interrupt-map = <0 0 0 0 &liointc1 5 IRQ_TYPE_LEVEL_LOW>;
++				external-facing;
++			};
++
++		};
++	};
++};
+diff --git a/arch/mips/include/asm/mach-loongson64/builtin_dtbs.h b/arch/mips/include/asm/mach-loongson64/builtin_dtbs.h
+index 1cdb2ea25..fa861b4f7 100644
+--- a/arch/mips/include/asm/mach-loongson64/builtin_dtbs.h
++++ b/arch/mips/include/asm/mach-loongson64/builtin_dtbs.h
+@@ -8,6 +8,7 @@
+ #ifndef __ASM_MACH_LOONGSON64_BUILTIN_DTBS_H_
+ #define __ASM_MACH_LOONGSON64_BUILTIN_DTBS_H_
+ 
++extern u32 __dtb_loongson2k_begin[];
+ extern u32 __dtb_loongson64c_4core_ls7a_begin[];
+ extern u32 __dtb_loongson64c_4core_rs780e_begin[];
+ extern u32 __dtb_loongson64c_8core_rs780e_begin[];
+-- 
+2.17.1
+

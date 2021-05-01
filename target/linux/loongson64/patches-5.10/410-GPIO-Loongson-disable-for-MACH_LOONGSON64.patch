@@ -1,0 +1,133 @@
+From 2b226248f2e0b089d3cb91007a6a8e0d3465daa0 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sat, 1 May 2021 22:14:28 +0800
+Subject: [PATCH 10/17] GPIO: Loongson disable for MACH_LOONGSON64
+
+---
+ drivers/gpio/Kconfig            |  6 ++---
+ drivers/i2c/busses/i2c-ocores.c | 44 ++++++++++++++++++++++++++++++---
+ 2 files changed, 43 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/gpio/Kconfig b/drivers/gpio/Kconfig
+index 14751c7cc..4478d0310 100644
+--- a/drivers/gpio/Kconfig
++++ b/drivers/gpio/Kconfig
+@@ -349,10 +349,10 @@ config GPIO_LOGICVC
+ 	  programmable logic block.
+ 
+ config GPIO_LOONGSON
+-	bool "Loongson-2/3 GPIO support"
+-	depends on CPU_LOONGSON2EF || CPU_LOONGSON64
++	bool "Loongson-2EF GPIO support"
++	depends on CPU_LOONGSON2EF
+ 	help
+-	  driver for GPIO functionality on Loongson-2F/3A/3B processors.
++	    driver for GPIO functionality on Loongson-2F processors.
+ 
+ config GPIO_LPC18XX
+ 	tristate "NXP LPC18XX/43XX GPIO support"
+diff --git a/drivers/i2c/busses/i2c-ocores.c b/drivers/i2c/busses/i2c-ocores.c
+index f5fc75b65..5e2eb62fe 100644
+--- a/drivers/i2c/busses/i2c-ocores.c
++++ b/drivers/i2c/busses/i2c-ocores.c
+@@ -84,8 +84,13 @@ struct ocores_i2c {
+ #define TYPE_OCORES		0
+ #define TYPE_GRLIB		1
+ #define TYPE_SIFIVE_REV0	2
++#define TYPE_LOONGSON_1_0	3
++#define TYPE_LOONGSON_1_1	4
++#define TYPE_LOONGSON_1_2	5
++#define TYPE_LOONGSON_2_0	6 
+ 
+ #define OCORES_FLAG_BROKEN_IRQ BIT(1) /* Broken IRQ for FU540-C000 SoC */
++#define OCORES_FLAG_MULTIPLER_4 BIT(2) /* Internal multipler is 4 instead of 5 */
+ 
+ static void oc_setreg_8(struct ocores_i2c *i2c, int reg, u8 value)
+ {
+@@ -417,18 +422,24 @@ static int ocores_xfer(struct i2c_adapter *adap,
+ 
+ static int ocores_init(struct device *dev, struct ocores_i2c *i2c)
+ {
++	int multipler;
+ 	int prescale;
+ 	int diff;
+ 	u8 ctrl = oc_getreg(i2c, OCI2C_CONTROL);
+ 
++	if (i2c->flags & OCORES_FLAG_MULTIPLER_4)
++		multipler = 4;
++	else
++		multipler = 5;
++
+ 	/* make sure the device is disabled */
+ 	ctrl &= ~(OCI2C_CTRL_EN | OCI2C_CTRL_IEN);
+ 	oc_setreg(i2c, OCI2C_CONTROL, ctrl);
+ 
+-	prescale = (i2c->ip_clock_khz / (5 * i2c->bus_clock_khz)) - 1;
++	prescale = (i2c->ip_clock_khz / (multipler * i2c->bus_clock_khz)) - 1;
+ 	prescale = clamp(prescale, 0, 0xffff);
+ 
+-	diff = i2c->ip_clock_khz / (5 * (prescale + 1)) - i2c->bus_clock_khz;
++	diff = i2c->ip_clock_khz / (multipler * (prescale + 1)) - i2c->bus_clock_khz;
+ 	if (abs(diff) > i2c->bus_clock_khz / 10) {
+ 		dev_err(dev,
+ 			"Unsupported clock settings: core: %d KHz, bus: %d KHz\n",
+@@ -482,6 +493,22 @@ static const struct of_device_id ocores_i2c_match[] = {
+ 		.compatible = "sifive,i2c0",
+ 		.data = (void *)TYPE_SIFIVE_REV0,
+ 	},
++	{
++		.compatible = "loongson,i2cmst-1.0",
++		.data = (void *)TYPE_LOONGSON_1_0,
++	},
++	{
++		.compatible = "loongson,i2cmst-1.1",
++		.data = (void *)TYPE_LOONGSON_1_1,
++	},
++	{
++		.compatible = "loongson,i2cmst-1.2",
++		.data = (void *)TYPE_LOONGSON_1_2,
++	},
++	{
++		.compatible = "loongson,i2cmst-2.0",
++		.data = (void *)TYPE_LOONGSON_2_0,
++	},
+ 	{},
+ };
+ MODULE_DEVICE_TABLE(of, ocores_i2c_match);
+@@ -608,6 +635,7 @@ static int ocores_i2c_probe(struct platform_device *pdev)
+ 	struct ocores_i2c_platform_data *pdata;
+ 	const struct of_device_id *match;
+ 	struct resource *res;
++	int type;
+ 	int irq;
+ 	int ret;
+ 	int i;
+@@ -686,6 +714,15 @@ static int ocores_i2c_probe(struct platform_device *pdev)
+ 
+ 	init_waitqueue_head(&i2c->wait);
+ 
++	match = of_match_node(ocores_i2c_match, pdev->dev.of_node);
++	if (!match)
++		type = TYPE_OCORES;
++	else
++		type = (long)match->data;
++
++	if (type == TYPE_LOONGSON_1_2 || type == TYPE_LOONGSON_2_0)
++		i2c->flags |= OCORES_FLAG_MULTIPLER_4;
++
+ 	irq = platform_get_irq(pdev, 0);
+ 	if (irq == -ENXIO) {
+ 		ocores_algorithm.master_xfer = ocores_xfer_polling;
+@@ -694,8 +731,7 @@ static int ocores_i2c_probe(struct platform_device *pdev)
+ 		 * Set in OCORES_FLAG_BROKEN_IRQ to enable workaround for
+ 		 * FU540-C000 SoC in polling mode.
+ 		 */
+-		match = of_match_node(ocores_i2c_match, pdev->dev.of_node);
+-		if (match && (long)match->data == TYPE_SIFIVE_REV0)
++		if (type == TYPE_SIFIVE_REV0 || type == TYPE_LOONGSON_1_0)
+ 			i2c->flags |= OCORES_FLAG_BROKEN_IRQ;
+ 	} else {
+ 		if (irq < 0)
+-- 
+2.17.1
+
