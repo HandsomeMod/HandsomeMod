@@ -353,7 +353,7 @@ define KernelPackage/usb-wdm
   FILES:=$(LINUX_DIR)/drivers/usb/class/cdc-wdm.ko
   AUTOLOAD:=$(call AutoProbe,cdc-wdm)
 $(call AddDepends/usb)
-$(call AddDepends/usb-net)
+$(call AddDepends/usb-net,+kmod-usb-net-cdc-ether)
 endef
 
 define KernelPackage/usb-wdm/description
