@@ -1,0 +1,44 @@
+From a705901fc24e9bc3cbb5a910802cba07ce3d768f Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Sun, 1 Dec 2019 19:10:22 +0100
+Subject: [PATCH 03/78] ARM: qcom: Add qcom,arm-cortex-acc SMP operations for
+ MSM8916
+
+---
+ arch/arm/mach-qcom/platsmp.c | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+
+diff --git a/arch/arm/mach-qcom/platsmp.c b/arch/arm/mach-qcom/platsmp.c
+index 630a038f4..04a0d4d07 100644
+--- a/arch/arm/mach-qcom/platsmp.c
++++ b/arch/arm/mach-qcom/platsmp.c
+@@ -291,6 +291,13 @@ static int kpssv2_boot_secondary(unsigned int cpu, struct task_struct *idle)
+ 	return qcom_boot_secondary(cpu, kpssv2_release_secondary);
+ }
+ 
++extern int qcom_cortex_a_release_secondary(unsigned int cpu);
++
++static int cortex_a_boot_secondary(unsigned int cpu, struct task_struct *idle)
++{
++	return qcom_boot_secondary(cpu, qcom_cortex_a_release_secondary);
++}
++
+ static void __init qcom_smp_prepare_cpus(unsigned int max_cpus)
+ {
+ 	int cpu;
+@@ -332,3 +339,12 @@ static const struct smp_operations qcom_smp_kpssv2_ops __initconst = {
+ #endif
+ };
+ CPU_METHOD_OF_DECLARE(qcom_smp_kpssv2, "qcom,kpss-acc-v2", &qcom_smp_kpssv2_ops);
++
++static const struct smp_operations qcom_smp_cortex_a_ops __initconst = {
++	.smp_prepare_cpus	= qcom_smp_prepare_cpus,
++	.smp_boot_secondary	= cortex_a_boot_secondary,
++#ifdef CONFIG_HOTPLUG_CPU
++	.cpu_die		= qcom_cpu_die,
++#endif
++};
++CPU_METHOD_OF_DECLARE(qcom_smp_cortex_a, "qcom,arm-cortex-acc", &qcom_smp_cortex_a_ops);
+-- 
+2.31.1
+

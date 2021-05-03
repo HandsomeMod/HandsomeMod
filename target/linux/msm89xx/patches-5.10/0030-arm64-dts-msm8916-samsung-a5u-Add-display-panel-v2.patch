@@ -1,0 +1,92 @@
+From d06119a252c70eb60c32becd439cbc906a07162d Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Sun, 23 Jun 2019 15:05:57 +0200
+Subject: [PATCH 30/78] arm64: dts: msm8916-samsung-a5u: Add display panel (v2)
+
+v2: Make reset-gpios GPIO_ACTIVE_LOW
+---
+ .../boot/dts/qcom/msm8916-samsung-a5u-eur.dts | 54 +++++++++++++++++++
+ 1 file changed, 54 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/msm8916-samsung-a5u-eur.dts b/arch/arm64/boot/dts/qcom/msm8916-samsung-a5u-eur.dts
+index dd35c3344..e352914d5 100644
+--- a/arch/arm64/boot/dts/qcom/msm8916-samsung-a5u-eur.dts
++++ b/arch/arm64/boot/dts/qcom/msm8916-samsung-a5u-eur.dts
+@@ -7,6 +7,30 @@
+ / {
+ 	model = "Samsung Galaxy A5U (EUR)";
+ 	compatible = "samsung,a5u-eur", "qcom,msm8916";
++
++	reg_vlcd_vdd3: regulator-vlcd-vdd3 {
++		compatible = "regulator-fixed";
++		regulator-name = "vlcd_vdd3";
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++		vin-supply = <&pm8916_s4>;
++
++		gpio = <&msmgpio 87 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&lcd_on_default>;
++	};
++
++	reg_vlcd_vci: regulator-vlcd-vci {
++		compatible = "regulator-fixed";
++		regulator-name = "vlcd_vci";
++		regulator-min-microvolt = <3000000>;
++		regulator-max-microvolt = <3000000>;
++
++		gpio = <&msmgpio 87 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++	};
+ };
+ 
+ &accelerometer {
+@@ -36,6 +60,28 @@ touchscreen@48 {
+ 	};
+ };
+ 
++&dsi0 {
++	panel@0 {
++		compatible = "samsung,ea8061v-ams497ee01";
++		reg = <0>;
++
++		vdd3-supply = <&reg_vlcd_vdd3>;
++		vci-supply = <&reg_vlcd_vci>;
++		reset-gpios = <&msmgpio 25 GPIO_ACTIVE_LOW>;
++
++		port {
++			panel_in: endpoint {
++				remote-endpoint = <&dsi0_out>;
++			};
++		};
++	};
++};
++
++&dsi0_out {
++	data-lanes = <0 1 2 3>;
++	remote-endpoint = <&panel_in>;
++};
++
+ &pronto {
+ 	iris {
+ 		compatible = "qcom,wcn3660b";
+@@ -43,6 +89,14 @@ iris {
+ };
+ 
+ &msmgpio {
++	lcd_on_default: lcd-on-default {
++		pins = "gpio87";
++		function = "gpio";
++
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	ts_int_default: ts-int-default {
+ 		pins = "gpio13";
+ 		function = "gpio";
+-- 
+2.31.1
+

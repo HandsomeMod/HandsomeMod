@@ -1,0 +1,45 @@
+From a0c5f7e9bb4f3e8916fcdae8d3bad2162b453a84 Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Wed, 28 Aug 2019 17:13:01 +0200
+Subject: [PATCH 35/78] power: supply: rt5033_battery: Fix device tree
+ enumeration
+
+rt5033_battery is a separate i2c device. As such, it is not actually
+probed as children device of the rt5033 MFD. Therefore, it needs
+its own of_device_id match table to be probed properly.
+---
+ drivers/power/supply/rt5033_battery.c | 8 ++++++++
+ 1 file changed, 8 insertions(+)
+
+diff --git a/drivers/power/supply/rt5033_battery.c b/drivers/power/supply/rt5033_battery.c
+index f33045234..09ab37732 100644
+--- a/drivers/power/supply/rt5033_battery.c
++++ b/drivers/power/supply/rt5033_battery.c
+@@ -7,6 +7,7 @@
+  */
+ 
+ #include <linux/module.h>
++#include <linux/of.h>
+ #include <linux/platform_device.h>
+ #include <linux/power_supply.h>
+ #include <linux/mfd/rt5033-private.h>
+@@ -164,9 +165,16 @@ static const struct i2c_device_id rt5033_battery_id[] = {
+ };
+ MODULE_DEVICE_TABLE(i2c, rt5033_battery_id);
+ 
++static const struct of_device_id rt5033_battery_dt_match[] = {
++	{ .compatible = "richtek,rt5033-battery", },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, rt5033_battery_dt_match);
++
+ static struct i2c_driver rt5033_battery_driver = {
+ 	.driver = {
+ 		.name = "rt5033-battery",
++		.of_match_table = of_match_ptr(rt5033_battery_dt_match),
+ 	},
+ 	.probe = rt5033_battery_probe,
+ 	.remove = rt5033_battery_remove,
+-- 
+2.31.1
+

@@ -1,0 +1,63 @@
+From ef1b5e170733c31b153a0487569c914f0f28f384 Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Mon, 9 Dec 2019 22:54:36 +0100
+Subject: [PATCH 23/78] MSM8916: ARM: configs: Add additional config options
+ for MSM8916 on ARM32
+
+The kernel configuration is largely shared with ARM64, so these
+are only the additional options needed for ARM32. It needs to be
+concatenated to the ARM64 msm8916_defconfig (see comment).
+---
+ arch/arm/configs/.gitignore             |  2 ++
+ arch/arm/configs/msm8916_defconfig.part | 30 +++++++++++++++++++++++++
+ 2 files changed, 32 insertions(+)
+ create mode 100644 arch/arm/configs/.gitignore
+ create mode 100644 arch/arm/configs/msm8916_defconfig.part
+
+diff --git a/arch/arm/configs/.gitignore b/arch/arm/configs/.gitignore
+new file mode 100644
+index 000000000..1cd39ba80
+--- /dev/null
++++ b/arch/arm/configs/.gitignore
+@@ -0,0 +1,2 @@
++# This is dynamically built from the arm64 one (see msm8916_defconfig.part)
++msm8916_defconfig
+diff --git a/arch/arm/configs/msm8916_defconfig.part b/arch/arm/configs/msm8916_defconfig.part
+new file mode 100644
+index 000000000..ddc6f541b
+--- /dev/null
++++ b/arch/arm/configs/msm8916_defconfig.part
+@@ -0,0 +1,30 @@
++# Build the full configuration by running
++# cat arch/arm64/configs/msm8916_defconfig arch/arm/configs/msm8916_defconfig.part > arch/arm/configs/msm8916_defconfig
++
++CONFIG_PERF_EVENTS=y
++CONFIG_ARCH_MSM8916=y
++CONFIG_SMP=y
++CONFIG_HZ_250=y
++CONFIG_HIGHMEM=y
++# CONFIG_ATAGS is not set
++CONFIG_VFP=y
++CONFIG_NEON=y
++CONFIG_KERNEL_MODE_NEON=y
++CONFIG_ARM_CRYPTO=y
++CONFIG_CRYPTO_SHA1_ARM_NEON=y
++CONFIG_CRYPTO_SHA1_ARM_CE=y
++CONFIG_CRYPTO_SHA2_ARM_CE=y
++CONFIG_CRYPTO_SHA512_ARM=m
++CONFIG_CRYPTO_AES_ARM=y
++CONFIG_CRYPTO_AES_ARM_BS=y
++CONFIG_CRYPTO_AES_ARM_CE=y
++CONFIG_CRYPTO_GHASH_ARM_CE=y
++CONFIG_CRYPTO_CRC32_ARM_CE=y
++CONFIG_GPIOLIB=y
++CONFIG_POWER_RESET=y
++CONFIG_POWER_SUPPLY=y
++CONFIG_CRYPTO=y
++CONFIG_CRYPTO_SHA3=m
++CONFIG_CRYPTO_SM3=m
++CONFIG_CRYPTO_SM4=m
++CONFIG_STRICT_DEVMEM=y
+-- 
+2.31.1
+

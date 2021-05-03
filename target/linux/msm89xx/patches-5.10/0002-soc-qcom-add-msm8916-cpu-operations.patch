@@ -1,0 +1,389 @@
+From 50adf1267a8ea0957fa9d0948fca074300e1391a Mon Sep 17 00:00:00 2001
+From: Abhimanyu Kapur <abhimany@codeaurora.org>
+Date: Tue, 14 Apr 2015 14:58:40 -0500
+Subject: [PATCH 02/78] soc: qcom: add msm8916 cpu operations
+
+Add qcom cpu operations for arm-v8 cpus. Implement secondary cpu boot ops
+As a part of this change update device tree documentation for:
+
+1. Arm cortex-a ACC device which provides percpu reg
+2. Armv8 cortex-a compatible string in arm/cpus.txt
+
+Signed-off-by: Abhimanyu Kapur <abhimany@codeaurora.org>
+Signed-off-by: Kumar Gala <galak@codeaurora.org>
+[minecrell: move back to drivers/soc/qcom to share between ARM32/64]
+---
+ .../devicetree/bindings/arm/cpus.yaml         |   1 +
+ .../devicetree/bindings/arm/msm/acc.txt       |  19 ++
+ arch/arm64/kernel/cpu_ops.c                   |   4 +
+ drivers/soc/qcom/Makefile                     |   1 +
+ drivers/soc/qcom/platsmp-msm8916.c            | 286 ++++++++++++++++++
+ 5 files changed, 311 insertions(+)
+ create mode 100644 Documentation/devicetree/bindings/arm/msm/acc.txt
+ create mode 100644 drivers/soc/qcom/platsmp-msm8916.c
+
+diff --git a/Documentation/devicetree/bindings/arm/cpus.yaml b/Documentation/devicetree/bindings/arm/cpus.yaml
+index 14cd727d3..6946314b3 100644
+--- a/Documentation/devicetree/bindings/arm/cpus.yaml
++++ b/Documentation/devicetree/bindings/arm/cpus.yaml
+@@ -178,6 +178,7 @@ properties:
+       - enum:
+           - psci
+           - spin-table
++          - qcom,arm-cortex-acc
+       # On ARM 32-bit systems this property is optional
+       - enum:
+           - actions,s500-smp
+diff --git a/Documentation/devicetree/bindings/arm/msm/acc.txt b/Documentation/devicetree/bindings/arm/msm/acc.txt
+new file mode 100644
+index 000000000..ae2d7253b
+--- /dev/null
++++ b/Documentation/devicetree/bindings/arm/msm/acc.txt
+@@ -0,0 +1,19 @@
++Application Processor Sub-system (APSS) Application Clock Controller (ACC)
++
++The ACC provides clock, power domain, and reset control to a CPU. There is one ACC
++register region per CPU within the APSS remapped region as well as an alias register
++region that remaps accesses to the ACC associated with the CPU accessing the region.
++
++Required properties:
++- compatible:		Must be "qcom,arm-cortex-acc"
++- reg:			The first element specifies the base address and size of
++			the register region. An optional second element specifies
++			the base address and size of the alias register region.
++
++Example:
++
++	clock-controller@b088000 {
++		compatible = "qcom,arm-cortex-acc";
++		reg = <0x0b088000 0x1000>,
++		      <0x0b008000 0x1000>;
++	}
+diff --git a/arch/arm64/kernel/cpu_ops.c b/arch/arm64/kernel/cpu_ops.c
+index e133011f6..ac0ea1941 100644
+--- a/arch/arm64/kernel/cpu_ops.c
++++ b/arch/arm64/kernel/cpu_ops.c
+@@ -19,12 +19,16 @@ extern const struct cpu_operations smp_spin_table_ops;
+ extern const struct cpu_operations acpi_parking_protocol_ops;
+ #endif
+ extern const struct cpu_operations cpu_psci_ops;
++extern const struct cpu_operations qcom_cortex_a_ops;
+ 
+ static const struct cpu_operations *cpu_ops[NR_CPUS] __ro_after_init;
+ 
+ static const struct cpu_operations *const dt_supported_cpu_ops[] __initconst = {
+ 	&smp_spin_table_ops,
+ 	&cpu_psci_ops,
++#ifdef CONFIG_ARCH_QCOM
++	&qcom_cortex_a_ops,
++#endif
+ 	NULL,
+ };
+ 
+diff --git a/drivers/soc/qcom/Makefile b/drivers/soc/qcom/Makefile
+index ad675a659..02a6ca263 100644
+--- a/drivers/soc/qcom/Makefile
++++ b/drivers/soc/qcom/Makefile
+@@ -8,6 +8,7 @@ obj-$(CONFIG_QCOM_GSBI)	+=	qcom_gsbi.o
+ obj-$(CONFIG_QCOM_MDT_LOADER)	+= mdt_loader.o
+ obj-$(CONFIG_QCOM_OCMEM)	+= ocmem.o
+ obj-$(CONFIG_QCOM_PDR_HELPERS)	+= pdr_interface.o
++obj-$(CONFIG_ARCH_QCOM)	+= platsmp-msm8916.o
+ obj-$(CONFIG_QCOM_QMI_HELPERS)	+= qmi_helpers.o
+ qmi_helpers-y	+= qmi_encdec.o qmi_interface.o
+ obj-$(CONFIG_QCOM_RMTFS_MEM)	+= rmtfs_mem.o
+diff --git a/drivers/soc/qcom/platsmp-msm8916.c b/drivers/soc/qcom/platsmp-msm8916.c
+new file mode 100644
+index 000000000..20163d27e
+--- /dev/null
++++ b/drivers/soc/qcom/platsmp-msm8916.c
+@@ -0,0 +1,286 @@
++/* Copyright (c) 2014, The Linux Foundation. All rights reserved.
++ * Copyright (c) 2013 ARM Ltd.
++ *
++ * This program is free software; you can redistribute it and/or modify
++ * it under the terms of the GNU General Public License version 2 and
++ * only version 2 as published by the Free Software Foundation.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ */
++
++/* MSM ARMv8 CPU Operations
++ * Based on arch/arm64/kernel/smp_spin_table.c
++ */
++
++#include <linux/bitops.h>
++#include <linux/cpu.h>
++#include <linux/cpumask.h>
++#include <linux/delay.h>
++#include <linux/init.h>
++#include <linux/io.h>
++#include <linux/of.h>
++#include <linux/of_address.h>
++#include <linux/smp.h>
++#include <linux/qcom_scm.h>
++
++#include <asm/barrier.h>
++#include <asm/cacheflush.h>
++#include <asm/cputype.h>
++#include <asm/smp_plat.h>
++
++#ifdef CONFIG_ARM64
++#include <asm/cpu_ops.h>
++
++DEFINE_PER_CPU(int, cold_boot_done);
++#endif
++
++/* CPU power domain register offsets */
++#define CPU_PWR_CTL		0x4
++#define CPU_PWR_GATE_CTL	0x14
++#define LDO_BHS_PWR_CTL		0x28
++
++/* L2 power domain register offsets */
++#define L2_PWR_CTL_OVERRIDE	0xc
++#define L2_PWR_CTL		0x14
++#define L2_PWR_STATUS		0x18
++#define L2_CORE_CBCR		0x58
++#define L1_RST_DIS		0x284
++
++#define L2_SPM_STS		0xc
++#define L2_VREG_CTL		0x1c
++
++/*
++ * struct qcom_l2ccc_of_info: represents of data for l2 cache clock controller.
++ * @compat: compat string for l2 cache clock controller
++ * @l2_pon: l2 cache power on routine
++ */
++struct qcom_l2ccc_of_info {
++	const char *compat;
++	int (*l2_power_on) (struct device_node *dn, u32 l2_mask, int cpu);
++	u32 l2_power_on_mask;
++};
++
++static int power_on_l2_msm8916(struct device_node *l2ccc_node, u32 pon_mask,
++				int cpu)
++{
++	u32 pon_status;
++	void __iomem *l2_base;
++
++	l2_base = of_iomap(l2ccc_node, 0);
++	if (!l2_base)
++		return -ENOMEM;
++
++	/* Skip power-on sequence if l2 cache is already powered up*/
++	pon_status = (__raw_readl(l2_base + L2_PWR_STATUS) & pon_mask)
++				== pon_mask;
++	if (pon_status) {
++		iounmap(l2_base);
++		return 0;
++	}
++
++	/* Close L2/SCU Logic GDHS and power up the cache */
++	writel_relaxed(0x10D700, l2_base + L2_PWR_CTL);
++
++	/* Assert PRESETDBGn */
++	writel_relaxed(0x400000, l2_base + L2_PWR_CTL_OVERRIDE);
++	mb();
++	udelay(2);
++
++	/* De-assert L2/SCU memory Clamp */
++	writel_relaxed(0x101700, l2_base + L2_PWR_CTL);
++
++	/* Wakeup L2/SCU RAMs by deasserting sleep signals */
++	writel_relaxed(0x101703, l2_base + L2_PWR_CTL);
++	mb();
++	udelay(2);
++
++	/* Enable clocks via SW_CLK_EN */
++	writel_relaxed(0x01, l2_base + L2_CORE_CBCR);
++
++	/* De-assert L2/SCU logic clamp */
++	writel_relaxed(0x101603, l2_base + L2_PWR_CTL);
++	mb();
++	udelay(2);
++
++	/* De-assert PRESSETDBg */
++	writel_relaxed(0x0, l2_base + L2_PWR_CTL_OVERRIDE);
++
++	/* De-assert L2/SCU Logic reset */
++	writel_relaxed(0x100203, l2_base + L2_PWR_CTL);
++	mb();
++	udelay(54);
++
++	/* Turn on the PMIC_APC */
++	writel_relaxed(0x10100203, l2_base + L2_PWR_CTL);
++
++	/* Set H/W clock control for the cpu CBC block */
++	writel_relaxed(0x03, l2_base + L2_CORE_CBCR);
++	mb();
++	iounmap(l2_base);
++
++	return 0;
++}
++
++static const struct qcom_l2ccc_of_info l2ccc_info[] = {
++	{
++		.compat = "qcom,8916-l2ccc",
++		.l2_power_on = power_on_l2_msm8916,
++		.l2_power_on_mask = BIT(9),
++	},
++};
++
++static int power_on_l2_cache(struct device_node *l2ccc_node, int cpu)
++{
++	int ret, i;
++	const char *compat;
++
++	ret = of_property_read_string(l2ccc_node, "compatible", &compat);
++	if (ret)
++		return ret;
++
++	for (i = 0; i < ARRAY_SIZE(l2ccc_info); i++) {
++		const struct qcom_l2ccc_of_info *ptr = &l2ccc_info[i];
++
++		if (!of_compat_cmp(ptr->compat, compat, strlen(compat)))
++				return ptr->l2_power_on(l2ccc_node,
++						ptr->l2_power_on_mask, cpu);
++	}
++	pr_err("Compat string not found for L2CCC node\n");
++	return -EIO;
++}
++
++int qcom_cortex_a_release_secondary(unsigned int cpu)
++{
++
++	int ret = 0;
++	struct device_node *cpu_node, *acc_node, *l2_node, *l2ccc_node;
++	void __iomem *reg;
++
++	cpu_node = of_get_cpu_node(cpu, NULL);
++	if (!cpu_node)
++		return -ENODEV;
++
++	acc_node = of_parse_phandle(cpu_node, "qcom,acc", 0);
++	if (!acc_node) {
++			ret = -ENODEV;
++			goto out_acc;
++	}
++
++	l2_node = of_parse_phandle(cpu_node, "next-level-cache", 0);
++	if (!l2_node) {
++		ret = -ENODEV;
++		goto out_l2;
++	}
++
++	l2ccc_node = of_parse_phandle(l2_node, "power-domain", 0);
++	if (!l2ccc_node) {
++		ret = -ENODEV;
++		goto out_l2;
++	}
++
++	/* Ensure L2-cache of the CPU is powered on before
++	 * unclamping cpu power rails.
++	 */
++	ret = power_on_l2_cache(l2ccc_node, cpu);
++	if (ret) {
++		pr_err("L2 cache power up failed for CPU%d\n", cpu);
++		goto out_l2ccc;
++	}
++
++	reg = of_iomap(acc_node, 0);
++	if (!reg) {
++		ret = -ENOMEM;
++		goto out_acc_reg;
++	}
++
++	/* Assert Reset on cpu-n */
++	writel_relaxed(0x00000033, reg + CPU_PWR_CTL);
++	mb();
++
++	/*Program skew to 16 X0 clock cycles*/
++	writel_relaxed(0x10000001, reg + CPU_PWR_GATE_CTL);
++	mb();
++	udelay(2);
++
++	/* De-assert coremem clamp */
++	writel_relaxed(0x00000031, reg + CPU_PWR_CTL);
++	mb();
++
++	/* Close coremem array gdhs */
++	writel_relaxed(0x00000039, reg + CPU_PWR_CTL);
++	mb();
++	udelay(2);
++
++	/* De-assert cpu-n clamp */
++	writel_relaxed(0x00020038, reg + CPU_PWR_CTL);
++	mb();
++	udelay(2);
++
++	/* De-assert cpu-n reset */
++	writel_relaxed(0x00020008, reg + CPU_PWR_CTL);
++	mb();
++
++	/* Assert PWRDUP signal on core-n */
++	writel_relaxed(0x00020088, reg + CPU_PWR_CTL);
++	mb();
++
++	/* Secondary CPU-N is now alive */
++	iounmap(reg);
++out_acc_reg:
++	of_node_put(l2ccc_node);
++out_l2ccc:
++	of_node_put(l2_node);
++out_l2:
++	of_node_put(acc_node);
++out_acc:
++	of_node_put(cpu_node);
++
++	return ret;
++}
++
++#ifdef CONFIG_ARM64
++static int __init qcom_cpu_init(unsigned int cpu)
++{
++	/* Mark CPU0 cold boot flag as done */
++	if (!cpu && !per_cpu(cold_boot_done, cpu))
++		per_cpu(cold_boot_done, cpu) = true;
++
++	return 0;
++}
++
++static int __init qcom_cpu_prepare(unsigned int cpu)
++{
++	const cpumask_t *mask = cpumask_of(cpu);
++
++	if (qcom_scm_set_cold_boot_addr(secondary_entry, mask)) {
++		pr_warn("CPU%d:Failed to set boot address\n", cpu);
++		return -ENOSYS;
++	}
++
++	return 0;
++}
++
++static int qcom_cpu_boot(unsigned int cpu)
++{
++	int ret = 0;
++
++	if (per_cpu(cold_boot_done, cpu) == false) {
++		ret = qcom_cortex_a_release_secondary(cpu);
++		if (ret)
++			return ret;
++		per_cpu(cold_boot_done, cpu) = true;
++	}
++
++	return ret;
++}
++
++const struct cpu_operations qcom_cortex_a_ops = {
++	.name		= "qcom,arm-cortex-acc",
++	.cpu_init	= qcom_cpu_init,
++	.cpu_prepare	= qcom_cpu_prepare,
++	.cpu_boot	= qcom_cpu_boot,
++};
++#endif
+-- 
+2.31.1
+

@@ -1,0 +1,49 @@
+From 0c4e38f5bad0544be2d576218edee4bb25569eea Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Wed, 6 Jan 2021 16:37:00 +0100
+Subject: [PATCH 53/78] drm/panel: longcheer-truly-otm1288a: Force DSI video
+ mode
+
+Command mode is somewhat broken in the mainline kernel.
+Change some magic bits to force video mode for now.
+---
+ .../msm8916-generated/panel-longcheer-truly-otm1288a.c   | 9 +++++----
+ 1 file changed, 5 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/gpu/drm/panel/msm8916-generated/panel-longcheer-truly-otm1288a.c b/drivers/gpu/drm/panel/msm8916-generated/panel-longcheer-truly-otm1288a.c
+index 455bcb434..b9b4fd0db 100644
+--- a/drivers/gpu/drm/panel/msm8916-generated/panel-longcheer-truly-otm1288a.c
++++ b/drivers/gpu/drm/panel/msm8916-generated/panel-longcheer-truly-otm1288a.c
+@@ -54,8 +54,9 @@ static int truly_otm1288a_on(struct truly_otm1288a *ctx)
+ 	dsi_generic_write_seq(dsi, 0xff, 0x12, 0x88, 0x01);
+ 	dsi_generic_write_seq(dsi, 0x00, 0x80);
+ 	dsi_generic_write_seq(dsi, 0xff, 0x12, 0x88);
+-	dsi_generic_write_seq(dsi, 0x00, 0xa0);
+-	dsi_generic_write_seq(dsi, 0xf6, 0x02);
++	/* keep the TE signal for ESD (unneeded for video mode I guess?)
++	 * dsi_generic_write_seq(dsi, 0x00, 0xa0);
++	 * dsi_generic_write_seq(dsi, 0xf6, 0x02); */
+ 	dsi_generic_write_seq(dsi, 0x00, 0x80);
+ 	dsi_generic_write_seq(dsi, 0xc0,
+ 			      0x00, 0x64, 0x00, 0x10, 0x10, 0x00, 0x64, 0x10,
+@@ -63,7 +64,7 @@ static int truly_otm1288a_on(struct truly_otm1288a *ctx)
+ 	dsi_generic_write_seq(dsi, 0x00, 0x90);
+ 	dsi_generic_write_seq(dsi, 0xc0, 0x00, 0x00, 0x00, 0x14, 0x00, 0x1b);
+ 	dsi_generic_write_seq(dsi, 0x00, 0x00);
+-	dsi_generic_write_seq(dsi, 0x1c, 0x00);
++	dsi_generic_write_seq(dsi, 0x1c, 0x32); /* 0x00 -> 0x32 for video mode */
+ 	dsi_generic_write_seq(dsi, 0x00, 0xc0);
+ 	dsi_generic_write_seq(dsi, 0xb0, 0x4d);
+ 	dsi_generic_write_seq(dsi, 0x00, 0xa3);
+@@ -373,7 +374,7 @@ static int truly_otm1288a_probe(struct mipi_dsi_device *dsi)
+ 
+ 	dsi->lanes = 4;
+ 	dsi->format = MIPI_DSI_FMT_RGB888;
+-	dsi->mode_flags = MIPI_DSI_MODE_VIDEO_SYNC_PULSE |
++	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE |
+ 			  MIPI_DSI_CLOCK_NON_CONTINUOUS | MIPI_DSI_MODE_LPM;
+ 
+ 	drm_panel_init(&ctx->panel, dev, &truly_otm1288a_panel_funcs,
+-- 
+2.31.1
+

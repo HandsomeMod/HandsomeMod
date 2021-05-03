@@ -1,0 +1,30 @@
+From 47b585b2301d54dd390c04e71206083db4d45757 Mon Sep 17 00:00:00 2001
+From: Nikita Travkin <nikitos.tr@gmail.com>
+Date: Fri, 23 Oct 2020 20:09:14 +0500
+Subject: [PATCH 62/78] arm64: dts: qcom: pm8916: Add LBC
+
+---
+ arch/arm64/boot/dts/qcom/pm8916.dtsi | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/pm8916.dtsi b/arch/arm64/boot/dts/qcom/pm8916.dtsi
+index 6d5320436..a7663bf86 100644
+--- a/arch/arm64/boot/dts/qcom/pm8916.dtsi
++++ b/arch/arm64/boot/dts/qcom/pm8916.dtsi
+@@ -48,6 +48,13 @@ pm8916_bms: vm-bms@4000 {
+ 			status = "disabled";
+ 		};
+ 
++		pm8916_charger: charger@1000 {
++			compatible = "qcom,pm8916-lbc";
++			reg = <0x1000>, <0x1200>, <0x1300>, <0x1600>;
++			interrupts = <0x0 0x13 1 IRQ_TYPE_EDGE_BOTH>;
++			status = "disabled";
++		};
++
+ 		pm8916_temp: temp-alarm@2400 {
+ 			compatible = "qcom,spmi-temp-alarm";
+ 			reg = <0x2400>;
+-- 
+2.31.1
+

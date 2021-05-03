@@ -1,0 +1,215 @@
+From 1b7dedc1bf73c913e543aca0b9a2aa4c29648bee Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Sun, 5 Jan 2020 13:21:29 +0100
+Subject: [PATCH 01/78] firmware: qcom: scm: Add support for MC boot address
+ API
+
+Unfortunately, it uses more arguments than possible without allocating
+more memory, and DMA is not available that early... FIXME!
+---
+ drivers/firmware/qcom_scm-smc.c | 22 ++++++--
+ drivers/firmware/qcom_scm.c     | 92 ++++++++++++++++++++++++++++-----
+ drivers/firmware/qcom_scm.h     |  5 ++
+ 3 files changed, 100 insertions(+), 19 deletions(-)
+
+diff --git a/drivers/firmware/qcom_scm-smc.c b/drivers/firmware/qcom_scm-smc.c
+index 497c13ba9..ce8f32bd6 100644
+--- a/drivers/firmware/qcom_scm-smc.c
++++ b/drivers/firmware/qcom_scm-smc.c
+@@ -11,6 +11,7 @@
+ #include <linux/qcom_scm.h>
+ #include <linux/arm-smccc.h>
+ #include <linux/dma-mapping.h>
++#include <asm/cacheflush.h>
+ 
+ #include "qcom_scm.h"
+ 
+@@ -123,12 +124,22 @@ int scm_smc_call(struct device *dev, const struct qcom_scm_desc *desc,
+ 						      SCM_SMC_FIRST_EXT_IDX]);
+ 		}
+ 
+-		args_phys = dma_map_single(dev, args_virt, alloc_len,
+-					   DMA_TO_DEVICE);
++		if (likely(dev)) {
++			args_phys = dma_map_single(dev, args_virt, alloc_len,
++						   DMA_TO_DEVICE);
+ 
+-		if (dma_mapping_error(dev, args_phys)) {
++			if (dma_mapping_error(dev, args_phys)) {
++				kfree(args_virt);
++				return -ENOMEM;
++			}
++		} else {
++#ifdef CONFIG_ARM64
++			args_phys = virt_to_phys(args_virt);
++			__flush_dcache_area(args_virt, alloc_len);
++#else
+ 			kfree(args_virt);
+-			return -ENOMEM;
++			return -ENODEV;
++#endif
+ 		}
+ 
+ 		smc.args[SCM_SMC_LAST_REG_IDX] = args_phys;
+@@ -137,7 +148,8 @@ int scm_smc_call(struct device *dev, const struct qcom_scm_desc *desc,
+ 	__scm_smc_do(&smc, &smc_res, atomic);
+ 
+ 	if (args_virt) {
+-		dma_unmap_single(dev, args_phys, alloc_len, DMA_TO_DEVICE);
++		if (likely(dev))
++			dma_unmap_single(dev, args_phys, alloc_len, DMA_TO_DEVICE);
+ 		kfree(args_virt);
+ 	}
+ 
+diff --git a/drivers/firmware/qcom_scm.c b/drivers/firmware/qcom_scm.c
+index 7be48c1be..8d28699c6 100644
+--- a/drivers/firmware/qcom_scm.c
++++ b/drivers/firmware/qcom_scm.c
+@@ -16,6 +16,7 @@
+ #include <linux/clk.h>
+ #include <linux/reset-controller.h>
+ #include <linux/arm-smccc.h>
++#include <asm/smp_plat.h>
+ 
+ #include "qcom_scm.h"
+ 
+@@ -250,15 +251,35 @@ static int __qcom_scm_is_call_available(struct device *dev, u32 svc_id,
+ 	return ret ? : res.result[0];
+ }
+ 
+-/**
+- * qcom_scm_set_warm_boot_addr() - Set the warm boot address for cpus
+- * @entry: Entry point function for the cpus
+- * @cpus: The cpumask of cpus that will use the entry point
+- *
+- * Set the Linux entry point for the SCM to transfer control to when coming
+- * out of a power down. CPU power down may be executed on cpuidle or hotplug.
+- */
+-int qcom_scm_set_warm_boot_addr(void *entry, const cpumask_t *cpus)
++static int __qcom_scm_set_boot_addr_mc(struct device *dev, void *entry,
++				       const cpumask_t *cpus, int flags)
++{
++	struct qcom_scm_desc desc = {
++		.svc = QCOM_SCM_SVC_BOOT,
++		.cmd = QCOM_SCM_BOOT_ADDR_MC,
++		.owner = ARM_SMCCC_OWNER_SIP,
++		.arginfo = QCOM_SCM_ARGS(6),
++		.args[0] = virt_to_phys(entry),
++		.args[4] = ~0ULL,
++		.args[5] = QCOM_SCM_BOOT_FLAG_HLOS | flags,
++	};
++	unsigned int cpu;
++	u64 map;
++
++	if (!cpus || cpumask_empty(cpus))
++		return -EINVAL;
++
++	for_each_cpu(cpu, cpus) {
++		map = cpu_logical_map(cpu);
++		desc.args[1] |= BIT(MPIDR_AFFINITY_LEVEL(map, 0));
++		desc.args[2] |= BIT(MPIDR_AFFINITY_LEVEL(map, 1));
++		desc.args[3] |= BIT(MPIDR_AFFINITY_LEVEL(map, 2));
++	}
++
++	return qcom_scm_call(dev, &desc, NULL);
++}
++
++static int __qcom_scm_set_warm_boot_addr(void *entry, const cpumask_t *cpus)
+ {
+ 	int ret;
+ 	int flags = 0;
+@@ -294,17 +315,34 @@ int qcom_scm_set_warm_boot_addr(void *entry, const cpumask_t *cpus)
+ 
+ 	return ret;
+ }
+-EXPORT_SYMBOL(qcom_scm_set_warm_boot_addr);
+ 
+ /**
+- * qcom_scm_set_cold_boot_addr() - Set the cold boot address for cpus
++ * qcom_scm_set_warm_boot_addr() - Set the warm boot address for cpus
+  * @entry: Entry point function for the cpus
+  * @cpus: The cpumask of cpus that will use the entry point
+  *
+- * Set the cold boot address of the cpus. Any cpu outside the supported
+- * range would be removed from the cpu present mask.
++ * Set the Linux entry point for the SCM to transfer control to when coming
++ * out of a power down. CPU power down may be executed on cpuidle or hotplug.
+  */
+-int qcom_scm_set_cold_boot_addr(void *entry, const cpumask_t *cpus)
++int qcom_scm_set_warm_boot_addr(void *entry, const cpumask_t *cpus)
++{
++	switch (__get_convention()) {
++	case SMC_CONVENTION_ARM_32:
++	case SMC_CONVENTION_ARM_64:
++		if (__qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_BOOT,
++						 QCOM_SCM_BOOT_ADDR_MC)) {
++			return __qcom_scm_set_boot_addr_mc(
++					__scm->dev, entry, cpus,
++					QCOM_SCM_BOOT_FLAG_WARMBOOT_MC);
++		}
++		/* fallthrough */
++	default:
++		return __qcom_scm_set_warm_boot_addr(entry, cpus);
++	}
++}
++EXPORT_SYMBOL(qcom_scm_set_warm_boot_addr);
++
++static int __qcom_scm_set_cold_boot_addr(void *entry, const cpumask_t *cpus)
+ {
+ 	int flags = 0;
+ 	int cpu;
+@@ -336,6 +374,32 @@ int qcom_scm_set_cold_boot_addr(void *entry, const cpumask_t *cpus)
+ 
+ 	return qcom_scm_call_atomic(__scm ? __scm->dev : NULL, &desc, NULL);
+ }
++
++/**
++ * qcom_scm_set_cold_boot_addr() - Set the cold boot address for cpus
++ * @entry: Entry point function for the cpus
++ * @cpus: The cpumask of cpus that will use the entry point
++ *
++ * Set the cold boot address of the cpus. Any cpu outside the supported
++ * range would be removed from the cpu present mask.
++ */
++int qcom_scm_set_cold_boot_addr(void *entry, const cpumask_t *cpus)
++{
++	struct device *dev = __scm ? __scm->dev : NULL;
++
++	switch (__get_convention()) {
++	case SMC_CONVENTION_ARM_32:
++	case SMC_CONVENTION_ARM_64:
++		if (__qcom_scm_is_call_available(dev, QCOM_SCM_SVC_BOOT,
++						 QCOM_SCM_BOOT_ADDR_MC)) {
++			return __qcom_scm_set_boot_addr_mc(dev, entry, cpus,
++					QCOM_SCM_BOOT_FLAG_COLDBOOT_MC);
++		}
++		/* fallthrough */
++	default:
++		return __qcom_scm_set_cold_boot_addr(entry, cpus);
++	}
++}
+ EXPORT_SYMBOL(qcom_scm_set_cold_boot_addr);
+ 
+ /**
+diff --git a/drivers/firmware/qcom_scm.h b/drivers/firmware/qcom_scm.h
+index 95cd1ac30..a707efedd 100644
+--- a/drivers/firmware/qcom_scm.h
++++ b/drivers/firmware/qcom_scm.h
+@@ -75,9 +75,14 @@ extern int scm_legacy_call(struct device *dev, const struct qcom_scm_desc *desc,
+ #define QCOM_SCM_BOOT_SET_ADDR		0x01
+ #define QCOM_SCM_BOOT_TERMINATE_PC	0x02
+ #define QCOM_SCM_BOOT_SET_DLOAD_MODE	0x10
++#define QCOM_SCM_BOOT_ADDR_MC		0x11
+ #define QCOM_SCM_BOOT_SET_REMOTE_STATE	0x0a
+ #define QCOM_SCM_FLUSH_FLAG_MASK	0x3
+ 
++#define QCOM_SCM_BOOT_FLAG_HLOS		0x01
++#define QCOM_SCM_BOOT_FLAG_COLDBOOT_MC	0x02
++#define QCOM_SCM_BOOT_FLAG_WARMBOOT_MC	0x04
++
+ #define QCOM_SCM_SVC_PIL		0x02
+ #define QCOM_SCM_PIL_PAS_INIT_IMAGE	0x01
+ #define QCOM_SCM_PIL_PAS_MEM_SETUP	0x02
+-- 
+2.31.1
+

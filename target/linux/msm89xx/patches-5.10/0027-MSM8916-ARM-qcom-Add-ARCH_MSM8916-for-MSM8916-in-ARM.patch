@@ -1,0 +1,28 @@
+From e006bb63e7506cd47d72dcebb2018bc2492f2084 Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Fri, 29 Nov 2019 19:31:59 +0100
+Subject: [PATCH 27/78] MSM8916: ARM: qcom: Add ARCH_MSM8916 for MSM8916 in
+ ARM32 mode
+
+---
+ arch/arm/mach-qcom/Kconfig | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/arch/arm/mach-qcom/Kconfig b/arch/arm/mach-qcom/Kconfig
+index 1772eccb5..3b2713485 100644
+--- a/arch/arm/mach-qcom/Kconfig
++++ b/arch/arm/mach-qcom/Kconfig
+@@ -29,6 +29,10 @@ config ARCH_MSM8974
+ 	bool "Enable support for MSM8974"
+ 	select HAVE_ARM_ARCH_TIMER
+ 
++config ARCH_MSM8916
++	bool "Enable support for MSM8916"
++	select HAVE_ARM_ARCH_TIMER
++
+ config ARCH_MDM9615
+ 	bool "Enable support for MDM9615"
+ 	select CLKSRC_QCOM
+-- 
+2.31.1
+

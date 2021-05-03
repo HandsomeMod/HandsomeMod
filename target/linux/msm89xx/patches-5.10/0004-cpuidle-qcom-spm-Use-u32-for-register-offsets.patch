@@ -1,0 +1,48 @@
+From 24d6c11fa83acc792bda5295b399ac2feef852ad Mon Sep 17 00:00:00 2001
+From: Lina Iyer <lina.iyer@linaro.org>
+Date: Fri, 27 Mar 2015 15:20:32 -0600
+Subject: [PATCH 04/78] cpuidle: qcom-spm: Use u32 for register offsets
+
+Newer SoC's allow a bigger memory range for the SPM. The offsets for the
+SPM sequences could therefore, be more than the capcacity of u8.
+
+Signed-off-by: Lina Iyer <lina.iyer@linaro.org>
+(cherry picked from commit 5bcdf59364dfa20d1113637309b6a1973ee31882)
+---
+ drivers/cpuidle/cpuidle-qcom-spm.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/drivers/cpuidle/cpuidle-qcom-spm.c b/drivers/cpuidle/cpuidle-qcom-spm.c
+index adf91a6e4..bf3c70d64 100644
+--- a/drivers/cpuidle/cpuidle-qcom-spm.c
++++ b/drivers/cpuidle/cpuidle-qcom-spm.c
+@@ -53,7 +53,7 @@ enum spm_reg {
+ };
+ 
+ struct spm_reg_data {
+-	const u8 *reg_offset;
++	const u32 *reg_offset;
+ 	u32 spm_cfg;
+ 	u32 spm_dly;
+ 	u32 pmic_dly;
+@@ -68,7 +68,7 @@ struct spm_driver_data {
+ 	const struct spm_reg_data *reg_data;
+ };
+ 
+-static const u8 spm_reg_offset_v2_1[SPM_REG_NR] = {
++static const u32 spm_reg_offset_v2_1[SPM_REG_NR] = {
+ 	[SPM_REG_CFG]		= 0x08,
+ 	[SPM_REG_SPM_CTL]	= 0x30,
+ 	[SPM_REG_DLY]		= 0x34,
+@@ -87,7 +87,7 @@ static const struct spm_reg_data spm_reg_8974_8084_cpu  = {
+ 	.start_index[PM_SLEEP_MODE_SPC] = 3,
+ };
+ 
+-static const u8 spm_reg_offset_v1_1[SPM_REG_NR] = {
++static const u32 spm_reg_offset_v1_1[SPM_REG_NR] = {
+ 	[SPM_REG_CFG]		= 0x08,
+ 	[SPM_REG_SPM_CTL]	= 0x20,
+ 	[SPM_REG_PMIC_DLY]	= 0x24,
+-- 
+2.31.1
+

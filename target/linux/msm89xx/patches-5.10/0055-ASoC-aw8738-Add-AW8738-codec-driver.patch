@@ -1,0 +1,169 @@
+From aa3b7fcf76967e89e51e547495672b9a88f087c3 Mon Sep 17 00:00:00 2001
+From: jonathan <jonathan.albrieux@gmail.com>
+Date: Sun, 7 Jun 2020 23:19:31 +0200
+Subject: [PATCH 55/78] ASoC: aw8738: Add AW8738 codec driver
+
+---
+ sound/soc/codecs/Kconfig  |   5 ++
+ sound/soc/codecs/Makefile |   2 +
+ sound/soc/codecs/aw8738.c | 105 ++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 112 insertions(+)
+ create mode 100644 sound/soc/codecs/aw8738.c
+
+diff --git a/sound/soc/codecs/Kconfig b/sound/soc/codecs/Kconfig
+index 87968e9d1..7a3a824b3 100644
+--- a/sound/soc/codecs/Kconfig
++++ b/sound/soc/codecs/Kconfig
+@@ -50,6 +50,7 @@ config SND_SOC_ALL_CODECS
+ 	imply SND_SOC_AK5558
+ 	imply SND_SOC_ALC5623
+ 	imply SND_SOC_ALC5632
++	imply SND_SOC_AW8738
+ 	imply SND_SOC_BT_SCO
+ 	imply SND_SOC_BD28623
+ 	imply SND_SOC_CQ0093VC
+@@ -525,6 +526,10 @@ config SND_SOC_ALC5632
+ 	tristate
+ 	depends on I2C
+ 
++config SND_SOC_AW8738
++	tristate "Awinic AW8738 CODEC"
++	depends on GPIOLIB
++
+ config SND_SOC_BD28623
+ 	tristate "ROHM BD28623 CODEC"
+ 	help
+diff --git a/sound/soc/codecs/Makefile b/sound/soc/codecs/Makefile
+index d7ad2ee9b..22871e826 100644
+--- a/sound/soc/codecs/Makefile
++++ b/sound/soc/codecs/Makefile
+@@ -41,6 +41,7 @@ snd-soc-ak4671-objs := ak4671.o
+ snd-soc-ak5386-objs := ak5386.o
+ snd-soc-ak5558-objs := ak5558.o
+ snd-soc-arizona-objs := arizona.o
++snd-soc-aw8738-objs := aw8738.o
+ snd-soc-bd28623-objs := bd28623.o
+ snd-soc-bt-sco-objs := bt-sco.o
+ snd-soc-cpcap-objs := cpcap.o
+@@ -352,6 +353,7 @@ obj-$(CONFIG_SND_SOC_ALC5623)    += snd-soc-alc5623.o
+ obj-$(CONFIG_SND_SOC_ALC5632)	+= snd-soc-alc5632.o
+ obj-$(CONFIG_SND_SOC_ARIZONA)	+= snd-soc-arizona.o
+ obj-$(CONFIG_SND_SOC_BD28623)	+= snd-soc-bd28623.o
++obj-$(CONFIG_SND_SOC_AW8738)	+= snd-soc-aw8738.o
+ obj-$(CONFIG_SND_SOC_BT_SCO)	+= snd-soc-bt-sco.o
+ obj-$(CONFIG_SND_SOC_CQ0093VC) += snd-soc-cq93vc.o
+ obj-$(CONFIG_SND_SOC_CPCAP)	+= snd-soc-cpcap.o
+diff --git a/sound/soc/codecs/aw8738.c b/sound/soc/codecs/aw8738.c
+new file mode 100644
+index 000000000..a1861b502
+--- /dev/null
++++ b/sound/soc/codecs/aw8738.c
+@@ -0,0 +1,105 @@
++// SPDX-License-Identifier: GPL-2.0-only
++
++#include <linux/gpio/consumer.h>
++#include <linux/module.h>
++#include <linux/regulator/consumer.h>
++#include <sound/soc.h>
++
++struct aw8738_priv {
++	struct gpio_desc *enable_gpio;
++	unsigned int mode;
++};
++
++static int aw8738_drv_event(struct snd_soc_dapm_widget *w,
++			    struct snd_kcontrol *kcontrol, int event)
++{
++	struct snd_soc_component *comp = snd_soc_dapm_to_component(w->dapm);
++	struct aw8738_priv *aw8738 = snd_soc_component_get_drvdata(comp);
++	int i;
++
++	switch (event) {
++	case SND_SOC_DAPM_POST_PMU:
++		for (i = 0; i < aw8738->mode; i++) {
++			gpiod_set_value_cansleep(aw8738->enable_gpio, 0);
++			udelay(2);
++			gpiod_set_value_cansleep(aw8738->enable_gpio, 1);
++			udelay(2);
++		}
++
++		msleep(40);
++		break;
++	case SND_SOC_DAPM_PRE_PMD:
++		gpiod_set_value_cansleep(aw8738->enable_gpio, 0);
++		usleep_range(1000, 2000);
++		break;
++	default:
++		WARN(1, "Unexpected event");
++		return -EINVAL;
++	}
++
++	return 0;
++}
++
++static const struct snd_soc_dapm_widget aw8738_dapm_widgets[] = {
++	SND_SOC_DAPM_INPUT("IN"),
++	SND_SOC_DAPM_OUT_DRV_E("DRV", SND_SOC_NOPM, 0, 0, NULL, 0,
++			       aw8738_drv_event,
++			       SND_SOC_DAPM_POST_PMU | SND_SOC_DAPM_PRE_PMD),
++	SND_SOC_DAPM_OUTPUT("OUT"),
++};
++
++static const struct snd_soc_dapm_route aw8738_dapm_routes[] = {
++	{ "DRV", NULL, "IN" },
++	{ "OUT", NULL, "DRV" },
++};
++
++static const struct snd_soc_component_driver aw8738_component_driver = {
++	.dapm_widgets = aw8738_dapm_widgets,
++	.num_dapm_widgets = ARRAY_SIZE(aw8738_dapm_widgets),
++	.dapm_routes = aw8738_dapm_routes,
++	.num_dapm_routes = ARRAY_SIZE(aw8738_dapm_routes),
++};
++
++static int aw8738_probe(struct platform_device *pdev)
++{
++	struct aw8738_priv *aw8738;
++	int ret;
++
++	aw8738 = devm_kzalloc(&pdev->dev, sizeof(*aw8738), GFP_KERNEL);
++	if (!aw8738)
++		return -ENOMEM;
++
++	aw8738->enable_gpio = devm_gpiod_get(&pdev->dev, "enable", GPIOD_OUT_LOW);
++	if (IS_ERR(aw8738->enable_gpio))
++		return PTR_ERR(aw8738->enable_gpio);
++
++	ret = device_property_read_u32(&pdev->dev, "aw8738,mode", &aw8738->mode);
++	if (ret)
++		return -EINVAL;
++
++	dev_set_drvdata(&pdev->dev, aw8738);
++
++	return devm_snd_soc_register_component(&pdev->dev,
++					       &aw8738_component_driver,
++					       NULL, 0);
++}
++
++#ifdef CONFIG_OF
++static const struct of_device_id aw8738_device_id[] = {
++	{ .compatible = "awinic,aw8738" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, aw8738_device_id);
++#endif
++
++static struct platform_driver aw8738_driver = {
++	.driver = {
++		.name = "aw8738",
++		.of_match_table = of_match_ptr(aw8738_device_id),
++	},
++	.probe	= aw8738_probe,
++};
++module_platform_driver(aw8738_driver);
++
++MODULE_DESCRIPTION("Awinic AW8738 Amplifier Driver");
++MODULE_LICENSE("GPL v2");
+-- 
+2.31.1
+

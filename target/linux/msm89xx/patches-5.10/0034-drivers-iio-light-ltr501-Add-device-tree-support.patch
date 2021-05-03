@@ -1,0 +1,35 @@
+From 5527a4030c4a8ab3ddb07984307f245bd79846d1 Mon Sep 17 00:00:00 2001
+From: Nikita Travkin <nikitos.tr@gmail.com>
+Date: Thu, 15 Aug 2019 17:41:48 +0500
+Subject: [PATCH 34/78] drivers: iio: light: ltr501: Add device tree support
+
+---
+ drivers/iio/light/ltr501.c | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/iio/light/ltr501.c b/drivers/iio/light/ltr501.c
+index b4323d2db..03c4a62a4 100644
+--- a/drivers/iio/light/ltr501.c
++++ b/drivers/iio/light/ltr501.c
+@@ -1574,9 +1574,18 @@ static const struct i2c_device_id ltr501_id[] = {
+ };
+ MODULE_DEVICE_TABLE(i2c, ltr501_id);
+ 
++static const struct of_device_id ltr501_of_match[] = {
++	{ .compatible = "liteon,ltr501", },
++	{ .compatible = "liteon,ltr559", },
++	{ .compatible = "liteon,ltr301", },
++	{}
++};
++MODULE_DEVICE_TABLE(of, ltr501_of_match);
++
+ static struct i2c_driver ltr501_driver = {
+ 	.driver = {
+ 		.name   = LTR501_DRV_NAME,
++		.of_match_table = ltr501_of_match,
+ 		.pm	= &ltr501_pm_ops,
+ 		.acpi_match_table = ACPI_PTR(ltr_acpi_match),
+ 	},
+-- 
+2.31.1
+

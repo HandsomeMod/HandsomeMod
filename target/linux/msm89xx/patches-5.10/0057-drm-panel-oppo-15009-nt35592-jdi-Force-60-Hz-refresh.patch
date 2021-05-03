@@ -1,0 +1,27 @@
+From 41f36e33a5b15ba6dda58ae621ade6b5228a7835 Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Wed, 6 Jan 2021 12:50:06 +0100
+Subject: [PATCH 57/78] drm/panel: oppo-15009-nt35592-jdi: Force 60 Hz refresh
+ rate
+
+61 Hz is just weird...
+---
+ .../drm/panel/msm8916-generated/panel-oppo-15009-nt35592-jdi.c  | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/panel/msm8916-generated/panel-oppo-15009-nt35592-jdi.c b/drivers/gpu/drm/panel/msm8916-generated/panel-oppo-15009-nt35592-jdi.c
+index b2c2a7886..429244bbc 100644
+--- a/drivers/gpu/drm/panel/msm8916-generated/panel-oppo-15009-nt35592-jdi.c
++++ b/drivers/gpu/drm/panel/msm8916-generated/panel-oppo-15009-nt35592-jdi.c
+@@ -623,7 +623,7 @@ static int oppo15009jdi_nt35592_unprepare(struct drm_panel *panel)
+ }
+ 
+ static const struct drm_display_mode oppo15009jdi_nt35592_mode = {
+-	.clock = (720 + 160 + 2 + 160) * (1280 + 6 + 1 + 4) * 61 / 1000,
++	.clock = (720 + 160 + 2 + 160) * (1280 + 6 + 1 + 4) * 60 / 1000,
+ 	.hdisplay = 720,
+ 	.hsync_start = 720 + 160,
+ 	.hsync_end = 720 + 160 + 2,
+-- 
+2.31.1
+

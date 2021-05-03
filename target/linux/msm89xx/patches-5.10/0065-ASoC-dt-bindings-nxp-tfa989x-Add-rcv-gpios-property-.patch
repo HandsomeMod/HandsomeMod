@@ -1,0 +1,38 @@
+From 827a1f4e0b3f206d73a1bc3efa607f3e8f620adc Mon Sep 17 00:00:00 2001
+From: Vincent Knecht <vincent.knecht@mailoo.org>
+Date: Thu, 4 Mar 2021 19:13:10 +0100
+Subject: [PATCH 65/78] ASoC: dt-bindings: nxp, tfa989x: Add rcv-gpios property
+ for tfa9897
+
+Add optional rcv-gpios property specific to tfa9897 receiver mode.
+
+Signed-off-by: Vincent Knecht <vincent.knecht@mailoo.org>
+---
+ .../devicetree/bindings/sound/nxp,tfa989x.yaml        | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml b/Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml
+index 2d2aa8437..f8e5fcf0a 100644
+--- a/Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml
++++ b/Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml
+@@ -37,6 +37,17 @@ required:
+ 
+ additionalProperties: false
+ 
++allOf:
++  - if:
++      properties:
++        compatible:
++          contains:
++            const: nxp,tfa9897
++    then:
++      properties:
++        rcv-gpios:
++          description: optional GPIO to be asserted when receiver mode is enabled.
++
+ examples:
+   - |
+     i2c {
+-- 
+2.31.1
+

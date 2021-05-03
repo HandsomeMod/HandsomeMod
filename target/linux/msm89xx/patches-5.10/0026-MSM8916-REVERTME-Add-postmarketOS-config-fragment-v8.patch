@@ -1,0 +1,79 @@
+From 7593c8f7b05ec6ec7bbb4958b643a00b903cd3ff Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Wed, 7 Aug 2019 10:01:22 +0200
+Subject: [PATCH 26/78] MSM8916: REVERTME: Add postmarketOS config fragment
+ (v8)
+
+This should be in the postmarketOS kernel package
+(maybe even shared across all (mainline?) kernels).
+But at the moment, envkernel does not provide a nice way to apply
+the kernel configuration from the pmaport.
+Place it here until a way to simplify this has been found.
+
+v2: Move to generic location at kernel/configs/pmos.config
+v3: # CONFIG_LOCALVERSION_AUTO is not set
+v4: CONFIG_MD=y
+v5: Add elogind, Anbox and fbkeyboard options
+    (should really move this somewhere else...)
+v6: CONFIG_USER_NS=y
+v7: CONFIG_CRYPTO_XTS=y
+v8: CONFIG_ZSMALLOC=y
+    CONFIG_ZRAM=m
+
+Co-Authored-By: Alexey Minnekhanov <alexeymin@postmarketos.org>
+---
+ kernel/configs/pmos.config | 42 ++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+ create mode 100644 kernel/configs/pmos.config
+
+diff --git a/kernel/configs/pmos.config b/kernel/configs/pmos.config
+new file mode 100644
+index 000000000..017192cc9
+--- /dev/null
++++ b/kernel/configs/pmos.config
+@@ -0,0 +1,42 @@
++# FIXME: This needs to be added dynamically
++CONFIG_LOCALVERSION="-postmarketos-qcom-msm8916"
++# CONFIG_LOCALVERSION_AUTO is not set
++
++CONFIG_BLK_DEV_DM=y
++CONFIG_BLK_DEV_INITRD=y
++CONFIG_CGROUPS=y
++CONFIG_CRYPTO_XTS=y
++CONFIG_DEVTMPFS=y
++CONFIG_DM_CRYPT=m
++CONFIG_EXT4_FS=y
++CONFIG_MD=y
++CONFIG_SYSVIPC=y
++CONFIG_UEVENT_HELPER=y
++CONFIG_USB_CONFIGFS_RNDIS=y
++CONFIG_USB_CONFIGFS=y
++CONFIG_USER_NS=y
++CONFIG_VT=y
++
++# elogind
++CONFIG_TMPFS_POSIX_ACL=y
++
++# Anbox
++CONFIG_ANDROID=y
++CONFIG_ANDROID_BINDER_IPC=y
++# CONFIG_ANDROID_BINDERFS is not set
++CONFIG_STAGING=y
++CONFIG_ASHMEM=y
++CONFIG_TMPFS_XATTR=y
++CONFIG_SQUASHFS=m
++CONFIG_SQUASHFS_FILE_DIRECT=y
++CONFIG_SQUASHFS_DECOMP_MULTI_PERCPU=y
++CONFIG_SQUASHFS_XATTR=y
++CONFIG_SQUASHFS_XZ=y
++CONFIG_NETFILTER_XT_MATCH_COMMENT=m
++
++# fbkeyboard
++CONFIG_INPUT_UINPUT=m
++
++# zram support
++CONFIG_ZSMALLOC=y
++CONFIG_ZRAM=m
+-- 
+2.31.1
+

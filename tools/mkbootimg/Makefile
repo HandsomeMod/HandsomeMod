@@ -4,7 +4,7 @@
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
 #
-# Our HandsomeMod Will Runs On Android Devices! 
+# Our HandsomeMod Can Runs On Android Devices! 
 #
 
 include $(TOPDIR)/rules.mk

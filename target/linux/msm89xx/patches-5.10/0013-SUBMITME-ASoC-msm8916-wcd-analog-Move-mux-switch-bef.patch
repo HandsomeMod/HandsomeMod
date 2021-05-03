@@ -1,0 +1,46 @@
+From f493024b51f92dc7c00576378f8f3d993ff4a840 Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Sat, 26 Sep 2020 11:45:22 +0200
+Subject: [PATCH 13/78] SUBMITME: ASoC: msm8916-wcd-analog: Move mux/switch
+ before HPHL/R PA
+
+---
+ sound/soc/codecs/msm8916-wcd-analog.c | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/sound/soc/codecs/msm8916-wcd-analog.c b/sound/soc/codecs/msm8916-wcd-analog.c
+index 485cda46d..34419a234 100644
+--- a/sound/soc/codecs/msm8916-wcd-analog.c
++++ b/sound/soc/codecs/msm8916-wcd-analog.c
+@@ -822,22 +822,22 @@ static const struct snd_soc_dapm_route pm8916_wcd_analog_audio_map[] = {
+ 	{"EAR PA", NULL, "EAR CP"},
+ 
+ 	/* Headset (RX MIX1 and RX MIX2) */
+-	{"HPH_L", NULL, "HPHL PA"},
+-	{"HPH_R", NULL, "HPHR PA"},
++	{"HPH_L", NULL, "HPHL"},
++	{"HPH_R", NULL, "HPHR"},
++	{"HPHL", "Switch", "HPHL PA"},
++	{"HPHR", "Switch", "HPHR PA"},
+ 
+ 	{"HPHL DAC", NULL, "EAR_HPHL_CLK"},
+ 	{"HPHR DAC", NULL, "EAR_HPHR_CLK"},
+ 
+ 	{"CP", NULL, "NCP_CLK"},
+ 
+-	{"HPHL PA", NULL, "HPHL"},
+-	{"HPHR PA", NULL, "HPHR"},
++	{"HPHL PA", NULL, "HPHL DAC"},
++	{"HPHR PA", NULL, "HPHR DAC"},
+ 	{"HPHL PA", NULL, "CP"},
+ 	{"HPHL PA", NULL, "RX_BIAS"},
+ 	{"HPHR PA", NULL, "CP"},
+ 	{"HPHR PA", NULL, "RX_BIAS"},
+-	{"HPHL", "Switch", "HPHL DAC"},
+-	{"HPHR", "Switch", "HPHR DAC"},
+ 
+ 	{"RX_BIAS", NULL, "DAC_REF"},
+ 
+-- 
+2.31.1
+

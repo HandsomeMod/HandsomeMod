@@ -1,0 +1,74 @@
+From 93c48994c73f5b5505f6d119f33408f40696b69a Mon Sep 17 00:00:00 2001
+From: Vincent Knecht <vincent.knecht@mailoo.org>
+Date: Wed, 3 Mar 2021 19:26:19 +0100
+Subject: [PATCH 66/78] ASoC: codecs: tfa989x: Add support for tfa9897 optional
+ rcv-gpios
+
+Some OEM use a GPIO in addition to the tfa9897 RCV bit to
+switch between loudspeaker and earpiece/receiver mode.
+
+Add support for the GPIO switching by specifying rcv-gpios in DT.
+
+Signed-off-by: Vincent Knecht <vincent.knecht@mailoo.org>
+---
+ sound/soc/codecs/tfa989x.c | 20 +++++++++++++++++++-
+ 1 file changed, 19 insertions(+), 1 deletion(-)
+
+diff --git a/sound/soc/codecs/tfa989x.c b/sound/soc/codecs/tfa989x.c
+index ec778d048..8aef5d9c9 100644
+--- a/sound/soc/codecs/tfa989x.c
++++ b/sound/soc/codecs/tfa989x.c
+@@ -6,6 +6,7 @@
+  * Copyright (C) 2014-2020 NXP Semiconductors, All Rights Reserved.
+  */
+ 
++#include <linux/gpio/consumer.h>
+ #include <linux/i2c.h>
+ #include <linux/module.h>
+ #include <linux/regmap.h>
+@@ -55,6 +56,7 @@ struct tfa989x_rev {
+ struct tfa989x {
+ 	const struct tfa989x_rev *rev;
+ 	struct regulator *vddd_supply;
++	struct gpio_desc *rcv_gpiod;
+ };
+ 
+ static bool tfa989x_writeable_reg(struct device *dev, unsigned int reg)
+@@ -102,10 +104,20 @@ static const struct snd_soc_dapm_route tfa989x_dapm_routes[] = {
+ 	{"Amp Input", "Right", "AIFINR"},
+ };
+ 
++static int tfa989x_put_mode(struct snd_kcontrol *kcontrol, struct snd_ctl_elem_value *ucontrol)
++{
++	struct snd_soc_component *component = snd_soc_kcontrol_component(kcontrol);
++	struct tfa989x *tfa989x = snd_soc_component_get_drvdata(component);
++
++	gpiod_set_value_cansleep(tfa989x->rcv_gpiod, ucontrol->value.enumerated.item[0]);
++
++	return snd_soc_put_enum_double(kcontrol, ucontrol);
++}
++
+ static const char * const mode_text[] = { "Speaker", "Receiver" };
+ static SOC_ENUM_SINGLE_DECL(mode_enum, TFA989X_I2SREG, TFA989X_I2SREG_RCV, mode_text);
+ static const struct snd_kcontrol_new tfa989x_mode_controls[] = {
+-	SOC_ENUM("Mode", mode_enum),
++	SOC_ENUM_EXT("Mode", mode_enum, snd_soc_get_enum_double, tfa989x_put_mode),
+ };
+ 
+ static int tfa989x_probe(struct snd_soc_component *component)
+@@ -305,6 +317,12 @@ static int tfa989x_i2c_probe(struct i2c_client *i2c)
+ 		return dev_err_probe(dev, PTR_ERR(tfa989x->vddd_supply),
+ 				     "Failed to get vddd regulator\n");
+ 
++	if (tfa989x->rev->rev == TFA9897_REVISION) {
++		tfa989x->rcv_gpiod = devm_gpiod_get_optional(dev, "rcv", GPIOD_OUT_LOW);
++		if (IS_ERR(tfa989x->rcv_gpiod))
++			return PTR_ERR(tfa989x->rcv_gpiod);
++	}
++
+ 	regmap = devm_regmap_init_i2c(i2c, &tfa989x_regmap);
+ 	if (IS_ERR(regmap))
+ 		return PTR_ERR(regmap);
+-- 
+2.31.1
+

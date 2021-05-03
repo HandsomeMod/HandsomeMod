@@ -1,0 +1,115 @@
+From 231648450f4c0ac37fa9d830422dbf8cd68c27c6 Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Tue, 6 Aug 2019 16:22:52 +0200
+Subject: [PATCH 25/78] MSM8916: Add Drone CI configuration (v6)
+
+v2: Add armv7
+v3: Install findutils to fix build warning
+v4: Remove pipefail to actually exit on errors
+v5: Remove --no-signoff from checkpatch.pl - require Signed-off-by:!
+    Add gmp-dev mpc1-dev mpfr-dev, seems to be needed for armv7 now
+v6: Force specific Alpine release, complain about FROM_SIGN_OFF_MISMATCH
+    Log critical checkpatch complaints. Minor cleanup.
+---
+ .drone-checkpatch.txt |  2 ++
+ .drone.sh             | 22 +++++++++++++++++++
+ .drone.yml            | 49 +++++++++++++++++++++++++++++++++++++++++++
+ 3 files changed, 73 insertions(+)
+ create mode 100644 .drone-checkpatch.txt
+ create mode 100755 .drone.sh
+ create mode 100644 .drone.yml
+
+diff --git a/.drone-checkpatch.txt b/.drone-checkpatch.txt
+new file mode 100644
+index 000000000..b521ed6c4
+--- /dev/null
++++ b/.drone-checkpatch.txt
+@@ -0,0 +1,2 @@
++ERROR:
++FROM_SIGN_OFF_MISMATCH
+diff --git a/.drone.sh b/.drone.sh
+new file mode 100755
+index 000000000..b0f2bd294
+--- /dev/null
++++ b/.drone.sh
+@@ -0,0 +1,22 @@
++#!/bin/sh
++# SPDX-License-Identifier: GPL-2.0-only
++set -eux
++
++case "$1" in
++build)
++	nproc && grep Mem /proc/meminfo && df -hT .
++	apk add build-base bison findutils flex gmp-dev mpc1-dev mpfr-dev openssl-dev perl
++	make msm8916_defconfig
++	make KCFLAGS="-Wall -Werror" -j$(nproc)
++	;;
++check)
++	apk add git perl
++	git format-patch origin/$DRONE_TARGET_BRANCH
++	scripts/checkpatch.pl --strict --color=always *.patch || :
++	! scripts/checkpatch.pl --strict --color=always --terse --show-types *.patch \
++		| grep -Ff .drone-checkpatch.txt
++	;;
++*)
++	exit 1
++	;;
++esac
+diff --git a/.drone.yml b/.drone.yml
+new file mode 100644
+index 000000000..8a9bbd38e
+--- /dev/null
++++ b/.drone.yml
+@@ -0,0 +1,49 @@
++---
++kind: pipeline
++name: aarch64
++
++platform:
++  os: linux
++  arch: arm64
++
++clone:
++  depth: 16
++
++steps:
++  - name: build
++    image: arm64v8/alpine:3.12
++    commands: [./.drone.sh build]
++  - name: check
++    image: arm64v8/alpine:3.12
++    commands: [./.drone.sh check]
++    when:
++      event: pull_request
++
++trigger:
++  event: [push, pull_request, tag]
++
++---
++kind: pipeline
++name: armv7
++
++platform:
++  os: linux
++  arch: arm
++
++clone:
++  depth: 16
++
++steps:
++  - name: build
++    image: arm32v7/alpine:3.12
++    commands:
++      - cat arch/arm64/configs/msm8916_defconfig arch/arm/configs/msm8916_defconfig.part > arch/arm/configs/msm8916_defconfig
++      - ./.drone.sh build
++  - name: check
++    image: arm32v7/alpine:3.12
++    commands: [./.drone.sh check]
++    when:
++      event: pull_request
++
++trigger:
++  event: [push, pull_request, tag]
+-- 
+2.31.1
+

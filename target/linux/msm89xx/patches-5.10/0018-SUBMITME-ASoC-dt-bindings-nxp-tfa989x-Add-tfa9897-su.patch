@@ -1,0 +1,28 @@
+From 5a2fe9a26bf1beb574c4bd60fcfb6b9defcc2def Mon Sep 17 00:00:00 2001
+From: Vincent Knecht <vincent.knecht@mailoo.org>
+Date: Thu, 4 Mar 2021 17:49:40 +0100
+Subject: [PATCH 18/78] SUBMITME: ASoC: dt-bindings: nxp,tfa989x: Add tfa9897
+ support
+
+Document TFA9897 bindings.
+
+Signed-off-by: Vincent Knecht <vincent.knecht@mailoo.org>
+---
+ Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml b/Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml
+index cebe15bab..f4d3beaa6 100644
+--- a/Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml
++++ b/Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml
+@@ -13,6 +13,7 @@ properties:
+   compatible:
+     enum:
+       - nxp,tfa9895
++      - nxp,tfa9897
+ 
+   reg:
+     maxItems: 1
+-- 
+2.31.1
+

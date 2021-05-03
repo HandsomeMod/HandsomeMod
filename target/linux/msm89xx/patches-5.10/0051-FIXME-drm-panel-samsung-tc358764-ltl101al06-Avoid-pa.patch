@@ -1,0 +1,75 @@
+From f50ea77a1aeb3bfa9e65b97afafcfe690643f3aa Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Ga=C3=ABtan=20Andr=C3=A9?= <rvlander@gaetanandre.eu>
+Date: Sun, 8 Mar 2020 09:46:41 +0100
+Subject: [PATCH 51/78] FIXME: drm/panel: samsung-tc358764-ltl101al06: Avoid
+ panel reset
+
+For some reason, the display initialization sequence is not working
+properly. Disable it for now.
+---
+ .../panel-samsung-tc358764-ltl101al06.c                | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/gpu/drm/panel/msm8916-generated/panel-samsung-tc358764-ltl101al06.c b/drivers/gpu/drm/panel/msm8916-generated/panel-samsung-tc358764-ltl101al06.c
+index 08ced2d09..71e9170d1 100644
+--- a/drivers/gpu/drm/panel/msm8916-generated/panel-samsung-tc358764-ltl101al06.c
++++ b/drivers/gpu/drm/panel/msm8916-generated/panel-samsung-tc358764-ltl101al06.c
+@@ -37,18 +37,23 @@ struct tc358764_ltl101a106 *to_tc358764_ltl101a106(struct drm_panel *panel)
+ 			return ret;					\
+ 	} while (0)
+ 
++/* FIXME: Fix panel initialization */
++
+ static void tc358764_ltl101a106_reset(struct tc358764_ltl101a106 *ctx)
+ {
++#if 0
+ 	gpiod_set_value_cansleep(ctx->reset_gpio, 0);
+ 	usleep_range(1000, 2000);
+ 	gpiod_set_value_cansleep(ctx->reset_gpio, 1);
+ 	usleep_range(1000, 2000);
+ 	gpiod_set_value_cansleep(ctx->reset_gpio, 0);
+ 	usleep_range(1000, 2000);
++#endif
+ }
+ 
+ static int tc358764_ltl101a106_on(struct tc358764_ltl101a106 *ctx)
+ {
++#if 0
+ 	struct mipi_dsi_device *dsi = ctx->dsi;
+ 
+ 	dsi->mode_flags |= MIPI_DSI_MODE_LPM;
+@@ -83,12 +88,14 @@ static int tc358764_ltl101a106_on(struct tc358764_ltl101a106 *ctx)
+ 	dsi_generic_write_seq(dsi, 0x94, 0x04, 0x13, 0x14, 0x15, 0x1b);
+ 	dsi_generic_write_seq(dsi, 0x98, 0x04, 0x18, 0x19, 0x1a, 0x06);
+ 	dsi_generic_write_seq(dsi, 0x9c, 0x04, 0x01, 0x00, 0x00, 0x00);
++#endif
+ 
+ 	return 0;
+ }
+ 
+ static int tc358764_ltl101a106_off(struct tc358764_ltl101a106 *ctx)
+ {
++#if 0
+ 	struct mipi_dsi_device *dsi = ctx->dsi;
+ 
+ 	dsi->mode_flags &= ~MIPI_DSI_MODE_LPM;
+@@ -96,6 +103,7 @@ static int tc358764_ltl101a106_off(struct tc358764_ltl101a106 *ctx)
+ 	dsi_generic_write_seq(dsi, 0xa0, 0x04, 0x01, 0x00, 0x00, 0x00);
+ 	usleep_range(1000, 2000);
+ 	dsi_generic_write_seq(dsi, 0x9c, 0x04, 0x00, 0x00, 0x00, 0x00);
++#endif
+ 
+ 	return 0;
+ }
+@@ -213,7 +221,7 @@ static int tc358764_ltl101a106_probe(struct mipi_dsi_device *dsi)
+ 	if (ret < 0)
+ 		return dev_err_probe(dev, ret, "Failed to get regulators\n");
+ 
+-	ctx->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_OUT_HIGH);
++	ctx->reset_gpio = devm_gpiod_get(dev, "reset", GPIOD_ASIS);
+ 	if (IS_ERR(ctx->reset_gpio))
+ 		return dev_err_probe(dev, PTR_ERR(ctx->reset_gpio),
+ 				     "Failed to get reset-gpios\n");
+-- 
+2.31.1
+

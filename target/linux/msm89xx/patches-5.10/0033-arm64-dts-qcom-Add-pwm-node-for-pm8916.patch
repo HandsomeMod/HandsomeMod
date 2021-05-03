@@ -1,0 +1,36 @@
+From 308854df18995c0d0bcd712e410f49f6e628047e Mon Sep 17 00:00:00 2001
+From: Bjorn Andersson <bjorn.andersson@linaro.org>
+Date: Wed, 24 Jan 2018 11:56:10 +0200
+Subject: [PATCH 33/78] arm64: dts: qcom: Add pwm node for pm8916
+
+The pm8916 contains a single PWM channel, typically fed to a backlight
+driver through MPP4.
+
+Signed-off-by: Bjorn Andersson <bjorn.andersson@linaro.org>
+(cherry picked from commit c247a946c053b2177d29762e3a103d65ce461ccb)
+Signed-off-by: Ramon Fried <rfried@codeaurora.org>
+(cherry picked from commit dca3389dcaa49a778e91775c4884b2f7410d62b0)
+---
+ arch/arm64/boot/dts/qcom/pm8916.dtsi | 6 ++++++
+ 1 file changed, 6 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/pm8916.dtsi b/arch/arm64/boot/dts/qcom/pm8916.dtsi
+index f931cb0de..1f06485d6 100644
+--- a/arch/arm64/boot/dts/qcom/pm8916.dtsi
++++ b/arch/arm64/boot/dts/qcom/pm8916.dtsi
+@@ -119,6 +119,12 @@ pm8916_1: pmic@1 {
+ 		#address-cells = <1>;
+ 		#size-cells = <0>;
+ 
++		pm8916_pwm: pwm@bc00 {
++			compatible = "qcom,pm8916-pwm";
++			#pwm-cells = <2>;
++			status = "disabled";
++		};
++
+ 		pm8916_vib: vibrator@c000 {
+ 			compatible = "qcom,pm8916-vib";
+ 			reg = <0xc000>;
+-- 
+2.31.1
+

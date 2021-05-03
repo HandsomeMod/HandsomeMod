@@ -1,0 +1,177 @@
+From ad9a087868d30d4078a3fc483f0c3eb69b0c2ee6 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sun, 2 May 2021 10:12:03 +0800
+Subject: [PATCH 75/78] dmaengine: qcom: bam_dma: Add remote power collapse 
+ mode
+
+---
+ drivers/dma/qcom/bam_dma.c     | 80 ++++++++++++++++++++++------------
+ drivers/dma/qcom/bam_dma.c.rej | 11 +++++
+ 2 files changed, 64 insertions(+), 27 deletions(-)
+ create mode 100644 drivers/dma/qcom/bam_dma.c.rej
+
+diff --git a/drivers/dma/qcom/bam_dma.c b/drivers/dma/qcom/bam_dma.c
+index 4eeb8bb27..01fe89d0f 100644
+--- a/drivers/dma/qcom/bam_dma.c
++++ b/drivers/dma/qcom/bam_dma.c
+@@ -388,6 +388,8 @@ struct bam_device {
+ 	/* execution environment ID, from DT */
+ 	u32 ee;
+ 	bool controlled_remotely;
++	bool remote_power_collapse;
++	u32 active_channels;
+ 
+ 	const struct reg_offset_data *layout;
+ 
+@@ -489,6 +491,8 @@ static void bam_chan_init_hw(struct bam_chan *bchan,
+ 	bchan->tail = 0;
+ }
+ 
++static void bam_reset(struct bam_device *bdev);
++
+ /**
+  * bam_alloc_chan - Allocate channel resources for DMA channel.
+  * @chan: specified channel
+@@ -512,6 +516,9 @@ static int bam_alloc_chan(struct dma_chan *chan)
+ 		return -ENOMEM;
+ 	}
+ 
++	if (bdev->active_channels++ == 0 && bdev->remote_power_collapse)
++		bam_reset(bdev);
++
+ 	return 0;
+ }
+ 
+@@ -565,6 +572,13 @@ static void bam_free_chan(struct dma_chan *chan)
+ 	/* disable irq */
+ 	writel_relaxed(0, bam_addr(bdev, bchan->id, BAM_P_IRQ_EN));
+ 
++	if (--bdev->active_channels == 0 && bdev->remote_power_collapse) {
++		/* s/w reset bam */
++		val = readl_relaxed(bam_addr(bdev, 0, BAM_CTRL));
++		val |= BAM_SW_RST;
++		writel_relaxed(val, bam_addr(bdev, 0, BAM_CTRL));
++	}
++
+ err:
+ 	pm_runtime_mark_last_busy(bdev->dev);
+ 	pm_runtime_put_autosuspend(bdev->dev);
+@@ -1143,34 +1157,10 @@ static struct dma_chan *bam_dma_xlate(struct of_phandle_args *dma_spec,
+ 	return dma_get_slave_channel(&(bdev->channels[request].vc.chan));
+ }
+ 
+-/**
+- * bam_init
+- * @bdev: bam device
+- *
+- * Initialization helper for global bam registers
+- */
+-static int bam_init(struct bam_device *bdev)
++static void bam_reset(struct bam_device *bdev)
+ {
+ 	u32 val;
+ 
+-	/* read revision and configuration information */
+-	if (!bdev->num_ees) {
+-		val = readl_relaxed(bam_addr(bdev, 0, BAM_REVISION));
+-		bdev->num_ees = (val >> NUM_EES_SHIFT) & NUM_EES_MASK;
+-	}
+-
+-	/* check that configured EE is within range */
+-	if (bdev->ee >= bdev->num_ees)
+-		return -EINVAL;
+-
+-	if (!bdev->num_channels) {
+-		val = readl_relaxed(bam_addr(bdev, 0, BAM_NUM_PIPES));
+-		bdev->num_channels = val & BAM_NUM_PIPES_MASK;
+-	}
+-
+-	if (bdev->controlled_remotely)
+-		return 0;
+-
+ 	/* s/w reset bam */
+ 	/* after reset all pipes are disabled and idle */
+ 	val = readl_relaxed(bam_addr(bdev, 0, BAM_CTRL));
+@@ -1199,7 +1189,37 @@ static int bam_init(struct bam_device *bdev)
+ 
+ 	/* unmask global bam interrupt */
+ 	writel_relaxed(BAM_IRQ_MSK, bam_addr(bdev, 0, BAM_IRQ_SRCS_MSK_EE));
++}
+ 
++/**
++ * bam_init
++ * @bdev: bam device
++ *
++ * Initialization helper for global bam registers
++ */
++static int bam_init(struct bam_device *bdev)
++{
++	u32 val;
++
++	/* read revision and configuration information */
++	if (!bdev->num_ees) {
++		val = readl_relaxed(bam_addr(bdev, 0, BAM_REVISION));
++		bdev->num_ees = (val >> NUM_EES_SHIFT) & NUM_EES_MASK;
++	}
++
++	/* check that configured EE is within range */
++	if (bdev->ee >= bdev->num_ees)
++		return -EINVAL;
++
++	if (!bdev->num_channels) {
++		val = readl_relaxed(bam_addr(bdev, 0, BAM_NUM_PIPES));
++		bdev->num_channels = val & BAM_NUM_PIPES_MASK;
++	}
++
++	if (bdev->controlled_remotely || bdev->remote_power_collapse)
++		return 0;
++
++	bam_reset(bdev);
+ 	return 0;
+ }
+ 
+@@ -1261,8 +1281,10 @@ static int bam_dma_probe(struct platform_device *pdev)
+ 
+ 	bdev->controlled_remotely = of_property_read_bool(pdev->dev.of_node,
+ 						"qcom,controlled-remotely");
++	bdev->remote_power_collapse = of_property_read_bool(pdev->dev.of_node,
++						"qcom,remote-power-collapse");
+ 
+-	if (bdev->controlled_remotely) {
++	if (bdev->controlled_remotely || bdev->remote_power_collapse) {
+ 		ret = of_property_read_u32(pdev->dev.of_node, "num-channels",
+ 					   &bdev->num_channels);
+ 		if (ret)
+@@ -1274,7 +1296,11 @@ static int bam_dma_probe(struct platform_device *pdev)
+ 			dev_err(bdev->dev, "num-ees unspecified in dt\n");
+ 	}
+ 
+-	bdev->bamclk = devm_clk_get(bdev->dev, "bam_clk");
++	if (bdev->controlled_remotely || bdev->remote_power_collapse)
++ 		bdev->bamclk = devm_clk_get_optional(bdev->dev, "bam_clk");
++ 	else
++ 		bdev->bamclk = devm_clk_get(bdev->dev, "bam_clk");
++ 		
+ 	if (IS_ERR(bdev->bamclk)) {
+ 		if (!bdev->controlled_remotely)
+ 			return PTR_ERR(bdev->bamclk);
+diff --git a/drivers/dma/qcom/bam_dma.c.rej b/drivers/dma/qcom/bam_dma.c.rej
+new file mode 100644
+index 000000000..8ec6dd46b
+--- /dev/null
++++ b/drivers/dma/qcom/bam_dma.c.rej
+@@ -0,0 +1,11 @@
++--- drivers/dma/qcom/bam_dma.c
+++++ drivers/dma/qcom/bam_dma.c
++@@ -1292,7 +1314,7 @@ static int bam_dma_probe(struct platform_device *pdev)
++ 			dev_err(bdev->dev, "num-ees unspecified in dt\n");
++ 	}
++ 
++-	if (bdev->controlled_remotely)
+++	if (bdev->controlled_remotely || bdev->remote_power_collapse)
++ 		bdev->bamclk = devm_clk_get_optional(bdev->dev, "bam_clk");
++ 	else
++ 		bdev->bamclk = devm_clk_get(bdev->dev, "bam_clk");
+-- 
+2.31.1
+

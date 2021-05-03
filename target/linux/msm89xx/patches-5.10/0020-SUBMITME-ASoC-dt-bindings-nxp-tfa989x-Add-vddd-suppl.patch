@@ -1,0 +1,30 @@
+From ebfab6c24d4907946eeed12fa61a23e367c7f96e Mon Sep 17 00:00:00 2001
+From: Vincent Knecht <vincent.knecht@mailoo.org>
+Date: Thu, 4 Mar 2021 18:13:47 +0100
+Subject: [PATCH 20/78] SUBMITME: ASoC: dt-bindings: nxp,tfa989x: Add
+ vddd-supply property
+
+Add optional vddd-supply property to allow regulator control.
+
+Signed-off-by: Vincent Knecht <vincent.knecht@mailoo.org>
+---
+ Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml b/Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml
+index f4d3beaa6..2d2aa8437 100644
+--- a/Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml
++++ b/Documentation/devicetree/bindings/sound/nxp,tfa989x.yaml
+@@ -27,6 +27,9 @@ properties:
+       Used as prefix for sink/source names of the component. Must be a
+       unique string among multiple instances of the same component.
+ 
++  vddd-supply:
++    description: regulator phandle for the VDDD power supply.
++
+ required:
+   - compatible
+   - reg
+-- 
+2.31.1
+

@@ -1,0 +1,33 @@
+From 5c3e66b17aeb04ab07029a468a14ef785178a3cb Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Fri, 29 Nov 2019 19:33:22 +0100
+Subject: [PATCH 28/78] MSM8916: iommu/qcom: Select IOMMU_DMA instead of
+ ARM_DMA_USE_IOMMU
+
+The ARM32 IOMMU DMA implementation does not really work properly
+with qcom_iommu. It fails to attach to any IOMMU because a domain
+is created by default in the driver.
+
+Now that there is IOMMU_DMA support for ARM32, select it instead
+of ARM_DMA_USE_IOMMU.
+---
+ drivers/iommu/Kconfig | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/iommu/Kconfig b/drivers/iommu/Kconfig
+index 04878caf6..6dab0ed7d 100644
+--- a/drivers/iommu/Kconfig
++++ b/drivers/iommu/Kconfig
+@@ -376,8 +376,8 @@ config QCOM_IOMMU
+ 	bool "Qualcomm IOMMU Support"
+ 	depends on ARCH_QCOM || (COMPILE_TEST && !GENERIC_ATOMIC64)
+ 	select IOMMU_API
++	select IOMMU_DMA
+ 	select IOMMU_IO_PGTABLE_LPAE
+-	select ARM_DMA_USE_IOMMU
+ 	help
+ 	  Support for IOMMU on certain Qualcomm SoCs.
+ 
+-- 
+2.31.1
+

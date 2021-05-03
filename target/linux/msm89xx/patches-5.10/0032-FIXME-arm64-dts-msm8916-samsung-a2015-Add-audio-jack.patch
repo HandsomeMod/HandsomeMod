@@ -1,0 +1,49 @@
+From ef2bb48e50d3779e19414edfba54c40c49037447 Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Thu, 4 Jul 2019 00:41:28 +0200
+Subject: [PATCH 32/78] FIXME: arm64: dts: msm8916-samsung-a2015: Add audio
+ jack detection
+
+---
+ .../dts/qcom/msm8916-samsung-a2015-common.dtsi | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/arch/arm64/boot/dts/qcom/msm8916-samsung-a2015-common.dtsi b/arch/arm64/boot/dts/qcom/msm8916-samsung-a2015-common.dtsi
+index 7bf2cb015..fce2f24eb 100644
+--- a/arch/arm64/boot/dts/qcom/msm8916-samsung-a2015-common.dtsi
++++ b/arch/arm64/boot/dts/qcom/msm8916-samsung-a2015-common.dtsi
+@@ -168,6 +168,16 @@ &usb_hs_phy {
+ 	extcon = <&muic>;
+ };
+ 
++&wcd_codec {
++	jack-gpios = <&msmgpio 110 GPIO_ACTIVE_LOW>;
++	qcom,micbias-lvl = <2800>;
++	qcom,mbhc-vthreshold-low = <75 150 237 450 500>;
++	qcom,mbhc-vthreshold-high = <75 150 237 450 500>;
++
++	pinctrl-names = "default";
++	pinctrl-0 = <&jack_default>;
++};
++
+ &smd_rpm_regulators {
+ 	vdd_l1_l2_l3-supply = <&pm8916_s3>;
+ 	vdd_l4_l5_l6-supply = <&pm8916_s4>;
+@@ -306,6 +316,14 @@ gpio_hall_sensor_default: gpio-hall-sensor-default {
+ 		bias-disable;
+ 	};
+ 
++	jack_default: jack-default {
++		pins = "gpio110";
++		function = "gpio";
++
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	mdss {
+ 		mdss_default: mdss-default {
+ 			pins = "gpio25";
+-- 
+2.31.1
+

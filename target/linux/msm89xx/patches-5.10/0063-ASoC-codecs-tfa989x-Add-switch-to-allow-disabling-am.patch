@@ -1,0 +1,56 @@
+From 4aed7b88b6672050de9d7e325ea23be83ea1c125 Mon Sep 17 00:00:00 2001
+From: Stephan Gerhold <stephan@gerhold.net>
+Date: Fri, 26 Feb 2021 17:19:50 +0100
+Subject: [PATCH 63/78] ASoC: codecs: tfa989x: Add switch to allow disabling
+ amplifier
+
+In some configurations it may be necessary to explicitly disable
+the amplifier with an ALSA mixer. An example for this is a stereo
+setup with two TFA989X. If only one of them should be used (e.g.
+to use it as an earpiece) the other one must be explicitly disabled.
+
+Add a virtual "Amp Switch" to implement that. There is no register
+for this (SND_SOC_NOPM) so it only prevents DAPM from activating
+the amplifier. Also it is inverted (= enabled by default) for
+compatibility with devices that do not need this functionality.
+
+Signed-off-by: Stephan Gerhold <stephan@gerhold.net>
+---
+ sound/soc/codecs/tfa989x.c | 8 ++++++--
+ 1 file changed, 6 insertions(+), 2 deletions(-)
+
+diff --git a/sound/soc/codecs/tfa989x.c b/sound/soc/codecs/tfa989x.c
+index 76f0f9452..380475777 100644
+--- a/sound/soc/codecs/tfa989x.c
++++ b/sound/soc/codecs/tfa989x.c
+@@ -76,13 +76,16 @@ static const struct regmap_config tfa989x_regmap = {
+ 
+ static const char * const chsa_text[] = { "Left", "Right", /* "DSP" */ };
+ static SOC_ENUM_SINGLE_DECL(chsa_enum, TFA989X_I2SREG, TFA989X_I2SREG_CHSA, chsa_text);
+-static const struct snd_kcontrol_new chsa_mux = SOC_DAPM_ENUM("Amp Input", chsa_enum);
++static const struct snd_kcontrol_new
++	chsa_mux = SOC_DAPM_ENUM("Amp Input", chsa_enum),
++	amp_switch = SOC_DAPM_SINGLE("Switch", SND_SOC_NOPM, 0, 1, 1);
+ 
+ static const struct snd_soc_dapm_widget tfa989x_dapm_widgets[] = {
+ 	SND_SOC_DAPM_OUTPUT("OUT"),
+ 	SND_SOC_DAPM_SUPPLY("POWER", TFA989X_SYS_CTRL, TFA989X_SYS_CTRL_PWDN, 1, NULL, 0),
+ 	SND_SOC_DAPM_OUT_DRV("AMPE", TFA989X_SYS_CTRL, TFA989X_SYS_CTRL_AMPE, 0, NULL, 0),
+ 
++	SND_SOC_DAPM_SWITCH("Amp", SND_SOC_NOPM, 0, 0, &amp_switch),
+ 	SND_SOC_DAPM_MUX("Amp Input", SND_SOC_NOPM, 0, 0, &chsa_mux),
+ 	SND_SOC_DAPM_AIF_IN("AIFINL", "HiFi Playback", 0, SND_SOC_NOPM, 0, 0),
+ 	SND_SOC_DAPM_AIF_IN("AIFINR", "HiFi Playback", 1, SND_SOC_NOPM, 0, 0),
+@@ -91,7 +94,8 @@ static const struct snd_soc_dapm_widget tfa989x_dapm_widgets[] = {
+ static const struct snd_soc_dapm_route tfa989x_dapm_routes[] = {
+ 	{"OUT", NULL, "AMPE"},
+ 	{"AMPE", NULL, "POWER"},
+-	{"AMPE", NULL, "Amp Input"},
++	{"AMPE", NULL, "Amp"},
++	{"Amp", "Switch", "Amp Input"},
+ 	{"Amp Input", "Left", "AIFINL"},
+ 	{"Amp Input", "Right", "AIFINR"},
+ };
+-- 
+2.31.1
+

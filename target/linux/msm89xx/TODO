@@ -1,0 +1,4 @@
+* modules.mk
+* more qcom socs support
+* testing on real devices
+* pass compile test

@@ -1,0 +1,80 @@
+From a4db0dc54327914faad05f44b01a3e143f4a3f28 Mon Sep 17 00:00:00 2001
+From: Stephan Gerhold <stephan@gerhold.net>
+Date: Wed, 7 Apr 2021 18:36:48 +0200
+Subject: [PATCH 70/78] UPSTREAM: arm64: dts: qcom: msm8916: Add GICv2
+ hypervisor registers/interrupt
+
+The ARM Cortex-A53 CPU cores and QGIC2 interrupt controller
+(an implementation of the ARM GIC 2.0 specification) used in MSM8916
+support virtualization, e.g. for KVM on Linux. However, so far it was
+not possible to make use of this functionality, because Qualcomm's
+proprietary "hyp" firmware blocks the EL2 mode of the CPU and only
+allows booting Linux in EL1.
+
+However, on devices without (firmware) secure boot there is no need
+to rely on all of Qualcomm's firmware. The "hyp" firmware on MSM8916
+seems simple enough that it can be replaced with an open-source
+alternative created only based on trial and error - with some similar
+EL2/EL1 initialization code adapted from Linux and U-Boot.
+
+qhypstub [1] is such an open-source firmware for MSM8916 that
+can be used as drop-in replacement for Qualcomm's "hyp" firmware.
+It does not implement any hypervisor functionality.
+Instead, it allows booting Linux/KVM (or other hypervisors) in EL2.
+
+With Linux booting in EL2, KVM seems to be working just fine on MSM8916.
+However, so far it is not possible to make use of the virtualization
+features in the GICv2. To use KVM's VGICv2 code, the QGIC2 device tree
+node needs additional resources (according to binding documentation):
+
+  - The CPU interface region (second reg) must be at least 8 KiB large
+    to access the GICC_DIR register (mapped at 0x1000 offset)
+  - Virtual control/CPU interface register base and size
+  - Hypervisor maintenance interrupt
+
+Fortunately, the public APQ8016E TRM [2] provides the required information:
+
+  - The CPU interface region (at 0x0B002000) actually has a size of 8 KiB
+  - Virtual control/CPU interface register is at 0x0B001000/0x0B004000
+  - Hypervisor maintenance interrupt is "PPI #0"
+      Note: This is a bit strange since almost all other ARM SoCs use
+            GIC_PPI 9 for this. However, I have verified that this is
+            indeed the interrupt that fires when bits are set in GICH_HCR.
+
+Add the additional resources to the QGIC2 device tree node in msm8916.dtsi.
+There is no functional difference when Linux is started in EL1 since the
+additional resources are ignored in that case.
+
+With these changes (and qhypstub), KVM seems to be fully working on
+the DragonBoard 410c (apq8016-sbc) and BQ Aquaris X5 (longcheer-l8910).
+
+[1]: https://github.com/msm8916-mainline/qhypstub
+[2]: https://developer.qualcomm.com/download/sd410/snapdragon-410e-technical-reference-manual.pdf
+
+Acked-by: Marc Zyngier <maz@kernel.org>
+Signed-off-by: Stephan Gerhold <stephan@gerhold.net>
+Link: https://lore.kernel.org/r/20210407163648.4708-1-stephan@gerhold.net
+Signed-off-by: Bjorn Andersson <bjorn.andersson@linaro.org>
+(cherry picked from commit 8385119b3295fa87c43a80faed5644bbdab02b8c)
+---
+ arch/arm64/boot/dts/qcom/msm8916.dtsi | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/msm8916.dtsi b/arch/arm64/boot/dts/qcom/msm8916.dtsi
+index bf42879f2..1644fa06d 100644
+--- a/arch/arm64/boot/dts/qcom/msm8916.dtsi
++++ b/arch/arm64/boot/dts/qcom/msm8916.dtsi
+@@ -1726,7 +1726,9 @@ intc: interrupt-controller@b000000 {
+ 			compatible = "qcom,msm-qgic2";
+ 			interrupt-controller;
+ 			#interrupt-cells = <3>;
+-			reg = <0x0b000000 0x1000>, <0x0b002000 0x1000>;
++			reg = <0x0b000000 0x1000>, <0x0b002000 0x2000>,
++			      <0x0b001000 0x1000>, <0x0b004000 0x2000>;
++			interrupts = <GIC_PPI 0 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_HIGH)>;
+ 		};
+ 
+ 		apcs: mailbox@b011000 {
+-- 
+2.31.1
+

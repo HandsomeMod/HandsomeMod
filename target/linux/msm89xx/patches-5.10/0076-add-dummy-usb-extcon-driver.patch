@@ -1,0 +1,120 @@
+From c9da9564afc2fbb2cb1147c9aa88bfed3446a7fa Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sun, 2 May 2021 10:13:20 +0800
+Subject: [PATCH 76/78] add dummy usb extcon driver
+
+---
+ drivers/dma/qcom/bam_dma.c.rej    | 11 -------
+ drivers/extcon/Kconfig            |  7 +++++
+ drivers/extcon/Makefile           |  1 +
+ drivers/extcon/extcon-usb-dummy.c | 51 +++++++++++++++++++++++++++++++
+ 4 files changed, 59 insertions(+), 11 deletions(-)
+ delete mode 100644 drivers/dma/qcom/bam_dma.c.rej
+ create mode 100644 drivers/extcon/extcon-usb-dummy.c
+
+diff --git a/drivers/dma/qcom/bam_dma.c.rej b/drivers/dma/qcom/bam_dma.c.rej
+deleted file mode 100644
+index 8ec6dd46b..000000000
+--- a/drivers/dma/qcom/bam_dma.c.rej
++++ /dev/null
+@@ -1,11 +0,0 @@
+---- drivers/dma/qcom/bam_dma.c
+-+++ drivers/dma/qcom/bam_dma.c
+-@@ -1292,7 +1314,7 @@ static int bam_dma_probe(struct platform_device *pdev)
+- 			dev_err(bdev->dev, "num-ees unspecified in dt\n");
+- 	}
+- 
+--	if (bdev->controlled_remotely)
+-+	if (bdev->controlled_remotely || bdev->remote_power_collapse)
+- 		bdev->bamclk = devm_clk_get_optional(bdev->dev, "bam_clk");
+- 	else
+- 		bdev->bamclk = devm_clk_get(bdev->dev, "bam_clk");
+diff --git a/drivers/extcon/Kconfig b/drivers/extcon/Kconfig
+index aac507bff..b2238d3ff 100644
+--- a/drivers/extcon/Kconfig
++++ b/drivers/extcon/Kconfig
+@@ -172,6 +172,13 @@ config EXTCON_SM5502
+ 	  Silicon Mitus SM5502. The SM5502 is a USB port accessory
+ 	  detector and switch.
+ 
++config EXTCON_USB_DUMMY
++	tristate "Dummy USB extcon support"
++	help
++	  Say Y here to create an extcon device that always reports USB=1
++	  and nothing else. This is stupid, but helpful as workaround for some
++	  funny implementation details for now. Just look away. Now! Still here?
++
+ config EXTCON_USB_GPIO
+ 	tristate "USB GPIO extcon support"
+ 	depends on GPIOLIB || COMPILE_TEST
+diff --git a/drivers/extcon/Makefile b/drivers/extcon/Makefile
+index 52096fd8a..d0fd36817 100644
+--- a/drivers/extcon/Makefile
++++ b/drivers/extcon/Makefile
+@@ -23,5 +23,6 @@ obj-$(CONFIG_EXTCON_PTN5150)	+= extcon-ptn5150.o
+ obj-$(CONFIG_EXTCON_QCOM_SPMI_MISC) += extcon-qcom-spmi-misc.o
+ obj-$(CONFIG_EXTCON_RT8973A)	+= extcon-rt8973a.o
+ obj-$(CONFIG_EXTCON_SM5502)	+= extcon-sm5502.o
++obj-$(CONFIG_EXTCON_USB_DUMMY)	+= extcon-usb-dummy.o
+ obj-$(CONFIG_EXTCON_USB_GPIO)	+= extcon-usb-gpio.o
+ obj-$(CONFIG_EXTCON_USBC_CROS_EC) += extcon-usbc-cros-ec.o
+diff --git a/drivers/extcon/extcon-usb-dummy.c b/drivers/extcon/extcon-usb-dummy.c
+new file mode 100644
+index 000000000..8a56ffd33
+--- /dev/null
++++ b/drivers/extcon/extcon-usb-dummy.c
+@@ -0,0 +1,51 @@
++// SPDX-License-Identifier: GPL-2.0-only
++
++#include <linux/extcon-provider.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/platform_device.h>
++
++static const unsigned int extcon_dummy_cable[] = {
++	EXTCON_USB,
++	EXTCON_NONE,
++};
++
++static int extcon_dummy_probe(struct platform_device *pdev)
++{
++	struct device *dev = &pdev->dev;
++	struct extcon_dev *edev;
++	int ret;
++
++	edev = devm_extcon_dev_allocate(dev, extcon_dummy_cable);
++	if (IS_ERR(edev))
++		return PTR_ERR(edev);
++
++	ret = devm_extcon_dev_register(dev, edev);
++	if (ret < 0) {
++		dev_err(dev, "failed to register extcon device: %d\n", ret);
++		return ret;
++	}
++
++	/* Pretend that USB is always connected */
++	extcon_set_state_sync(edev, EXTCON_USB, true);
++
++	return 0;
++}
++
++static const struct of_device_id extcon_dummy_of_match[] = {
++	{ .compatible = "linux,extcon-usb-dummy", },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, extcon_dummy_of_match);
++
++static struct platform_driver extcon_dummy_driver = {
++	.probe = extcon_dummy_probe,
++	.driver = {
++		.name = "extcon-usb-dummy",
++		.of_match_table = extcon_dummy_of_match,
++	},
++};
++module_platform_driver(extcon_dummy_driver);
++
++MODULE_DESCRIPTION("Dummy USB extcon driver");
++MODULE_LICENSE("GPL v2");
+-- 
+2.31.1
+

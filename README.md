@@ -50,7 +50,7 @@ https://github.com/openwrt/openwrt
 - Allwinner Socs （Sunxi）
 - Freescale I.MX6ULL Family
 - Loongson64 Family (5.10) WIP
-- Qualcomm MSM89xx Family (5.10) Highly WIP
+- Qualcomm MSM89xx Family (5.10) WIP
 
 
 ## License

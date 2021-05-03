@@ -1,0 +1,41 @@
+From c0c86330125cdf34b457449a805940b93819cf46 Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Mon, 2 Dec 2019 13:30:58 +0100
+Subject: [PATCH 06/78] cpuidle: qcom-spm: Enable compilation on ARM64
+
+---
+ drivers/cpuidle/Kconfig.arm        | 2 +-
+ drivers/cpuidle/cpuidle-qcom-spm.c | 4 ++++
+ 2 files changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/cpuidle/Kconfig.arm b/drivers/cpuidle/Kconfig.arm
+index 0844fadc4..16c107fb4 100644
+--- a/drivers/cpuidle/Kconfig.arm
++++ b/drivers/cpuidle/Kconfig.arm
+@@ -107,7 +107,7 @@ config ARM_TEGRA_CPUIDLE
+ 
+ config ARM_QCOM_SPM_CPUIDLE
+ 	bool "CPU Idle Driver for Qualcomm Subsystem Power Manager (SPM)"
+-	depends on (ARCH_QCOM || COMPILE_TEST) && !ARM64
++	depends on ARCH_QCOM || COMPILE_TEST
+ 	select ARM_CPU_SUSPEND
+ 	select CPU_IDLE_MULTIPLE_DRIVERS
+ 	select DT_IDLE_STATES
+diff --git a/drivers/cpuidle/cpuidle-qcom-spm.c b/drivers/cpuidle/cpuidle-qcom-spm.c
+index da1826ceb..7888dd24b 100644
+--- a/drivers/cpuidle/cpuidle-qcom-spm.c
++++ b/drivers/cpuidle/cpuidle-qcom-spm.c
+@@ -24,6 +24,10 @@
+ 
+ #include "dt_idle_states.h"
+ 
++#ifdef CONFIG_ARM64
++#define cpu_resume_arm		cpu_resume
++#endif
++
+ #define MAX_PMIC_DATA		2
+ #define MAX_SEQ_DATA		64
+ #define SPM_CTL_INDEX		0x7f
+-- 
+2.31.1
+

@@ -1,0 +1,27 @@
+From 83f24f6b4d8a06fc8bcb4749424137fa593fc096 Mon Sep 17 00:00:00 2001
+From: Ruby Iris Juric <ruby@srxl.me>
+Date: Mon, 3 Feb 2020 00:38:23 +1100
+Subject: [PATCH 11/78] SUBMITME: iio: accel: bma180: BMA253 support
+
+---
+ drivers/iio/accel/bma180.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/drivers/iio/accel/bma180.c b/drivers/iio/accel/bma180.c
+index 6b74c2b04..585f7cd22 100644
+--- a/drivers/iio/accel/bma180.c
++++ b/drivers/iio/accel/bma180.c
+@@ -1180,6 +1180,10 @@ static const struct of_device_id bma180_of_match[] = {
+ 		.compatible = "bosch,bma250",
+ 		.data = (void *)BMA250
+ 	},
++	{
++		.compatible = "bosch,bma253",
++		.data = (void *)BMA254
++	},
+ 	{
+ 		.compatible = "bosch,bma254",
+ 		.data = (void *)BMA254
+-- 
+2.31.1
+

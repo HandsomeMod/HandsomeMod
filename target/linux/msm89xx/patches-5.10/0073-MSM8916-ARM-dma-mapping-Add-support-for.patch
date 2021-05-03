@@ -1,0 +1,97 @@
+From 313ebde5803b1f08e7cc297a6b133894425f6dc8 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Sun, 2 May 2021 10:03:30 +0800
+Subject: [PATCH 73/78] MSM8916: ARM: dma-mapping: Add support for 
+ CONFIG_IOMMU_DMA
+
+---
+ arch/arm/Kconfig          |  5 +++--
+ arch/arm/mm/dma-mapping.c | 27 ++++++++++++++++++++-------
+ 2 files changed, 23 insertions(+), 9 deletions(-)
+
+diff --git a/arch/arm/Kconfig b/arch/arm/Kconfig
+index 002e0cf02..d76e12640 100644
+--- a/arch/arm/Kconfig
++++ b/arch/arm/Kconfig
+@@ -5,6 +5,7 @@ config ARM
+ 	select ARCH_32BIT_OFF_T
+ 	select ARCH_HAS_BINFMT_FLAT
+ 	select ARCH_HAS_DEBUG_VIRTUAL if MMU
++	select ARCH_HAS_DMA_PREP_COHERENT if IOMMU_DMA
+ 	select ARCH_HAS_DEVMEM_IS_ALLOWED
+ 	select ARCH_HAS_DMA_WRITE_COMBINE if !ARM_DMA_MEM_BUFFERABLE
+ 	select ARCH_HAS_ELF_RANDOMIZE
+@@ -19,8 +20,8 @@ config ARM
+ 	select ARCH_HAS_SET_MEMORY
+ 	select ARCH_HAS_STRICT_KERNEL_RWX if MMU && !XIP_KERNEL
+ 	select ARCH_HAS_STRICT_MODULE_RWX if MMU
+-	select ARCH_HAS_SYNC_DMA_FOR_DEVICE if SWIOTLB
+-	select ARCH_HAS_SYNC_DMA_FOR_CPU if SWIOTLB
++	select ARCH_HAS_SYNC_DMA_FOR_DEVICE if SWIOTLB || IOMMU_DMA
++	select ARCH_HAS_SYNC_DMA_FOR_CPU if SWIOTLB || IOMMU_DMA
+ 	select ARCH_HAS_TEARDOWN_DMA_OPS if MMU
+ 	select ARCH_HAS_TICK_BROADCAST if GENERIC_CLOCKEVENTS_BROADCAST
+ 	select ARCH_HAVE_CUSTOM_GPIO_H
+diff --git a/arch/arm/mm/dma-mapping.c b/arch/arm/mm/dma-mapping.c
+index c4b8df2ad..d5e7a8587 100644
+--- a/arch/arm/mm/dma-mapping.c
++++ b/arch/arm/mm/dma-mapping.c
+@@ -15,6 +15,7 @@
+ #include <linux/init.h>
+ #include <linux/device.h>
+ #include <linux/dma-direct.h>
++#include <linux/dma-iommu.h>
+ #include <linux/dma-map-ops.h>
+ #include <linux/highmem.h>
+ #include <linux/memblock.h>
+@@ -2260,7 +2261,7 @@ void arch_setup_dma_ops(struct device *dev, u64 dma_base, u64 size,
+ 	const struct dma_map_ops *dma_ops;
+ 
+ 	dev->archdata.dma_coherent = coherent;
+-#ifdef CONFIG_SWIOTLB
++#if defined(CONFIG_SWIOTLB) || defined(CONFIG_IOMMU_DMA)
+ 	dev->dma_coherent = coherent;
+ #endif
+ 
+@@ -2272,12 +2273,17 @@ void arch_setup_dma_ops(struct device *dev, u64 dma_base, u64 size,
+ 	if (dev->dma_ops)
+ 		return;
+ 
+-	if (arm_setup_iommu_dma_ops(dev, dma_base, size, iommu))
+-		dma_ops = arm_get_iommu_dma_map_ops(coherent);
+-	else
+-		dma_ops = arm_get_dma_map_ops(coherent);
++	if (iommu)
++		iommu_setup_dma_ops(dev, dma_base, size);
++
++	if (!dev->dma_ops) {
++		if (arm_setup_iommu_dma_ops(dev, dma_base, size, iommu))
++			dma_ops = arm_get_iommu_dma_map_ops(coherent);
++		else
++			dma_ops = arm_get_dma_map_ops(coherent);
+ 
+-	set_dma_ops(dev, dma_ops);
++		set_dma_ops(dev, dma_ops);
++	}
+ 
+ #ifdef CONFIG_XEN
+ 	if (xen_initial_domain())
+@@ -2296,7 +2302,14 @@ void arch_teardown_dma_ops(struct device *dev)
+ 	set_dma_ops(dev, NULL);
+ }
+ 
+-#ifdef CONFIG_SWIOTLB
++#ifdef CONFIG_IOMMU_DMA
++void arch_dma_prep_coherent(struct page *page, size_t size)
++{
++	__dma_clear_buffer(page, size, NORMAL);
++}
++#endif
++
++#if defined(CONFIG_SWIOTLB) || defined(CONFIG_IOMMU_DMA)
+ void arch_sync_dma_for_device(phys_addr_t paddr, size_t size,
+ 		enum dma_data_direction dir)
+ {
+-- 
+2.31.1
+

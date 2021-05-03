@@ -1,0 +1,47 @@
+From 2f95ffc9a474efb9118b0cffc0cddeed62e0dcf6 Mon Sep 17 00:00:00 2001
+From: Minecrell <minecrell@minecrell.net>
+Date: Wed, 6 Jan 2021 12:42:02 +0100
+Subject: [PATCH 52/78] drm/panel: longcheer-yushun-nt35520: Force DSI video
+ mode
+
+Command mode is somewhat broken in the mainline kernel. Copy a magic
+parameter from panel-novatek-nt35510.c to force video mode for now.
+---
+ .../msm8916-generated/panel-longcheer-yushun-nt35520.c     | 7 +++++--
+ 1 file changed, 5 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/gpu/drm/panel/msm8916-generated/panel-longcheer-yushun-nt35520.c b/drivers/gpu/drm/panel/msm8916-generated/panel-longcheer-yushun-nt35520.c
+index 361cdb163..c5fa6e8b9 100644
+--- a/drivers/gpu/drm/panel/msm8916-generated/panel-longcheer-yushun-nt35520.c
++++ b/drivers/gpu/drm/panel/msm8916-generated/panel-longcheer-yushun-nt35520.c
+@@ -13,6 +13,9 @@
+ #include <drm/drm_modes.h>
+ #include <drm/drm_panel.h>
+ 
++/* From panel-novatek-nt35510.c */
++#define NT35520_DOPCTR_0_DSIM BIT(4) /* Enable video mode on DSI */
++
+ struct yushun_nt35520 {
+ 	struct drm_panel panel;
+ 	struct mipi_dsi_device *dsi;
+@@ -56,7 +59,7 @@ static int yushun_nt35520_on(struct yushun_nt35520 *ctx)
+ 	dsi_generic_write_seq(dsi, 0xf7, 0x00);
+ 	dsi_generic_write_seq(dsi, 0x6f, 0x01);
+ 	dsi_generic_write_seq(dsi, 0xf3, 0x00);
+-	dsi_generic_write_seq(dsi, 0xb1, 0x68, 0x21);
++	dsi_generic_write_seq(dsi, 0xb1, 0x68 | NT35520_DOPCTR_0_DSIM, 0x21);
+ 	dsi_generic_write_seq(dsi, 0xbd, 0x02, 0x67, 0x20, 0x20, 0x00);
+ 	dsi_generic_write_seq(dsi, 0x6f, 0x02);
+ 	dsi_generic_write_seq(dsi, 0xb8, 0x08);
+@@ -410,7 +413,7 @@ static int yushun_nt35520_probe(struct mipi_dsi_device *dsi)
+ 
+ 	dsi->lanes = 4;
+ 	dsi->format = MIPI_DSI_FMT_RGB888;
+-	dsi->mode_flags = MIPI_DSI_MODE_VIDEO_SYNC_PULSE |
++	dsi->mode_flags = MIPI_DSI_MODE_VIDEO | MIPI_DSI_MODE_VIDEO_SYNC_PULSE |
+ 			  MIPI_DSI_CLOCK_NON_CONTINUOUS | MIPI_DSI_MODE_LPM;
+ 
+ 	drm_panel_init(&ctx->panel, dev, &yushun_nt35520_panel_funcs,
+-- 
+2.31.1
+
