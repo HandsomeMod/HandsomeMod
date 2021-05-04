@@ -6,7 +6,7 @@
 #
 
 SUBTARGET:=msm8916
-BOARDNAME:=Msm8916 Soc based Targets.
+BOARDNAME:=Msm8916 Soc based Targets
 CPU_TYPE:=cortex-a53
 CPU_SUBTYPE:=neon
 

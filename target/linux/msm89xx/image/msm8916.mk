@@ -24,6 +24,7 @@ define Device/XiaoMi_wingtech-wt88047-modem
   QCOM_BOOTIMG_FLASH_OFFSET_TAGS:= 0x01e00000
   QCOM_BOOTIMG_FLASH_OFFSET_PAGESIZE:= 2048
 endef
+
 TARGET_DEVICES += XiaoMi_wingtech-wt88047-modem
 
 endif
