@@ -57,7 +57,7 @@ endef
 
 # Step2 Build the System.img
 define Build/qcom-systemimg
-	simg2img $(IMAGE_ROOTFS) $@
+	img2simg $(IMAGE_ROOTFS) $@
 endef
 
 
