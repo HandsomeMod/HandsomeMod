@@ -11,7 +11,7 @@
 
 include $(TOPDIR)/rules.mk
 
-ARCH:=arm
+ARCH:=aarch64
 BOARD:=msm89xx
 BOARDNAME:=Qualcomm Msm89xx Soc
 FEATURES:=fpu usb ext4 display rtc usbgadget gpio

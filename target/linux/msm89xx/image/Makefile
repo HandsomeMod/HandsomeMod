@@ -86,6 +86,6 @@ define Device/Qcom
 endef
 
 
-include $(SUBTARGETS).mk
+include msm8916.mk
 
 $(eval $(call BuildImage))
