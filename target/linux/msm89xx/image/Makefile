@@ -39,8 +39,8 @@ endef
 # Step1 Build the Bootimg
 # No Ramdisk For Now
 define Build/qcom-bootimg
-	rm -f $@.zImage-dtb
-	cat $(KDIR)/zImage $(DTS_DIR)/$(QCOM_DTS).dtb > $@.zImage-dtb
+	rm -f $@.kernel-dtb
+	cat $(KDIR)/Image.gz $(DTS_DIR)/$(QCOM_DTS).dtb > $@.kernel-dtb
 	# TODO Ramdisk
 	$(call mkBootimg_noRamdisk, \
 		$(QCOM_BOOTIMG_FLASH_OFFSET_BASE), \
@@ -49,10 +49,10 @@ define Build/qcom-bootimg
 		$(QCOM_BOOTIMG_FLASH_OFFSET_PAGESIZE), \
 		$(QCOM_BOOTIMG_FLASH_OFFSET_SECOND), \
 		$(QCOM_CMDLINE), \
-		$@.zImage-dtb, \
+		$@.kernel-dtb, \
 		$@, \
 		)
-	rm -f $@.zImage-dtb
+	rm -f $@.kernel-dtb
 endef
 
 # Step2 Build the System.img
@@ -63,8 +63,8 @@ endef
 
 define Device/Default
   PROFILES = Default
-  KERNEL_NAME := zImage
-  KERNEL := kernel-bin | uImage none
+  KERNEL_NAME := Image.gz
+  KERNEL := kernel-bin
   IMAGES := boot.img system.img
   IMAGE/boot.img := qcom-bootimg | append-metadata
   IMAGE/system.img := qcom-systemimg | append-metadata
@@ -81,7 +81,7 @@ endef
 # Qcom Default Dts
 define Device/Qcom
   QCOM_DTS_DIR := qcom/
-  KERNEL_NAME := Image
+  KERNEL_NAME := Image.gz
   KERNEL := kernel-bin
 endef
 
