@@ -20,7 +20,7 @@ MAINTAINER:=HandsomeYingyan <handsomeyingyan@gmail.com>
 
 KERNEL_PATCHVER:=5.10
 KERNEL_TESTING_PATCHVER:=5.10
-KERNELNAME:=zImage dtbs
+KERNELNAME:=Image dtbs
 
 define Target/Description
 	Build firmware images for Qualcomm Msm89xx Soc based SmartPhones Tablets and Boards.
