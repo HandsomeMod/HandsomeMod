@@ -16,4 +16,12 @@ PKG_MIRROR_HASH:=2cfcc280ea06570cd1ab3cff1aab6ab6628b25f0560f5bb7e27e982f281a99c
 include $(INCLUDE_DIR)/host-build.mk
 include $(INCLUDE_DIR)/cmake.mk
 
+define Host/Install
+	$(call Host/Install/Default)
+	$(INSTALL_DIR) $(STAGING_DIR_HOST)/bin
+	$(INSTALL_BIN) $(HOST_BUILD_DIR)/bin/img2simg $(STAGING_DIR_HOST)/bin
+	$(INSTALL_BIN) $(HOST_BUILD_DIR)/bin/make_ext4fs $(STAGING_DIR_HOST)/bin
+	$(INSTALL_BIN) $(HOST_BUILD_DIR)/bin/simg2img $(STAGING_DIR_HOST)/bin
+endef
+
 $(eval $(call HostBuild))
