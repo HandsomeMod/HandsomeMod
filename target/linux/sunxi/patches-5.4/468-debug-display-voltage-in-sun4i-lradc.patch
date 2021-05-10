@@ -16,7 +16,7 @@ index 4a796bed4..3e24dad3c 100755
  };
  
 +// hack: just for testing
-+struct device *lradc_dev;
++static struct device *lradc_dev;
 +
  static irqreturn_t sun4i_lradc_irq(int irq, void *dev_id)
  {
