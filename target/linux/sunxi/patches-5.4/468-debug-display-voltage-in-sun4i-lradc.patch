@@ -1,0 +1,48 @@
+From 7d2532e1274f75a9d157cbe0e8a4cee3c7760db4 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Mon, 10 May 2021 11:12:20 +0800
+Subject: [PATCH] debug : display voltage in sun4i-lradc
+
+---
+ drivers/input/keyboard/sun4i-lradc-keys.c | 11 ++++++++++-
+ 1 file changed, 10 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/input/keyboard/sun4i-lradc-keys.c b/drivers/input/keyboard/sun4i-lradc-keys.c
+index 4a796bed4..3e24dad3c 100755
+--- a/drivers/input/keyboard/sun4i-lradc-keys.c
++++ b/drivers/input/keyboard/sun4i-lradc-keys.c
+@@ -91,6 +91,9 @@ struct sun4i_lradc_data {
+ 	u32 vref;
+ };
+ 
++// hack: just for testing
++struct device *lradc_dev;
++
+ static irqreturn_t sun4i_lradc_irq(int irq, void *dev_id)
+ {
+ 	struct sun4i_lradc_data *lradc = dev_id;
+@@ -111,7 +114,10 @@ static irqreturn_t sun4i_lradc_irq(int irq, void *dev_id)
+ 	if ((ints & CHAN0_KEYDOWN_IRQ) && lradc->chan0_keycode == 0) {
+ 		val = readl(lradc->base + LRADC_DATA0) & 0x3f;
+ 		voltage = val * lradc->vref / 63;
+-
++		
++		// debug hack : display voltage in dmesg
++		dev_info(lradc_dev, "Debug: a %u V button pressed\n", voltage);
++		
+ 		for (i = 0; i < lradc->chan0_map_count; i++) {
+ 			diff = abs(lradc->chan0_map[i].voltage - voltage);
+ 			if (diff < closest) {
+@@ -228,6 +234,9 @@ static int sun4i_lradc_probe(struct platform_device *pdev)
+ 	struct device *dev = &pdev->dev;
+ 	int i;
+ 	int error;
++	
++	// hack : just for testing
++	lradc_dev = &pdev->dev;
+ 
+ 	lradc = devm_kzalloc(dev, sizeof(struct sun4i_lradc_data), GFP_KERNEL);
+ 	if (!lradc)
+-- 
+2.31.1
+
