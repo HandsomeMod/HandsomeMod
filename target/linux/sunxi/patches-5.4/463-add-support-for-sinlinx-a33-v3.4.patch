@@ -216,21 +216,21 @@ index 000000000..9d196d57e
 +		label = "Volume Up";
 +		linux,code = <KEY_VOLUMEUP>;
 +		channel = <0>;
-+		voltage = <180000>;
++		voltage = <158730>;
 +	};
 +
 +	button-2 {
 +		label = "Volume Down";
 +		linux,code = <KEY_VOLUMEDOWN>;
 +		channel = <0>;
-+		voltage = <390000>;
++		voltage = <349206>;
 +	};
 +
 +	button-3 {
 +		label = "Home";
 +		linux,code = <KEY_HOME>;
 +		channel = <0>;
-+		voltage = <600000>;
++		voltage = <571428>;
 +	};
 +};
 +
