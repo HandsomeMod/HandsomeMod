@@ -1,0 +1,34 @@
+From 3e46680b1707daeb488d1840127d2b27ff79aa22 Mon Sep 17 00:00:00 2001
+From: handsomeyingyan <handsomeyingyan@github.com>
+Date: Mon, 10 May 2021 11:18:44 +0800
+Subject: [PATCH] add power key support for sina33 v3
+
+---
+ arch/arm/boot/dts/sun8i-a33-sinlinx-sina33-v3.dts | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/arch/arm/boot/dts/sun8i-a33-sinlinx-sina33-v3.dts b/arch/arm/boot/dts/sun8i-a33-sinlinx-sina33-v3.dts
+index 9d196d57e..b09a2d00a 100755
+--- a/arch/arm/boot/dts/sun8i-a33-sinlinx-sina33-v3.dts
++++ b/arch/arm/boot/dts/sun8i-a33-sinlinx-sina33-v3.dts
+@@ -31,6 +31,17 @@
+ 		stdout-path = "serial0:115200n8";
+ 	};
+ 	
++	r_gpio_keys {
++		compatible = "gpio-keys";
++
++		power {
++			label = "power";
++			linux,code = <KEY_POWER>;
++			gpios = <&r_pio 0 11 GPIO_ACTIVE_LOW>; /* PL11 */
++		};
++
++	};
++	
+ 	backlight: backlight {
+ 		compatible = "pwm-backlight";
+ 		pwms = <&pwm 0 50000 PWM_POLARITY_INVERTED>;
+-- 
+2.31.1
+
