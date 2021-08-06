@@ -8,6 +8,7 @@ config WPA_RFKILL_SUPPORT
 		   PACKAGE_wpa-supplicant-mesh-wolfssl || \
 		   PACKAGE_wpa-supplicant-basic || \
 		   PACKAGE_wpa-supplicant-mini || \
+		   PACKAGE_wpa-supplicant-dbus || \
 		   PACKAGE_wpa-supplicant-p2p || \
 		   PACKAGE_wpad || \
 		   PACKAGE_wpad-openssl || \
@@ -29,6 +30,7 @@ config WPA_MSG_MIN_PRIORITY
 		   PACKAGE_wpa-supplicant-mesh-wolfssl || \
 		   PACKAGE_wpa-supplicant-basic || \
 		   PACKAGE_wpa-supplicant-mini || \
+		   PACKAGE_wpa-supplicant-dbus || \
 		   PACKAGE_wpa-supplicant-p2p || \
 		   PACKAGE_wpad || \
 		   PACKAGE_wpad-openssl || \

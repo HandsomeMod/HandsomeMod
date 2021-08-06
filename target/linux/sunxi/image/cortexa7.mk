@@ -248,6 +248,15 @@ endef
 
 TARGET_DEVICES += sipeed_licheepi-zero-dock
 
+define Device/sinlinx_sinlinx-sinv3s
+  DEVICE_VENDOR := SinLinx
+  DEVICE_MODEL := SinV3s
+  DEVICE_PACKAGES:=kmod-rtc-sunxi kmod-esp8089
+  SOC := sun8i-v3s
+endef
+
+TARGET_DEVICES += sinlinx_sinlinx-sinv3s
+
 define Device/sinlinx_sinlinx-sina33
   DEVICE_VENDOR := SinLinx
   DEVICE_MODEL := SinA33
@@ -275,3 +284,5 @@ define Device/pine64_pinecube
 endef
 
 TARGET_DEVICES += pine64_pinecube
+
+

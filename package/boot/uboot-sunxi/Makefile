@@ -355,6 +355,12 @@ define U-Boot/pinecube
   BUILD_DEVICES:=pine64_pinecube
 endef
 
+define U-Boot/Sinlinx_SinV3s
+  BUILD_SUBTARGET:=cortexa7
+  NAME:=U-Boot for Sinlinx SinV3s (V3s)
+  BUILD_DEVICES:=sinlinx_sinlinx-sinv3s
+endef
+
 UBOOT_TARGETS := \
 	a64-olinuxino \
 	a64-olinuxino-emmc \
@@ -407,7 +413,8 @@ UBOOT_TARGETS := \
 	widora_tiny200_v3 \
 	Sinlinx_SinA33 \
 	Sinlinx_SinA33_V3 \
-	pinecube
+	pinecube \
+	Sinlinx_SinV3s
 
 UBOOT_CONFIGURE_VARS += USE_PRIVATE_LIBGCC=yes
 

@@ -17,7 +17,7 @@ define Device/XiaoMi_wingtech-wt88047-modem
   $(Device/msm8916)
   DEVICE_VENDOR := XiaoMi
   DEVICE_MODEL := Redmi 2
-  QCOM_CMDLINE := "earlycon console=tty0 console=ttyMSM0,115200 root=/dev/mmcblk0p30 rw"
+  QCOM_CMDLINE := "earlycon console=tty0 console=ttyMSM0,115200 root=/dev/mmcblk1p23 rw"
   QCOM_BOOTIMG_FLASH_OFFSET_BASE := 0x80000000
   QCOM_BOOTIMG_FLASH_OFFSET_KERNEL := 0x00080000
   QCOM_BOOTIMG_FLASH_OFFSET_RAMDISK := 0x02000000

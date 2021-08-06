@@ -5,9 +5,9 @@ PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
 PKG_SOURCE_URL=$(PROJECT_GIT)/project/netifd.git
-PKG_SOURCE_DATE:=2021-05-26
-PKG_SOURCE_VERSION:=899c2a4520526d43113f73cf673f20e2486a40fb
-PKG_MIRROR_HASH:=354905192b30af88ea953241ed332555e67cdb7e3b54dd139250bf1e6ad3a709
+PKG_SOURCE_DATE:=2021-07-26
+PKG_SOURCE_VERSION:=440eb0647708274cc8d7d9e7c2bb0cfdfba90023
+PKG_MIRROR_HASH:=eed957036ab608fdc49bdf801fc5b4405fcd2a3a5e5d3343ec39898e156c10e9
 PKG_MAINTAINER:=Felix Fietkau <nbd@nbd.name>
 
 PKG_LICENSE:=GPL-2.0
@@ -23,6 +23,7 @@ define Package/netifd
   CATEGORY:=Base system
   DEPENDS:=+libuci +libnl-tiny +libubus +ubus +ubusd +jshn +libubox
   TITLE:=OpenWrt Network Interface Configuration Daemon
+  PROVIDES:=network
 endef
 
 define Package/netifd/conffiles

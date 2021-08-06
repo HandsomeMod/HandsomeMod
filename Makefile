@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
 # Copyright (C) 2007 OpenWrt.org
+# Copyright (C) 2020-2021 HandsomeMod Project
+#
 
 TOPDIR:=${CURDIR}
 LC_ALL:=C

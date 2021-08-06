@@ -1,4 +1,6 @@
+#
 # Copyright (C) 2006-2014 OpenWrt.org
+# Copyright (C) 2020-2021 HandsomeMod Project
 #
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
@@ -363,6 +365,7 @@ $(call Package/wpa-supplicant/Default,$(1))
   DEPENDS+=+libopenssl
 endef
 
+
 define Package/wpa-supplicant-wolfssl
 $(call Package/wpa-supplicant/Default,$(1))
   TITLE+= (wolfSSL full)
@@ -379,6 +382,13 @@ $(call Package/wpa-supplicant/Default,$(1))
   TITLE+= (Wi-Fi P2P support)
   DEPENDS+=@PACKAGE_kmod-cfg80211
   VARIANT:=supplicant-p2p-internal
+endef
+
+define Package/wpa-supplicant-dbus
+$(call Package/wpa-supplicant/Default,$(1))
+  TITLE+= (D-Bus Support)
+  VARIANT:=supplicant-dbus
+  DEPENDS+=+dbus +libxml2
 endef
 
 define Package/wpa-supplicant-mesh/Default
@@ -511,6 +521,10 @@ ifdef CONFIG_PACKAGE_kmod-cfg80211
   TARGET_LDFLAGS += -lm -lnl-tiny
 endif
 
+ifdef CONFIG_PACKAGE_wpa-supplicant-dbus
+  TARGET_LDFLAGS += -ldbus-1
+endif
+
 ifdef CONFIG_WPA_ENABLE_WEP
     DRIVER_MAKEOPTS += CONFIG_WEP=y
 endif
@@ -565,6 +579,12 @@ define Build/Compile/supplicant
 endef
 
 define Build/Compile/supplicant-full-internal
+	+$(call Build/RunMake,wpa_supplicant, \
+		eapol_test \
+	)
+endef
+
+define Build/Compile/supplicant-full-dbus
 	+$(call Build/RunMake,wpa_supplicant, \
 		eapol_test \
 	)
@@ -646,6 +666,7 @@ Package/wpa-supplicant-basic/install = $(Package/wpa-supplicant/install)
 Package/wpa-supplicant-mini/install = $(Package/wpa-supplicant/install)
 Package/wpa-supplicant-p2p/install = $(Package/wpa-supplicant/install)
 Package/wpa-supplicant-openssl/install = $(Package/wpa-supplicant/install)
+Package/wpa-supplicant-dbus/install = $(Package/wpa-supplicant/install)
 Package/wpa-supplicant-wolfssl/install = $(Package/wpa-supplicant/install)
 Package/wpa-supplicant-mesh-openssl/install = $(Package/wpa-supplicant/install)
 Package/wpa-supplicant-mesh-wolfssl/install = $(Package/wpa-supplicant/install)
@@ -701,6 +722,7 @@ $(eval $(call BuildPackage,wpa-supplicant-basic))
 $(eval $(call BuildPackage,wpa-supplicant-mini))
 $(eval $(call BuildPackage,wpa-supplicant-p2p))
 $(eval $(call BuildPackage,wpa-supplicant-openssl))
+$(eval $(call BuildPackage,wpa-supplicant-dbus))
 $(eval $(call BuildPackage,wpa-supplicant-wolfssl))
 $(eval $(call BuildPackage,wpa-cli))
 $(eval $(call BuildPackage,hostapd-utils))
