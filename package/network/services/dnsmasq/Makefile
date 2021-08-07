@@ -1,5 +1,6 @@
 #
 # Copyright (C) 2006-2016 OpenWrt.org
+# Copyright (C) 2020-2021 HandsomeMod Project
 #
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
@@ -26,6 +27,7 @@ PKG_INSTALL:=1
 PKG_BUILD_PARALLEL:=1
 PKG_ASLR_PIE_REGULAR:=1
 PKG_CONFIG_DEPENDS:= CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dhcp \
+	CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dbus \
 	CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dhcpv6 \
 	CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dnssec \
 	CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_auth \
@@ -64,7 +66,8 @@ $(call Package/dnsmasq/Default)
   TITLE += (with DNSSEC, DHCPv6, Auth DNS, IPset, Conntrack, NO_ID enabled by default)
   DEPENDS+=+PACKAGE_dnsmasq_full_dnssec:libnettle \
 	+PACKAGE_dnsmasq_full_ipset:kmod-ipt-ipset \
-	+PACKAGE_dnsmasq_full_conntrack:libnetfilter-conntrack
+	+PACKAGE_dnsmasq_full_conntrack:libnetfilter-conntrack \
+	+PACKAGE_dnsmasq_full_dbus:dbus
   VARIANT:=full
   PROVIDES:=dnsmasq
 endef
@@ -97,6 +100,9 @@ define Package/dnsmasq-full/config
 	config PACKAGE_dnsmasq_full_dhcp
 		bool "Build with DHCP support."
 		default y
+	config PACKAGE_dnsmasq_full_dbus
+		bool "Build with DBus support."
+		default n
 	config PACKAGE_dnsmasq_full_dhcpv6
 		bool "Build with DHCPv6 support."
 		depends on IPV6 && PACKAGE_dnsmasq_full_dhcp
@@ -129,7 +135,8 @@ Package/dnsmasq-dhcpv6/conffiles = $(Package/dnsmasq/conffiles)
 Package/dnsmasq-full/conffiles = $(Package/dnsmasq/conffiles)
 
 TARGET_CFLAGS += -flto
-TARGET_LDFLAGS += -flto=jobserver
+TARGET_LDFLAGS += -flto=jobserver \
+	$(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dbus),-ldbus-1,)
 
 COPTS = -DHAVE_UBUS -DHAVE_POLL_H \
 	$(if $(CONFIG_IPV6),,-DNO_IPV6)
@@ -140,6 +147,7 @@ endif
 
 ifeq ($(BUILD_VARIANT),full)
 	COPTS += $(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dhcp),,-DNO_DHCP) \
+		$(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dbus),-DHAVE_DBUS,) \
 		$(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dhcpv6),,-DNO_DHCP6) \
 		$(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dnssec),-DHAVE_DNSSEC) \
 		$(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_auth),,-DNO_AUTH) \
@@ -191,6 +199,10 @@ $(call Package/dnsmasq/install,$(1))
 ifneq ($(CONFIG_PACKAGE_dnsmasq_full_dnssec),)
 	$(INSTALL_DIR) $(1)/usr/share/dnsmasq
 	$(INSTALL_CONF) $(PKG_BUILD_DIR)/trust-anchors.conf $(1)/usr/share/dnsmasq
+endif
+ifneq ($(CONFIG_PACKAGE_dnsmasq_full_dbus),)
+	$(INSTALL_DIR) $(1)/usr/share/dbus-1/system.d
+	$(INSTALL_CONF) $(PKG_BUILD_DIR)/dbus/dnsmasq.conf $(1)/usr/share/dbus-1/system.d/dnsmasq.conf
 endif
 endef
 
