@@ -272,6 +272,7 @@ define Package/wpad-basic
 $(call Package/wpad/Default,$(1))
   TITLE+= (WPA-PSK, 11r, 11w)
   VARIANT:=wpad-basic
+  $(if $(CONFIG_PACKAGE_wpa-supplicant-dbus),DEPENDS+=+dbus,)
 endef
 
 define Package/wpad-basic/description
@@ -618,7 +619,10 @@ endef
 define Package/hostapd-common/install
 	$(INSTALL_DIR) $(1)/etc/capabilities $(1)/etc/rc.button $(1)/etc/hotplug.d/ieee80211 $(1)/etc/init.d $(1)/lib/netifd  $(1)/usr/share/acl.d
 	$(INSTALL_DATA) ./files/hostapd.sh $(1)/lib/netifd/hostapd.sh
-	$(INSTALL_BIN) ./files/wpad.init $(1)/etc/init.d/wpad
+	$(if $(CONFIG_PACKAGE_wpa-supplicant-dbus), \
+	$(INSTALL_BIN) ./files/wpad-dbus.init $(1)/etc/init.d/wpad \
+	,$(INSTALL_BIN) ./files/wpad.init $(1)/etc/init.d/wpad)
+	
 	$(INSTALL_BIN) ./files/wps-hotplug.sh $(1)/etc/rc.button/wps
 	$(INSTALL_DATA) ./files/wpad_acl.json $(1)/usr/share/acl.d
 	$(INSTALL_DATA) ./files/wpad.json $(1)/etc/capabilities
@@ -666,10 +670,16 @@ Package/wpa-supplicant-basic/install = $(Package/wpa-supplicant/install)
 Package/wpa-supplicant-mini/install = $(Package/wpa-supplicant/install)
 Package/wpa-supplicant-p2p/install = $(Package/wpa-supplicant/install)
 Package/wpa-supplicant-openssl/install = $(Package/wpa-supplicant/install)
-Package/wpa-supplicant-dbus/install = $(Package/wpa-supplicant/install)
 Package/wpa-supplicant-wolfssl/install = $(Package/wpa-supplicant/install)
 Package/wpa-supplicant-mesh-openssl/install = $(Package/wpa-supplicant/install)
 Package/wpa-supplicant-mesh-wolfssl/install = $(Package/wpa-supplicant/install)
+
+define Package/wpa-supplicant-dbus/install
+	$(call Install/supplicant,$(1))
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wpa_supplicant/wpa_supplicant $(1)/usr/sbin/
+	$(INSTALL_DIR) $(1)/usr/share/dbus-1/system.d
+	$(INSTALL_BIN) $(PKG_BUILD_DIR)/wpa_supplicant/dbus/dbus-wpa_supplicant.conf $(1)/usr/share/dbus-1/system.d/wpa_supplicant.conf
+endef
 
 ifneq ($(LOCAL_TYPE),hostapd)
   define Package/wpa-cli/install

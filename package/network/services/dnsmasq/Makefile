@@ -147,7 +147,7 @@ endif
 
 ifeq ($(BUILD_VARIANT),full)
 	COPTS += $(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dhcp),,-DNO_DHCP) \
-		$(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dbus),-DHAVE_DBUS,) \
+		$(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dbus),-DHAVE_DBUS) \
 		$(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dhcpv6),,-DNO_DHCP6) \
 		$(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_dnssec),-DHAVE_DNSSEC) \
 		$(if $(CONFIG_PACKAGE_dnsmasq_$(BUILD_VARIANT)_auth),,-DNO_AUTH) \
@@ -174,8 +174,11 @@ define Package/dnsmasq/install
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./files/dhcp.conf $(1)/etc/config/dhcp
 	$(INSTALL_CONF) ./files/dnsmasq.conf $(1)/etc/dnsmasq.conf
+	# We don't need init script when network manager is working!
+ifeq ($(CONFIG_PACKAGE_dnsmasq_full_dbus),)
 	$(INSTALL_DIR) $(1)/etc/init.d
 	$(INSTALL_BIN) ./files/dnsmasq.init $(1)/etc/init.d/dnsmasq
+endif
 	$(INSTALL_DIR) $(1)/etc/hotplug.d/dhcp
 	$(INSTALL_DIR) $(1)/etc/hotplug.d/neigh
 	$(INSTALL_DIR) $(1)/etc/hotplug.d/ntp
