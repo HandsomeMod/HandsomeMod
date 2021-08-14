@@ -61,13 +61,13 @@ index 92795918b..6e25c6e8e 100644
 +        #size-cells = <0>;
 +
 +        /* Parallel bus endpoint */
-+        csi_from_ov2640: endpoint {
-+            remote-endpoint = <&ov2640_to_csi>;
-+            bus-width = <10>;
-+           // data-shift = <2>;
-+            hsync-active = <0>; /* Active low */
++        csi_from_ov5640: endpoint {
++            remote-endpoint = <&ov5640_to_csi>;
++            bus-width = <8>;
++            data-shift = <2>;
++            hsync-active = <1>; /* Active high */
 +            vsync-active = <0>; /* Active low */
-+           // data-active = <1>;  /* Active high */
++            data-active = <1>;  /* Active high */
 +            pclk-sample = <1>;  /* Rising */
 +        };
 +    };
@@ -76,9 +76,9 @@ index 92795918b..6e25c6e8e 100644
 +&i2c2 {
 +   status = "okay";
 +
-+   ov2640: camera@30 {
-+        compatible = "ovti,ov2640";
-+        reg = <0x30>;
++   ov5640: camera@3c {
++        compatible = "ovti,ov5640";
++        reg = <0x3c>;
 +        clocks = <&cam_xclk>;
 +        clock-names = "xclk";
 +
@@ -90,13 +90,13 @@ index 92795918b..6e25c6e8e 100644
 +        DVDD-supply = <&reg_cam_dvdd>;
 +
 +        port {
-+            ov2640_to_csi: endpoint {
-+                remote-endpoint = <&csi_from_ov2640>;
-+                bus-width = <10>;
-+                //data-shift = <2>;
-+                hsync-active = <0>; /* Active low */
++            ov5640_to_csi: endpoint {
++                remote-endpoint = <&csi_from_ov5640>;
++                bus-width = <8>;
++                data-shift = <2>;
++                hsync-active = <1>; /* Active high */
 +                vsync-active = <0>; /* Active low */
-+                //data-active = <1>;  /* Active high */
++                data-active = <1>;  /* Active high */
 +                pclk-sample = <1>;  /* Rising */
 +            };
 +        };
