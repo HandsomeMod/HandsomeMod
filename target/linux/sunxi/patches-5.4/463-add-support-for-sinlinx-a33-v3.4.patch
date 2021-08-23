@@ -481,8 +481,8 @@ index 000000000..9d196d57e
 +        		pinctrl-0 = <&edt_ft5x06_pins_a &edt_ft5x06_pins_b>;
 +		touchscreen-size-x = <1024>;
 +        		touchscreen-size-y = <600>;
-+        		touchscreen-inverted-x;
-+        		touchscreen-inverted-y;
++ 
++
 +	};
 +};
 +
