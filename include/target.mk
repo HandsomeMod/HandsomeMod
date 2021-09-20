@@ -21,12 +21,17 @@ DEFAULT_PACKAGES:=\
 	libustream-wolfssl \
 	logd \
 	mtd \
-	netifd \
 	opkg \
 	uci \
 	uclient-fetch \
 	urandom-seed \
 	urngd
+	
+ifneq ($(CONFIG_NETWORK_NETIFD),)
+DEFAULT_PACKAGES+=netifd
+else
+DEFAULT_PACKAGES+=network-manager ifupdown
+endif
 
 ifneq ($(CONFIG_SELINUX),)
 DEFAULT_PACKAGES+=busybox-selinux procd-selinux

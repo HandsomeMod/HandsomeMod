@@ -158,6 +158,24 @@ menu "Global build settings"
 		default y
 		help
 		  Enables IPv6 support in kernel (builtin) and packages.
+	
+	choice
+		prompt "Default Network Manager"
+		default NETWORK_NETIFD
+		help
+		  Select Network Manager you want use in your rootfs.
+		  Network Manager is highly wip,but it can have better support in wext-based wireless drivers.
+		  You CAN'T use uci or ubus to control network if network-manager is selected.
+	
+		config NETWORK_NETIFD
+			bool "Netifd"
+			select PACKAGE_netifd
+	
+		config NETWORK_NETWORK_MANAGER
+			bool "Network Manager"
+			select PACKAGE_network-manager
+			select PACKAGE_ifupdown
+	endchoice
 
 	comment "Stripping options"
 
