@@ -231,6 +231,7 @@ define Package/wpad/Default
   SUBMENU:=WirelessAPD
   TITLE:=IEEE 802.1x Auth/Supplicant
   DEPENDS:=$(DRV_DEPENDS) +hostapd-common +libubus
+  $(if $(CONFIG_PACKAGE_wpa-supplicant-dbus),DEPENDS+=+dbus,)
   USERID:=network=101:network=101
   URL:=http://hostap.epitest.fi/
   PROVIDES:=hostapd wpa-supplicant
@@ -272,7 +273,6 @@ define Package/wpad-basic
 $(call Package/wpad/Default,$(1))
   TITLE+= (WPA-PSK, 11r, 11w)
   VARIANT:=wpad-basic
-  $(if $(CONFIG_PACKAGE_wpa-supplicant-dbus),DEPENDS+=+dbus,)
 endef
 
 define Package/wpad-basic/description
