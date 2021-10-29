@@ -3,10 +3,11 @@ src-git luci https://git.openwrt.org/project/luci.git;openwrt-21.02
 src-git routing https://git.openwrt.org/feed/routing.git;openwrt-21.02
 src-git telephony https://git.openwrt.org/feed/telephony.git;openwrt-21.02
 
-# Handsome Feeds (still testing)
+# HandsomeFeeds
 src-git handsomefeed https://github.com/HandsomeMod/handsomefeed.git
 
 # Lean Feeds
 src-git extra https://github.com/HandsomeMod/extra.git
 
-# HMGL Feeds(Non-free)
+# Xorg Feeds (WIP)
+src-git xorg https://github.com/HandsomeMod/xorg.git
