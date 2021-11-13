@@ -27,10 +27,10 @@ DEFAULT_PACKAGES:=\
 	urandom-seed \
 	urngd
 	
-ifneq ($(CONFIG_NETWORK_NETIFD),)
-DEFAULT_PACKAGES+=netifd
-else
+ifeq ($(CONFIG_NETWORK_NETWORK_MANAGER),y)
 DEFAULT_PACKAGES+=network-manager ifupdown
+else
+DEFAULT_PACKAGES+=netifd 
 endif
 
 ifneq ($(CONFIG_SELINUX),)
