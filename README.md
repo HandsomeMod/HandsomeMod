@@ -1,12 +1,19 @@
-![HandsomeMod logo](include/logo.png)
+<p align="center"><img src="img/logo.png" /></p>
+<h1 align="center">HandsomeMod 21.03</h1>
+<h4 align="center">IOT Freedom For End-user!</h4>
+<p align="center"><img  height="200" width="300" src="img/wayland.png" /><img  height="200" width="300" src="img/xorg.png" /></p>
 
-# HandsomeMod Attila (21.03)
-## IOT Freedom For End-user!
+## Feature Overview
 
-### HandsomeMod is Not A router-only GNU/Linux distribution.
-### Right Now Router is not Our Mainly Support Target.
+- Opkg Packager Manager and Procd init.
+- Lower memory usage than Debian or some systemd-based linux.
+- Support Qt5 Gtk3 Xorg Wayland and lots of Graphics Stuff.
+- Support sound csi camera encoder&decoder drm on Allwinner platform.
+- Support librarys commonly use in embedded project.(opencv ncnn wiringpi etc)
+- Support Networkmanager and Connman. 
+- Just-enough Generic OS for embedded devices!
 
-This is the buildsystem for the HandsomeMod GNU/Linux distribution.
+## Building Firmware
 
 To build your own firmware you need a Linux, BSD or MacOSX system (case
 sensitive filesystem required). Cygwin is unsupported.
@@ -27,30 +34,28 @@ toolchain, target system & firmware packages.
 the cross-compile toolchain and then cross-compile the Linux kernel & all
 chosen applications for your target system.
 
+## Mainly Supporting Platform
+
+This means those socs can get better support than others.
+
+- Rapsberry pi
+- Allwinner Socs (linux mainline)
+- X86
+- Allwinner Socs (bsp kernel) (Planing)
+- Freescale I.MX6ULL Family (WIP)
+- Loongson64 Family (WIP)
+- Qualcomm MSM89xx Family (WIP) 
+
 ## Thanks
 
-The orginal code comes form openwrt 21.02.
+The orginal code comes form openwrt project.
 
 https://github.com/openwrt/openwrt
 
-## Project Goal
+## Warning
 
-- Create a ready-to-use lightweight linux distribution for single-board computer and IOT devices.
-
-- Bring package-manager to devices that has lower memory.
-
-- Maybe the first mainline-based IOT Solution?
-
-- A Simple distribution for IOT devices with screen.
-
-
-#  The Main Target Support By HandsomeMod
-
-- Rapsberry pies (BCM27xx)
-- Allwinner Socs （Sunxi）
-- Freescale I.MX6ULL Family
-- Loongson64 Family (5.10) WIP
-- Qualcomm MSM89xx Family (5.10) WIP
+* Now this project is not good enough for production environment.
+* Some packages may buggy and unusable.
 
 
 ## License
