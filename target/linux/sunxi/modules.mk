@@ -226,7 +226,7 @@ define KernelPackage/sun6i-csi
   KCONFIG:= CONFIG_VIDEO_SUN6I_CSI
   FILES:=$(LINUX_DIR)/drivers/media/platform/sunxi/sun6i-csi/sun6i-csi.ko
   AUTOLOAD:=$(call AutoProbe,sun6i-csi)
-  DEPENDS:=@TARGET_sunxi_cortexa7 @LINUX_5_4 +kmod-video-csi-core +kmod-video-videobuf2
+  DEPENDS:=@TARGET_sunxi_cortexa7 @LINUX_5_4 +kmod-video-csi-core +kmod-video-videobuf2 +kmod-video-videobuf2-dma-contig
 endef
 
 define KernelPackage/sun6i-csi/description
@@ -241,7 +241,7 @@ define KernelPackage/sun4i-csi
   KCONFIG:= CONFIG_VIDEO_SUN4I_CSI
   FILES:=$(LINUX_DIR)/drivers/media/platform/sunxi/sun4i-csi/sun4i-csi.ko
   AUTOLOAD:=$(call AutoProbe,sun4i-csi)
-  DEPENDS:=@TARGET_sunxi @LINUX_5_4 +kmod-video-csi-core +kmod-video-videobuf2
+  DEPENDS:=@TARGET_sunxi @LINUX_5_4 +kmod-video-csi-core +kmod-video-videobuf2 +kmod-video-videobuf2-dma-contig
 endef
 
 define KernelPackage/sun4i-csi/description
@@ -278,7 +278,7 @@ $(eval $(call KernelPackage,sunxi-cedarx))
 define KernelPackage/sunxi-cedrus
   SUBMENU:=Video Encoder/Decoder Support
   TITLE:=Allwinner Open-Source VPU Encoder/Decoder module
-  DEPENDS:=@TARGET_sunxi @LINUX_5_4 +kmod-video-core +kmod-video-videobuf2
+  DEPENDS:=@TARGET_sunxi @LINUX_5_4 +kmod-video-core +kmod-video-videobuf2 +kmod-video-videobuf2-dma-contig
   KCONFIG:= CONFIG_GENERIC_ALLOCATOR=y \
          CONFIG_STAGING_MEDIA=y \
          CONFIG_CMA_DEBUG=n \

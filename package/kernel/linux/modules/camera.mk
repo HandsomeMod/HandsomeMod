@@ -60,23 +60,37 @@ define KernelPackage/video-videobuf2
   KCONFIG:= \
 	CONFIG_VIDEOBUF2_CORE \
 	CONFIG_VIDEOBUF2_MEMOPS \
-	CONFIG_VIDEOBUF2_VMALLOC \
-	CONFIG_VIDEOBUF2_DMA_CONTIG
+	CONFIG_VIDEOBUF2_VMALLOC
   FILES:= \
 	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-common.ko \
 	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-v4l2.ko \
 	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-memops.ko \
-	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-vmalloc.ko \
-	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-dma-contig.ko
-  AUTOLOAD:=$(call AutoLoad,65,videobuf2-core videobuf2-v4l2 videobuf2-memops videobuf2-vmalloc videobuf2-dma-contig)
+	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-vmalloc.ko
+  AUTOLOAD:=$(call AutoLoad,65,videobuf2-core videobuf2-v4l2 videobuf2-memops videobuf2-vmalloc)
   $(call AddDepends/video)
 endef
 
 define KernelPackage/video-videobuf2/description
- Kernel modules that implements three basic types of media buffers.
+ Kernel modules that implements four basic types of media buffers.
 endef
 
 $(eval $(call KernelPackage,video-videobuf2))
+
+define KernelPackage/video-videobuf2-dma-contig
+  TITLE:=videobuf2 dma contig 
+  DEPENDS:=+kmod-dma-buf +kmod-video-videobuf2
+  KCONFIG:= CONFIG_VIDEOBUF2_DMA_CONTIG
+  FILES:= $(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-dma-contig.ko
+  AUTOLOAD:=$(call AutoLoad,65,videobuf2-dma-contig)
+  HIDDEN:=1
+  $(call AddDepends/video)
+endef
+
+define KernelPackage/video-videobuf2-dma-contig/description
+ Some stuff depends on this,but this cannot generate without those stuff.
+endef
+
+$(eval $(call KernelPackage,video-videobuf2-dma-contig))
 
 
 define KernelPackage/video-cpia2
