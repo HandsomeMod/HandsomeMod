@@ -45,3 +45,17 @@ define Package/wil6210-firmware/install
 	$(INSTALL_DATA) $(PKG_BUILD_DIR)/wil6210.brd $(1)/lib/firmware
 endef
 $(eval $(call BuildPackage,wil6210-firmware))
+
+Package/venus-firmware = $(call Package/firmware-default,venus firmware)
+define Package/venus-firmware/install
+	$(INSTALL_DIR) $(1)/lib/firmware/qcom/venus-1.8
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/qcom/venus-1.8/venus.* $(1)/lib/firmware/qcom/venus-1.8
+endef
+$(eval $(call BuildPackage,venus-firmware))
+
+Package/adreno-3xx-firmware = $(call Package/firmware-default,adreno a3xx gpu firmware)
+define Package/adreno-3xx-firmware/install
+	$(INSTALL_DIR) $(1)/lib/firmware/qcom/
+	$(INSTALL_DATA) $(PKG_BUILD_DIR)/qcom/a300* $(1)/lib/firmware/qcom
+endef
+$(eval $(call BuildPackage,adreno-3xx-firmware))
