@@ -38,13 +38,13 @@ chosen applications for your target system.
 
 This means those socs can get better support than others.
 
-- Rapsberry pi
 - Allwinner Socs (linux mainline)
+- Qualcomm MSM89xx Family
+- Rapsberry pi
 - X86
-- Allwinner Socs (bsp kernel) (Planing)
 - Freescale I.MX6ULL Family (WIP)
 - Loongson64 Family (WIP)
-- Qualcomm MSM89xx Family (WIP) 
+- Allwinner Socs (bsp kernel) (Planing)
 
 ## Thanks
 
