@@ -1,6 +1,6 @@
 PKG_DRIVERS += \
 	ath ath5k ath6kl ath6kl-sdio ath6kl-usb ath9k ath9k-common ath9k-htc ath10k \
-	carl9170 owl-loader ar5523 wil6210
+	carl9170 owl-loader ar5523 wil6210 wcn36xx
 
 PKG_CONFIG_DEPENDS += \
 	CONFIG_PACKAGE_ATH_DEBUG \
@@ -22,7 +22,8 @@ ifdef CONFIG_PACKAGE_MAC80211_DEBUGFS
 	CARL9170_DEBUGFS \
 	ATH5K_DEBUG \
 	ATH6KL_DEBUG \
-	WIL6210_DEBUGFS
+	WIL6210_DEBUGFS \
+  WCN36XX_DEBUGFS
 endif
 
 ifdef CONFIG_PACKAGE_MAC80211_TRACING
@@ -71,6 +72,8 @@ config-$(call config_package,carl9170) += CARL9170
 config-$(call config_package,ar5523) += AR5523
 
 config-$(call config_package,wil6210) += WIL6210
+
+config-$(call config_package,wcn36xx) += WCN36XX
 
 define KernelPackage/ath/config
   if PACKAGE_kmod-ath
@@ -320,4 +323,13 @@ define KernelPackage/wil6210
   DEPENDS+= @PCI_SUPPORT +kmod-mac80211 +wil6210-firmware
   FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/ath/wil6210/wil6210.ko
   AUTOLOAD:=$(call AutoProbe,wil6210)
+endef
+
+# missing firmware
+define KernelPackage/wcn36xx
+  $(call KernelPackage/mac80211/Default)
+  TITLE:=Qualcomm Atheros WCN3660/3680 support
+  DEPENDS+= +kmod-mac80211 +kmod-qcom-wcnss
+  FILES:=$(PKG_BUILD_DIR)/drivers/net/wireless/ath/wcn36xx/wcn36xx.ko
+  AUTOLOAD:=$(call AutoProbe,wcn36xx)
 endef
