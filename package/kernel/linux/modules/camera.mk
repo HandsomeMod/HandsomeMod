@@ -67,6 +67,10 @@ define KernelPackage/video-videobuf2
 	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-memops.ko \
 	$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-vmalloc.ko
   AUTOLOAD:=$(call AutoLoad,65,videobuf2-core videobuf2-v4l2 videobuf2-memops videobuf2-vmalloc)
+ifneq ($(wildcard $(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-dma-sg.ko),)
+  FILES+=$(LINUX_DIR)/drivers/media/common/videobuf2/videobuf2-dma-sg.ko
+  AUTOLOAD+=$(call AutoLoad,65,videobuf2-dma-sg)
+endif
   $(call AddDepends/video)
 endef
 
