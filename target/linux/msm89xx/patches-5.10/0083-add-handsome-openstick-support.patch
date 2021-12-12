@@ -1,0 +1,384 @@
+From 02879c6576593bc0f28bb5cf228d865093283196 Mon Sep 17 00:00:00 2001
+From: HandsomeYingyan <handsomeyingyan@gmail.com>
+Date: Sun, 12 Dec 2021 12:24:54 +0800
+Subject: [PATCH] arm64:dts : add support for Handsome Openstick
+
+---
+ arch/arm64/boot/dts/qcom/Makefile             |   1 +
+ .../dts/qcom/msm8916-handsome-openstick.dts   | 353 ++++++++++++++++++
+ 2 files changed, 354 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/qcom/msm8916-handsome-openstick.dts
+
+diff --git a/arch/arm64/boot/dts/qcom/Makefile b/arch/arm64/boot/dts/qcom/Makefile
+index 170e29487..62246f851 100644
+--- a/arch/arm64/boot/dts/qcom/Makefile
++++ b/arch/arm64/boot/dts/qcom/Makefile
+@@ -28,6 +28,7 @@ dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-samsung-j5nlte.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-wingtech-wt86518.dtb msm8916-wingtech-wt86518-modem.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-wingtech-wt86528.dtb msm8916-wingtech-wt86528-modem.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-wingtech-wt88047.dtb msm8916-wingtech-wt88047-modem.dtb
++dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-handsome-openstick.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= msm8992-bullhead-rev-101.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= msm8992-msft-lumia-octagon-talkman.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= msm8992-xiaomi-libra.dtb
+diff --git a/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick.dts b/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick.dts
+new file mode 100644
+index 000000000..b5c2d46f9
+--- /dev/null
++++ b/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick.dts
+@@ -0,0 +1,353 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (C) 2021 HandsomeYingyan <handsomeyingyan@gmail.com>
++ */
++
++/dts-v1/;
++
++#include "msm8916-pm8916.dtsi"
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++#include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
++#include <dt-bindings/pinctrl/qcom,pmic-mpp.h>
++#include <dt-bindings/sound/apq8016-lpass.h>
++
++
++/ {
++	model = "Handsome Openstick";
++	compatible = "handsome,openstick", "qcom,msm8916";
++
++	aliases {
++		serial0 = &blsp1_uart2;
++		usid0 = &pm8916_0;
++	};
++
++	chosen {
++		stdout-path = "serial0";
++	};
++
++	reserved-memory {
++		/delete-node/ wcnss@89300000;
++		/delete-node/ venus@89900000;
++		
++		mpss_mem: gps_mem: mpss@86800000 {
++			status = "disabled";
++			reg = <0x0 0x86800000 0x0 0x5100000>;
++			no-map;
++		};
++
++		wcnss_mem: wcnss@8b900000 {
++			reg = <0x0 0x8b900000 0x0 0x600000>;
++			no-map;
++		};
++
++		venus_mem: venus@8bf00000 {
++			reg = <0x0 0x8bf00000 0x0 0x600000>;
++			no-map;
++		};
++	};
++
++	usb_id: usb-id {
++		compatible = "linux,extcon-usb-gpio";
++		id-gpio = <&msmgpio 121 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&usb_id_default>;
++	};
++
++	gpio-keys {
++		compatible = "gpio-keys";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		autorepeat;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&gpio_keys_default>;
++		label = "GPIO Buttons";
++
++		reset {
++			label = "Restart";
++			gpios = <&msmgpio 37 GPIO_ACTIVE_LOW>;
++			linux,code = <KEY_RESTART>;
++		};
++	};
++
++	leds {
++		pinctrl-names = "default";
++		pinctrl-0 = <&msmgpio_leds>;
++
++		compatible = "gpio-leds";
++
++		wifi {
++			label = "blue:wifi";
++			gpios = <&msmgpio 20 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "phy0tx";
++			default-state = "off";
++		};
++
++		led_internet: internet {
++			label = "green:internet";
++			gpios = <&msmgpio 21 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++		os {
++			label = "red:os";
++			gpios = <&msmgpio 22 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "heartbeat";
++			default-state = "on";
++		};
++
++		4g_l3 {
++			label = "4g:l3";
++			gpios = <&msmgpio 68 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++		
++		sim_sel {
++			label = "sim:sel";
++			gpios = <&msmgpio 2 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++		sim_en {
++			label = "sim:en";
++			gpios = <&msmgpio 1 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++
++	};
++};
++
++/*
++ * The modem firmware sends a "query_size" memshare request for client ID 1,
++ * but basically does not do anything with it. GPS works only if:
++ *   - Memshare is not present or
++ *   - Memshare replies to the request with an error
++ * Overall it seems pointless to enable memshare for this device.
++ */
++ 
++&memshare {
++	status = "disabled";
++};
++
++&blsp_dma {
++	status = "okay";
++};
++
++&blsp1_uart2 {
++	status = "okay";
++	label = "LS-UART1";
++};
++
++&lpass {
++	status = "okay";
++};
++
++&mdss {
++	status = "disabled";
++};
++
++&pm8916_resin {
++	status = "okay";
++	linux,code = <KEY_VOLUMEDOWN>;
++};
++
++&pronto {
++	status = "okay";
++};
++
++&sdhc_1 {
++	status = "okay";
++
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&sdc1_clk_on &sdc1_cmd_on &sdc1_data_on>;
++	pinctrl-1 = <&sdc1_clk_off &sdc1_cmd_off &sdc1_data_off>;
++};
++
++&sound {
++	status = "disabled";
++};
++
++&usb {
++	status = "okay";
++	extcon = <&usb_id>, <&usb_id>;
++
++	pinctrl-names = "default", "device";
++	pinctrl-0 = <&usb_sw_sel_pm &usb_hub_reset_pm>;
++	pinctrl-1 = <&usb_sw_sel_pm_device &usb_hub_reset_pm_device>;
++};
++
++&usb_hs_phy {
++	extcon = <&usb_id>;
++};
++
++&smd_rpm_regulators {
++	vdd_l1_l2_l3-supply = <&pm8916_s3>;
++	vdd_l4_l5_l6-supply = <&pm8916_s4>;
++	vdd_l7-supply = <&pm8916_s4>;
++
++	s3 {
++		regulator-min-microvolt = <1200000>;
++		regulator-max-microvolt = <1300000>;
++	};
++
++	s4 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <2100000>;
++	};
++
++	l1 {
++		regulator-min-microvolt = <1225000>;
++		regulator-max-microvolt = <1225000>;
++	};
++
++	l2 {
++		regulator-min-microvolt = <1200000>;
++		regulator-max-microvolt = <1200000>;
++	};
++
++	l4 {
++		regulator-min-microvolt = <2050000>;
++		regulator-max-microvolt = <2050000>;
++	};
++
++	l5 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++	};
++
++	l6 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++	};
++
++	l7 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++	};
++
++	l8 {
++		regulator-min-microvolt = <2850000>;
++		regulator-max-microvolt = <2900000>;
++	};
++
++	l9 {
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++	};
++
++	l10 {
++		regulator-min-microvolt = <2700000>;
++		regulator-max-microvolt = <2800000>;
++	};
++
++	l11 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <2950000>;
++		regulator-allow-set-load;
++		regulator-system-load = <200000>;
++	};
++
++	l12 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <2950000>;
++	};
++
++	l13 {
++		regulator-min-microvolt = <3075000>;
++		regulator-max-microvolt = <3075000>;
++	};
++
++	l14 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <3300000>;
++	};
++
++	l15 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <3300000>;
++	};
++
++	l16 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <3300000>;
++	};
++
++	l17 {
++		regulator-min-microvolt = <2850000>;
++		regulator-max-microvolt = <2850000>;
++		regulator-always-on;
++	};
++
++	l18 {
++		regulator-min-microvolt = <2700000>;
++		regulator-max-microvolt = <2700000>;
++	};
++};
++
++&msmgpio {
++	msmgpio_leds: msmgpio-leds {
++		pins = "gpio1","gpio2","gpio68","gpio20","gpio21","gpio22";
++		function = "gpio";
++
++		bias-disabled;
++	};
++
++	usb_id_default: usb-id-default {
++		pins = "gpio121";
++		function = "gpio";
++
++		drive-strength = <8>;
++		input-enable;
++		bias-pull-up;
++	};
++
++	gpio_keys_default: gpio_keys_default {
++		pins = "gpio37";
++		function = "gpio";
++
++		drive-strength = <8>;
++		input-enable;
++		bias-pull-up;
++	};
++};
++
++&pm8916_gpios {
++
++	usb_hub_reset_pm: usb-hub-reset-pm {
++		pins = "gpio3";
++		function = PMIC_GPIO_FUNC_NORMAL;
++
++		input-disable;
++		output-high;
++	};
++
++	usb_hub_reset_pm_device: usb-hub-reset-pm-device {
++		pins = "gpio3";
++		function = PMIC_GPIO_FUNC_NORMAL;
++
++		output-low;
++	};
++
++	usb_sw_sel_pm: usb-sw-sel-pm {
++		pins = "gpio4";
++		function = PMIC_GPIO_FUNC_NORMAL;
++
++		power-source = <PM8916_GPIO_VPH>;
++		input-disable;
++		output-high;
++	};
++
++	usb_sw_sel_pm_device: usb-sw-sel-pm-device {
++		pins = "gpio4";
++		function = PMIC_GPIO_FUNC_NORMAL;
++
++		power-source = <PM8916_GPIO_VPH>;
++		input-disable;
++		output-low;
++	};
++};
++
++// HACK : must includes here
++#include "msm8916-modem.dtsi"
+-- 
+2.34.1
