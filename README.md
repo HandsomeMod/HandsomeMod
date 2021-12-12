@@ -48,7 +48,10 @@ This means those socs can get better support than others.
 
 ## Thanks
 
-The orginal code comes form openwrt project.
+HandsomeMod based on OpenWrt project.
+
+	* branch : openwrt-21.02
+	* commit: c67509efd7d0c43eb3f622f06c8a31aa28d22f6e
 
 https://github.com/openwrt/openwrt
 
