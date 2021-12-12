@@ -56,6 +56,9 @@ define KernelPackage/bluetooth
 	$(LINUX_DIR)/drivers/bluetooth/hci_uart.ko \
 	$(LINUX_DIR)/drivers/bluetooth/btusb.ko \
 	$(LINUX_DIR)/drivers/bluetooth/btintel.ko
+ifneq ($(wildcard $(LINUX_DIR)/drivers/bluetooth/btqca.ko),)
+  FILES+=$(LINUX_DIR)/drivers/bluetooth/btqca.ko
+endif
   AUTOLOAD:=$(call AutoProbe,bluetooth rfcomm bnep hidp hci_uart btusb)
 endef
 
