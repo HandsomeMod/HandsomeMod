@@ -1,15 +1,12 @@
+# SPDX-License-Identifier: GPL-2.0-only
 #
 # Copyright (C) 2020-2021 HandsomeMod Project
-#
-# This is free software, licensed under the GNU General Public License v2.
-# See /LICENSE for more information.
 #
 
 include $(TOPDIR)/rules.mk
 include $(INCLUDE_DIR)/image.mk
 
 DEVICE_VARS := QCOM_DTS QCOM_DTS_DIR
-
 
 define mkBootimg
 mkbootimg --base $(1) \
@@ -23,19 +20,6 @@ mkbootimg --base $(1) \
 	--kernel $(9) \
 	-o $(10)
 endef
-
-# May Not Boot Without Ramdisk
-define mkBootimg_noRamdisk
-mkbootimg --base $(1) \
-	--kernel_offset $(2) \
-	--tags_offset $(3) \
-	--pagesize $(4) \
-	--second_offset $(5) \
-	--cmdline $(6) \
-	--kernel $(7) \
-	-o $(8)
-endef
-
 
 # Step1 Build the Bootimg
 # Fake Ramdisk For Now
