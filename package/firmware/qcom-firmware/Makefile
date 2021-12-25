@@ -19,7 +19,8 @@ PKG_MIRROR_HASH:=51b5a788f17ffd781417a50ebaa08e0aafa90884f8b1d0f8890dbaded19ee74
 
 PKG_MAINTAINER:=Handsomeyingyan <handsomeyingyan@gmail.com>
 
-_WCNSS_NV_NAME := WCNSS_qcom_wlan_nv.bin
+# Why mba.mbn has an ELF header?
+STRIP:=:
 
 include $(INCLUDE_DIR)/package.mk
 
