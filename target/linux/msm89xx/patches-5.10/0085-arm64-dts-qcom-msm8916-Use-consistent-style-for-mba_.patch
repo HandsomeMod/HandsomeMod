@@ -1,0 +1,32 @@
+From fd34f85e1698536c79756ca6fae588cc0faadbfe Mon Sep 17 00:00:00 2001
+From: Stephan Gerhold <stephan@gerhold.net>
+Date: Thu, 14 Oct 2021 20:49:40 +0200
+Subject: [PATCH 2/7] arm64: dts: qcom: msm8916: Use consistent style for
+ &mba_mem
+
+All other entries in reserved-memory list "reg"	before "no-map"
+and prefix the 0 with "0x". Make this consistent to make the list
+a bit easier to read.
+
+Signed-off-by: Stephan Gerhold <stephan@gerhold.net>
+---
+ arch/arm64/boot/dts/qcom/msm8916.dtsi | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/msm8916.dtsi b/arch/arm64/boot/dts/qcom/msm8916.dtsi
+index 0ea23b133..2a3500f2d 100644
+--- a/arch/arm64/boot/dts/qcom/msm8916.dtsi
++++ b/arch/arm64/boot/dts/qcom/msm8916.dtsi
+@@ -94,8 +94,8 @@ venus_mem: venus@89900000 {
+ 		};
+ 
+ 		mba_mem: mba@8ea00000 {
++			reg = <0x0 0x8ea00000 0x0 0x100000>;
+ 			no-map;
+-			reg = <0 0x8ea00000 0 0x100000>;
+ 		};
+ 	};
+ 
+-- 
+2.34.1
+

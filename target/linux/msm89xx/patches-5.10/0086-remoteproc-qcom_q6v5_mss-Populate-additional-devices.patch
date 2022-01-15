@@ -1,0 +1,46 @@
+From 7a04f1e3752292d89d3793c4d1977aef15c5a7d3 Mon Sep 17 00:00:00 2001
+From: Stephan Gerhold <stephan@gerhold.net>
+Date: Wed, 9 Jun 2021 17:03:35 +0200
+Subject: [PATCH 3/7] remoteproc: qcom_q6v5_mss: Populate additional devices
+ from device tree
+
+Some devices without own memory resources could be placed anywhere in the
+device tree but they logically belong to the modem remote processor. Make
+it possible to probe them when defined under the mpss device tree node
+by calling of_platform_populate().
+
+Signed-off-by: Stephan Gerhold <stephan@gerhold.net>
+---
+ drivers/remoteproc/qcom_q6v5_mss.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/drivers/remoteproc/qcom_q6v5_mss.c b/drivers/remoteproc/qcom_q6v5_mss.c
+index ac289e080..4caec6589 100644
+--- a/drivers/remoteproc/qcom_q6v5_mss.c
++++ b/drivers/remoteproc/qcom_q6v5_mss.c
+@@ -1783,8 +1783,14 @@ static int q6v5_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		goto remove_sysmon_subdev;
+ 
++	ret = of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
++	if (ret)
++		goto remove_rproc;
++
+ 	return 0;
+ 
++remove_rproc:
++	rproc_del(rproc);
+ remove_sysmon_subdev:
+ 	qcom_remove_sysmon_subdev(qproc->sysmon);
+ remove_subdevs:
+@@ -1806,6 +1812,7 @@ static int q6v5_remove(struct platform_device *pdev)
+ 	struct q6v5 *qproc = platform_get_drvdata(pdev);
+ 	struct rproc *rproc = qproc->rproc;
+ 
++	of_platform_depopulate(&pdev->dev);
+ 	rproc_del(rproc);
+ 
+ 	qcom_remove_sysmon_subdev(qproc->sysmon);
+-- 
+2.34.1
+
