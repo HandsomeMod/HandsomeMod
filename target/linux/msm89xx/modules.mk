@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Copyright (C) 2020-2021 HandsomeMod Project
+# Copyright (C) 2020-2022 HandsomeMod Project
 
 define KernelPackage/qcom-bluetooth
     SUBMENU:=$(OTHER_MENU)
@@ -63,7 +63,7 @@ $(eval $(call KernelPackage,qcom-venus))
 define KernelPackage/qcom-wcnss
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Qualcomm wireless connectivity subsystem support
-  DEPENDS:=@TARGET_msm89xx +kmod-qcom-remoteproc +qcom-msm8916-wcnss-firmware
+  DEPENDS:=@TARGET_msm89xx +kmod-qcom-remoteproc
   KCONFIG:= \
          CONFIG_QCOM_WCNSS_PIL \
          CONFIG_QCOM_WCNSS_CTRL
@@ -78,7 +78,7 @@ $(eval $(call KernelPackage,qcom-wcnss))
 define KernelPackage/qcom-remoteproc
   SUBMENU:=$(OTHER_MENU)
   TITLE:=Qualcomm remoteproc support
-  DEPENDS:=@TARGET_msm89xx
+  DEPENDS:=@TARGET_msm89xx +kmod-dma-buf
   KCONFIG:= \
          CONFIG_QCOM_PIL_INFO \
          CONFIG_RPMSG_QCOM_GLINK \
@@ -116,7 +116,7 @@ $(eval $(call KernelPackage,qcom-remoteproc))
 define KernelPackage/qcom-modem
   SUBMENU:=$(NETWORK_DEVICES_MENU)
   TITLE:=Qualcomm modem subsystem support
-  DEPENDS:=@TARGET_msm89xx +kmod-qcom-remoteproc
+  DEPENDS:=@TARGET_msm89xx +kmod-qcom-remoteproc +qrtr-ns +rpmsgexport +rmtfs
   KCONFIG:= \
          CONFIG_RMNET \
          CONFIG_QCOM_BAM_DMUX \
@@ -197,7 +197,6 @@ define KernelPackage/qcom-drm
     DEPENDS:=@TARGET_msm89xx +kmod-backlight +adreno-3xx-firmware +kmod-backlight-pwm +kmod-drm +kmod-drm-ttm +kmod-drm-kms-helper +kmod-lib-crc-ccitt +kmod-qcom-remoteproc
     KCONFIG:= \
          CONFIG_DRM_PANEL=y \
-         CONFIG_RESET_CONTROLLER=y \
          CONFIG_DRM_MSM \
          CONFIG_DRM_MSM_HDMI_HDCP=y \
          CONFIG_DRM_MSM_DP=y \
@@ -214,6 +213,12 @@ define KernelPackage/qcom-drm
          CONFIG_DRM_PANEL_SIMPLE \
          CONFIG_DRM_DISPLAY_CONNECTOR \
          CONFIG_DRM_LEGACY=y \
+         CONFIG_DRM_BRIDGE=y \
+         CONFIG_DRM_PANEL_ORIENTATION_QUIRKS=y \
+         CONFIG_DRM_PANEL_BRIDGE=y \
+         CONFIG_DRM_FBDEV_EMULATION=y \
+         CONFIG_DRM_FBDEV_OVERALLOC=100 \
+         CONFIG_DRM_GEM_SHMEM_HELPER=y \
          CONFIG_DRM_PANEL_ASUS_Z00T_TM5P5_NT35596=n \
          CONFIG_DRM_PANEL_BOE_HIMAX8279D=n \
          CONFIG_DRM_PANEL_BOE_TV101WUM_NL6=n \
@@ -231,7 +236,7 @@ define KernelPackage/qcom-drm
          $(LINUX_DIR)/drivers/gpu/drm/panel/panel-simple.ko \
          $(LINUX_DIR)/drivers/gpu/drm/msm/msm.ko \
          $(LINUX_DIR)/drivers/gpu/drm/bridge/display-connector.ko
-    AUTOLOAD:=$(call AutoLoad,08,msm display-connector panel-simple)
+    AUTOLOAD:=$(call AutoLoad,70,panel-simple display-connector msm)
 endef
 
 define KernelPackage/qcom-drm/description
@@ -268,7 +273,7 @@ define KernelPackage/qcom-msm8916-panel
          $(LINUX_DIR)/drivers/gpu/drm/panel/msm8916-generated/panel-wingtech-sharp-r69431.ko \
          $(LINUX_DIR)/drivers/gpu/drm/panel/msm8916-generated/panel-wingtech-tianma-hx8394d.ko \
          $(LINUX_DIR)/drivers/gpu/drm/panel/msm8916-generated/panel-wingtech-yassy-ili9881.ko
-    AUTOLOAD:=$(call AutoLoad,10,panel-wingtech-auo-r61308 panel-wingtech-ebbg-otm1285a panel-wingtech-sharp-r69431 panel-wingtech-tianma-hx8394d panel-wingtech-yassy-ili9881)
+    AUTOLOAD:=$(call AutoLoad,50,panel-wingtech-auo-r61308 panel-wingtech-ebbg-otm1285a panel-wingtech-sharp-r69431 panel-wingtech-tianma-hx8394d panel-wingtech-yassy-ili9881)
 endef
 
 define KernelPackage/qcom-msm8916-panel/description
