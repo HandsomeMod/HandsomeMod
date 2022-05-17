@@ -1,0 +1,642 @@
+From 233c004f692117ea3107e7ee1128dd31bca9ff43 Mon Sep 17 00:00:00 2001
+From: HandsomeYingyan <handsomeyingyan@gmail.com>
+Date: Mon, 16 May 2022 15:59:24 +0800
+Subject: [PATCH] arm64:dts: add support for Handsome Openstick Family
+
+---
+ arch/arm64/boot/dts/qcom/Makefile             |   4 +
+ .../msm8916-handsome-openstick-common.dtsi    | 226 +++++++++++
+ .../qcom/msm8916-handsome-openstick-sp970.dts |  84 +++++
+ .../msm8916-handsome-openstick-ufi001b.dts    |  89 +++++
+ .../msm8916-handsome-openstick-ufi001c.dts    | 101 +++++
+ .../qcom/msm8916-handsome-openstick-uz801.dts |  76 ++++
+ 7 files changed, 933 insertions(+)
+ create mode 100644 arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-common.dtsi
+ create mode 100644 arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-sp970.dts
+ create mode 100644 arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-ufi001b.dts
+ create mode 100644 arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-ufi001c.dts
+ create mode 100644 arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-uz801.dts
+
+diff --git a/arch/arm64/boot/dts/qcom/Makefile b/arch/arm64/boot/dts/qcom/Makefile
+index 170e29487..aefa0ace8 100644
+--- a/arch/arm64/boot/dts/qcom/Makefile
++++ b/arch/arm64/boot/dts/qcom/Makefile
+@@ -28,6 +28,10 @@ dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-samsung-j5nlte.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-wingtech-wt86518.dtb msm8916-wingtech-wt86518-modem.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-wingtech-wt86528.dtb msm8916-wingtech-wt86528-modem.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-wingtech-wt88047.dtb msm8916-wingtech-wt88047-modem.dtb
++dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-handsome-openstick-ufi001b.dtb
++dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-handsome-openstick-ufi001c.dtb
++dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-handsome-openstick-sp970.dtb
++dtb-$(CONFIG_ARCH_QCOM)	+= msm8916-handsome-openstick-uz801.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= msm8992-bullhead-rev-101.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= msm8992-msft-lumia-octagon-talkman.dtb
+ dtb-$(CONFIG_ARCH_QCOM)	+= msm8992-xiaomi-libra.dtb
+diff --git a/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-common.dtsi b/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-common.dtsi
+new file mode 100644
+index 000000000..3c2a8964d
+--- /dev/null
++++ b/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-common.dtsi
+@@ -0,0 +1,226 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (C) 2021-2022 HandsomeYingyan <handsomeyingyan@gmail.com>
++ *
++ */
++
++/dts-v1/;
++
++#include "msm8916-pm8916.dtsi"
++#include <dt-bindings/gpio/gpio.h>
++#include <dt-bindings/input/input.h>
++#include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
++#include <dt-bindings/pinctrl/qcom,pmic-mpp.h>
++#include <dt-bindings/sound/apq8016-lpass.h>
++
++
++/ {
++	model = "Handsome Openstick Generic";
++	compatible = "handsome,openstick", "qcom,msm8916";
++
++	aliases {
++		serial0 = &blsp1_uart2;
++	};
++
++	chosen {
++		stdout-path = "serial0";
++	};
++
++	reserved-memory {
++		/delete-node/ wcnss@89300000;
++		/delete-node/ venus@89900000;
++		
++		mpss_mem: gps_mem: mpss@86800000 {
++			status = "disabled";
++			reg = <0x0 0x86800000 0x0 0x5500000>;
++			no-map;
++		};
++
++		wcnss_mem: wcnss@8df00000 {
++			reg = <0x0 0x8df00000 0x0 0x600000>;
++			no-map;
++		};
++
++		venus_mem: venus@8e500000 {
++			reg = <0x0 0x8e500000 0x0 0x500000>;
++			no-map;
++		};
++	};
++
++	usb_id: usb-id {
++		compatible = "linux,extcon-usb-gpio";
++		id-gpio = <&msmgpio 110 GPIO_ACTIVE_HIGH>;
++		pinctrl-names = "default";
++		pinctrl-0 = <&usb_id_default>;
++	};
++
++};
++
++/*
++ * The modem firmware sends a "query_size" memshare request for client ID 1,
++ * but basically does not do anything with it. GPS works only if:
++ *   - Memshare is not present or
++ *   - Memshare replies to the request with an error
++ * Overall it seems pointless to enable memshare for this device.
++ */
++ 
++&memshare {
++	status = "disabled";
++};
++
++&blsp_dma {
++	status = "okay";
++};
++
++&blsp1_uart2 {
++	status = "okay";
++};
++
++&lpass {
++	status = "okay";
++};
++
++&pronto {
++	status = "okay";
++};
++
++&sdhc_1 {
++	status = "okay";
++
++	pinctrl-names = "default", "sleep";
++	pinctrl-0 = <&sdc1_clk_on &sdc1_cmd_on &sdc1_data_on>;
++	pinctrl-1 = <&sdc1_clk_off &sdc1_cmd_off &sdc1_data_off>;
++};
++
++&sound {
++	status = "disabled";
++};
++
++&usb {
++	status = "okay";
++	extcon = <&usb_id>, <&usb_id>;
++};
++
++&usb_hs_phy {
++	v1p8-supply = <&pm8916_l7>;
++	v3p3-supply = <&pm8916_l13>;
++	extcon = <&usb_id>;
++};
++
++&msmgpio {
++	usb_id_default: usb-id-default {
++		pins = "gpio110";
++		function = "gpio";
++
++		drive-strength = <8>;
++		input-enable;
++		bias-pull-up;
++	};
++};
++
++&smd_rpm_regulators {
++	vdd_l1_l2_l3-supply = <&pm8916_s3>;
++	vdd_l4_l5_l6-supply = <&pm8916_s4>;
++	vdd_l7-supply = <&pm8916_s4>;
++
++	s3 {
++		regulator-min-microvolt = <1200000>;
++		regulator-max-microvolt = <1300000>;
++	};
++
++	s4 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <2100000>;
++	};
++
++	l1 {
++		regulator-min-microvolt = <1225000>;
++		regulator-max-microvolt = <1225000>;
++	};
++
++	l2 {
++		regulator-min-microvolt = <1200000>;
++		regulator-max-microvolt = <1200000>;
++	};
++
++	l4 {
++		regulator-min-microvolt = <2050000>;
++		regulator-max-microvolt = <2050000>;
++	};
++
++	l5 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++	};
++
++	l6 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++	};
++
++	l7 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <1800000>;
++	};
++
++	l8 {
++		regulator-min-microvolt = <2850000>;
++		regulator-max-microvolt = <2900000>;
++	};
++
++	l9 {
++		regulator-min-microvolt = <3300000>;
++		regulator-max-microvolt = <3300000>;
++	};
++
++	l10 {
++		regulator-min-microvolt = <2700000>;
++		regulator-max-microvolt = <2800000>;
++	};
++
++	l11 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <2950000>;
++		regulator-allow-set-load;
++		regulator-system-load = <200000>;
++	};
++
++	l12 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <2950000>;
++	};
++
++	l13 {
++		regulator-min-microvolt = <3075000>;
++		regulator-max-microvolt = <3075000>;
++	};
++
++	l14 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <3300000>;
++	};
++
++	l15 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <3300000>;
++	};
++
++	l16 {
++		regulator-min-microvolt = <1800000>;
++		regulator-max-microvolt = <3300000>;
++	};
++
++	l17 {
++		regulator-min-microvolt = <2850000>;
++		regulator-max-microvolt = <2850000>;
++		regulator-always-on;
++	};
++
++	l18 {
++		regulator-min-microvolt = <2700000>;
++		regulator-max-microvolt = <2700000>;
++	};
++};
++
++// HACK : must includes here
++#include "msm8916-modem.dtsi"
+diff --git a/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-sp970.dts b/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-sp970.dts
+new file mode 100644
+index 000000000..724d5edef
+--- /dev/null
++++ b/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-sp970.dts
+@@ -0,0 +1,84 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (C) 2021-2022 HandsomeYingyan <handsomeyingyan@gmail.com>
++ *
++ */
++ 
++/dts-v1/;
++#include "msm8916-handsome-openstick-common.dtsi"
++
++/ {
++	model = "Handsome OpenStick SP970";
++	compatible = "handsome,openstick", "qcom,msm8916";
++
++	gpio-keys {
++		compatible = "gpio-keys";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		autorepeat;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&gpio_keys_default>;
++		label = "GPIO Buttons";
++
++		reset {
++			label = "Restart";
++			gpios = <&msmgpio 107 GPIO_ACTIVE_LOW>;
++			linux,code = <KEY_RESTART>;
++		};
++	};
++
++	leds {
++		pinctrl-names = "default";
++		pinctrl-0 = <&msmgpio_leds>;
++
++		compatible = "gpio-leds";
++
++		wifi {
++			label = "blue:wifi";
++			gpios = <&msmgpio 28 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "phy0tx";
++			default-state = "off";
++		};
++
++		led_internet: internet {
++			label = "green:internet";
++			gpios = <&msmgpio 10 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++		os {
++			label = "red:os";
++			gpios = <&msmgpio 9 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "heartbeat";
++			default-state = "on";
++		};
++
++	};
++};
++
++&pronto {
++	status = "okay";
++
++	iris {
++		compatible = "qcom,wcn3660b";
++	};
++};
++
++&msmgpio {
++	msmgpio_leds: msmgpio-leds {
++		pins = "gpio28","gpio10","gpio9";
++		function = "gpio";
++
++		bias-disabled;
++	};
++
++	gpio_keys_default: gpio_keys_default {
++		pins = "gpio107";
++		function = "gpio";
++
++		drive-strength = <8>;
++		input-enable;
++		bias-pull-up;
++	};
++};
+diff --git a/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-ufi001b.dts b/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-ufi001b.dts
+new file mode 100644
+index 000000000..beade9af8
+--- /dev/null
++++ b/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-ufi001b.dts
+@@ -0,0 +1,89 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (C) 2021-2022 HandsomeYingyan <handsomeyingyan@gmail.com>
++ *
++ */
++ 
++/dts-v1/;
++#include "msm8916-handsome-openstick-common.dtsi"
++
++/ {
++	model = "Handsome OpenStick UFI001B";
++	compatible = "handsome,openstick", "qcom,msm8916";
++
++	gpio-keys {
++		compatible = "gpio-keys";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		autorepeat;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&gpio_keys_default>;
++		label = "GPIO Buttons";
++
++		reset {
++			label = "Restart";
++			gpios = <&msmgpio 37 GPIO_ACTIVE_LOW>;
++			linux,code = <KEY_RESTART>;
++		};
++	};
++
++	leds {
++		pinctrl-names = "default";
++		pinctrl-0 = <&msmgpio_leds>;
++
++		compatible = "gpio-leds";
++
++		wifi {
++			label = "blue:wifi";
++			gpios = <&msmgpio 20 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "phy0tx";
++			default-state = "off";
++		};
++
++		led_internet: internet {
++			label = "green:internet";
++			gpios = <&msmgpio 21 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++		os {
++			label = "red:os";
++			gpios = <&msmgpio 22 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "heartbeat";
++			default-state = "on";
++		};
++
++		sim_sel {
++			label = "sim:sel";
++			gpios = <&msmgpio 2 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++		sim_en {
++			label = "sim:en";
++			gpios = <&msmgpio 1 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++
++	};
++};
++
++&msmgpio {
++	msmgpio_leds: msmgpio-leds {
++		pins = "gpio1","gpio2","gpio20","gpio21","gpio22";
++		function = "gpio";
++
++		bias-disabled;
++	};
++
++	gpio_keys_default: gpio_keys_default {
++		pins = "gpio37";
++		function = "gpio";
++
++		drive-strength = <8>;
++		input-enable;
++		bias-pull-up;
++	};
++};
+diff --git a/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-ufi001c.dts b/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-ufi001c.dts
+new file mode 100644
+index 000000000..cf12c2c09
+--- /dev/null
++++ b/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-ufi001c.dts
+@@ -0,0 +1,101 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (C) 2021-2022 HandsomeYingyan <handsomeyingyan@gmail.com>
++ *
++ */
++ 
++/dts-v1/;
++#include "msm8916-handsome-openstick-common.dtsi"
++
++/ {
++	model = "Handsome OpenStick UFI001C";
++	compatible = "handsome,openstick", "qcom,msm8916";
++
++	gpio-keys {
++		compatible = "gpio-keys";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		autorepeat;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&gpio_keys_default>;
++		label = "GPIO Buttons";
++
++		reset {
++			label = "Restart";
++			gpios = <&msmgpio 37 GPIO_ACTIVE_LOW>;
++			linux,code = <KEY_RESTART>;
++		};
++	};
++
++	leds {
++		pinctrl-names = "default";
++		pinctrl-0 = <&msmgpio_leds>;
++
++		compatible = "gpio-leds";
++
++		wifi {
++			label = "blue:wifi";
++			gpios = <&msmgpio 20 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "phy0tx";
++			default-state = "off";
++		};
++
++		led_internet: internet {
++			label = "green:internet";
++			gpios = <&msmgpio 21 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++		os {
++			label = "red:os";
++			gpios = <&msmgpio 22 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "heartbeat";
++			default-state = "on";
++		};
++
++		sim_sel {
++			label = "sim:sel";
++			gpios = <&msmgpio 2 GPIO_ACTIVE_HIGH>;
++			default-state = "on";
++		};
++
++		sim_en {
++			label = "sim:en";
++			gpios = <&msmgpio 1 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++		sim_sel2 {
++			label = "sim:sel2";
++			gpios = <&msmgpio 0 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++		sim_en2 {
++			label = "sim:en2";
++			gpios = <&msmgpio 3 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++
++	};
++};
++
++&msmgpio {
++	msmgpio_leds: msmgpio-leds {
++		pins = "gpio0","gpio1","gpio2","gpio3","gpio20","gpio21","gpio22";
++		function = "gpio";
++
++		bias-disabled;
++	};
++
++	gpio_keys_default: gpio_keys_default {
++		pins = "gpio37";
++		function = "gpio";
++
++		drive-strength = <8>;
++		input-enable;
++		bias-pull-up;
++	};
++};
+diff --git a/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-uz801.dts b/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-uz801.dts
+new file mode 100644
+index 000000000..f3fe8cbc0
+--- /dev/null
++++ b/arch/arm64/boot/dts/qcom/msm8916-handsome-openstick-uz801.dts
+@@ -0,0 +1,76 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Copyright (C) 2021-2022 HandsomeYingyan <handsomeyingyan@gmail.com>
++ *
++ */
++ 
++/dts-v1/;
++#include "msm8916-handsome-openstick-common.dtsi"
++
++/ {
++	model = "Handsome OpenStick UZ801";
++	compatible = "handsome,openstick", "qcom,msm8916";
++
++	gpio-keys {
++		compatible = "gpio-keys";
++		#address-cells = <1>;
++		#size-cells = <0>;
++		autorepeat;
++
++		pinctrl-names = "default";
++		pinctrl-0 = <&gpio_keys_default>;
++		label = "GPIO Buttons";
++
++		reset {
++			label = "Restart";
++			gpios = <&msmgpio 23 GPIO_ACTIVE_LOW>;
++			linux,code = <KEY_RESTART>;
++		};
++	};
++
++	leds {
++		pinctrl-names = "default";
++		pinctrl-0 = <&msmgpio_leds>;
++
++		compatible = "gpio-leds";
++
++		wifi {
++			label = "blue:wifi";
++			gpios = <&msmgpio 6 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "phy0tx";
++			default-state = "off";
++		};
++
++		led_internet: internet {
++			label = "green:internet";
++			gpios = <&msmgpio 8 GPIO_ACTIVE_HIGH>;
++			default-state = "off";
++		};
++
++		os {
++			label = "red:os";
++			gpios = <&msmgpio 7 GPIO_ACTIVE_HIGH>;
++			linux,default-trigger = "heartbeat";
++			default-state = "on";
++		};
++
++	};
++};
++
++&msmgpio {
++	msmgpio_leds: msmgpio-leds {
++		pins = "gpio6","gpio7","gpio8";
++		function = "gpio";
++
++		bias-disabled;
++	};
++
++	gpio_keys_default: gpio_keys_default {
++		pins = "gpio23";
++		function = "gpio";
++
++		drive-strength = <8>;
++		input-enable;
++		bias-pull-up;
++	};
++};
+-- 
+2.36.1
