@@ -1,6 +1,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 #
-# Copyright (C) 2020-2021 HandsomeMod Project
+# Copyright (C) 2020-2022 HandsomeMod Project
 #
 # THANKS TO:
 # Postmarket OS Project
@@ -26,5 +26,6 @@ endef
 include $(INCLUDE_DIR)/target.mk
 
 DEFAULT_PACKAGES += partx-utils mkf2fs e2fsprogs
+DEFAULT_PACKAGES += kmod-wcn36xx kmod-qcom-remoteproc kmod-qcom-wcnss kmod-qcom-venus kmod-qcom-bluetooth
 
 $(eval $(call BuildTarget))
