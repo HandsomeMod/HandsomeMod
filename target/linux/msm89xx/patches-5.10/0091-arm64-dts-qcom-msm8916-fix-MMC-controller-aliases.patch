@@ -1,0 +1,27 @@
+From bed5736efc2658d82e191511fa6df5dc8c5f6331 Mon Sep 17 00:00:00 2001
+From: HandsomeYingyan <handsomeyingyan@gmail.com>
+Date: Mon, 16 May 2022 22:54:08 +0800
+Subject: [PATCH 1/2] arm64: dts: qcom: msm8916: fix MMC controller aliases
+
+---
+ arch/arm64/boot/dts/qcom/msm8916.dtsi         |   4 +-
+ 1 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm64/boot/dts/qcom/msm8916.dtsi b/arch/arm64/boot/dts/qcom/msm8916.dtsi
+index 2a3500f2d..1aaeb8428 100644
+--- a/arch/arm64/boot/dts/qcom/msm8916.dtsi
++++ b/arch/arm64/boot/dts/qcom/msm8916.dtsi
+@@ -23,8 +23,8 @@ / {
+ 	#size-cells = <2>;
+ 
+ 	aliases {
+-		sdhc1 = &sdhc_1; /* SDC1 eMMC slot */
+-		sdhc2 = &sdhc_2; /* SDC2 SD card slot */
++		mmc0 = &sdhc_1; /* SDC1 eMMC slot */
++		mmc1 = &sdhc_2; /* SDC2 SD card slot */
+ 	};
+ 
+ 	chosen { };
+-- 
+2.36.1
+

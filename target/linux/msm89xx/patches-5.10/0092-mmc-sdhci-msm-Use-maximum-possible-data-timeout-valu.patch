@@ -1,0 +1,40 @@
+From 89983f1aecaf9be378af7784f51be8081bdc47ca Mon Sep 17 00:00:00 2001
+From: Sahitya Tummala <stummala@codeaurora.org>
+Date: Fri, 6 Aug 2021 12:25:00 +0530
+Subject: [PATCH 2/2] mmc: sdhci-msm: Use maximum possible data timeout value
+
+The Qcom SD controller defines the usage of 0xF in data
+timeout counter register (0x2E) which is actually a reserved
+bit as per specification. This would result in maximum of 21.26 secs
+timeout value.
+
+Some SDcard taking more time than 2.67secs (timeout value corresponding
+to 0xE) and with that observed data timeout errors.
+So increasing the timeout value to max possible timeout.
+
+Signed-off-by: Sahitya Tummala <stummala@codeaurora.org>
+Signed-off-by: Sarthak Garg <sartgarg@codeaurora.org>
+Acked-by: Adrian Hunter <adrian.hunter@intel.com>
+Link: https://lore.kernel.org/r/1628232901-30897-3-git-send-email-sartgarg@codeaurora.org
+Signed-off-by: Ulf Hansson <ulf.hansson@linaro.org>
+---
+ drivers/mmc/host/sdhci-msm.c | 3 +++
+ 1 file changed, 3 insertions(+)
+
+diff --git a/drivers/mmc/host/sdhci-msm.c b/drivers/mmc/host/sdhci-msm.c
+index 3451eb325..1110321fa 100644
+--- a/drivers/mmc/host/sdhci-msm.c
++++ b/drivers/mmc/host/sdhci-msm.c
+@@ -2437,6 +2437,9 @@ static int sdhci_msm_probe(struct platform_device *pdev)
+ 
+ 	msm_host->mmc->caps |= MMC_CAP_WAIT_WHILE_BUSY | MMC_CAP_NEED_RSP_BUSY;
+ 
++	/* Set the timeout value to max possible */
++	host->max_timeout_count = 0xF;
++
+ 	pm_runtime_get_noresume(&pdev->dev);
+ 	pm_runtime_set_active(&pdev->dev);
+ 	pm_runtime_enable(&pdev->dev);
+-- 
+2.36.1
+
