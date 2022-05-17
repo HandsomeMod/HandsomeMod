@@ -1,6 +1,6 @@
 #
 # Copyright (C) 2006-2014 OpenWrt.org
-# Copyright (C) 2020-2021 HandsomeMod Project
+# Copyright (C) 2020-2022 HandsomeMod Project
 #
 # This is free software, licensed under the GNU General Public License v2.
 # See /LICENSE for more information.
@@ -1611,6 +1611,7 @@ define KernelPackage/usb-gadget
 	CONFIG_USB_CONFIGFS_F_MIDI=n \
 	CONFIG_USB_CONFIGFS_F_HID=n \
 	CONFIG_USB_CONFIGFS_F_PRINTER=n \
+  CONFIG_USB_CONFIGFS_F_UVC=n \
 	CONFIG_USB_OTG=y
   HIDDEN:=1
   FILES:=\
@@ -1742,7 +1743,7 @@ $(eval $(call KernelPackage,usb-gadget-mass-storage))
 define KernelPackage/usb-gadget-functionfs
   TITLE:=USB Function filesystem support
   KCONFIG:= \
-	CONFIG_USB_CONFIGFS_F_FS \
+	CONFIG_USB_CONFIGFS_F_FS=y \
 	CONFIG_USB_FUNCTIONFS \
 	CONFIG_USB_FUNCTIONFS_ETH=n \
 	CONFIG_USB_FUNCTIONFS_RNDIS=y \
