@@ -30,7 +30,7 @@ define Device/Handsome_handsome-openstick-ufi001b
   $(Device/msm8916)
   DEVICE_VENDOR := Handsome
   DEVICE_MODEL := OpenStick UFI001B
-  DEVICE_PACKAGES := wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-ufi001b-firmware qcom-msm8916-openstick-ufi001b-wcnss-firmware qcom-msm8916-wcnss-openstick-ufi001b-nv
+  DEVICE_PACKAGES := openstick-tweaks wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-ufi001b-firmware qcom-msm8916-openstick-ufi001b-wcnss-firmware qcom-msm8916-wcnss-openstick-ufi001b-nv
 endef
 
 TARGET_DEVICES += Handsome_handsome-openstick-ufi001b
@@ -39,7 +39,7 @@ define Device/Handsome_handsome-openstick-ufi001c
   $(Device/msm8916)
   DEVICE_VENDOR := Handsome
   DEVICE_MODEL := OpenStick UFI001C
-  DEVICE_PACKAGES := wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-ufi001c-firmware qcom-msm8916-openstick-ufi001c-wcnss-firmware qcom-msm8916-wcnss-openstick-ufi001c-nv
+  DEVICE_PACKAGES := openstick-tweaks wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-ufi001c-firmware qcom-msm8916-openstick-ufi001c-wcnss-firmware qcom-msm8916-wcnss-openstick-ufi001c-nv
 endef
 
 TARGET_DEVICES += Handsome_handsome-openstick-ufi001c
@@ -48,7 +48,7 @@ define Device/Handsome_handsome-openstick-sp970
   $(Device/msm8916)
   DEVICE_VENDOR := Handsome
   DEVICE_MODEL := OpenStick SP970
-  DEVICE_PACKAGES := wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-sp970-firmware qcom-msm8916-openstick-sp970-wcnss-firmware qcom-msm8916-wcnss-openstick-sp970-nv
+  DEVICE_PACKAGES := openstick-tweaks wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-sp970-firmware qcom-msm8916-openstick-sp970-wcnss-firmware qcom-msm8916-wcnss-openstick-sp970-nv
 endef
 
 TARGET_DEVICES += Handsome_handsome-openstick-sp970
@@ -57,7 +57,7 @@ define Device/Handsome_handsome-openstick-uz801
   $(Device/msm8916)
   DEVICE_VENDOR := Handsome
   DEVICE_MODEL := OpenStick UZ801
-  DEVICE_PACKAGES := wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-uz801-firmware qcom-msm8916-openstick-uz801-wcnss-firmware qcom-msm8916-wcnss-openstick-uz801-nv
+  DEVICE_PACKAGES := openstick-tweaks wpad-basic-wolfssl kmod-qcom-modem qcom-msm8916-modem-openstick-uz801-firmware qcom-msm8916-openstick-uz801-wcnss-firmware qcom-msm8916-wcnss-openstick-uz801-nv
 endef
 
 TARGET_DEVICES += Handsome_handsome-openstick-uz801
