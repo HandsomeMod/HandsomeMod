@@ -44,7 +44,7 @@ $(eval $(call KernelPackage,qcom-camss))
 define KernelPackage/qcom-venus
   SUBMENU:=Video Encoder/Decoder Support
   TITLE:=Qualcomm Venus V4L2 encoder/decoder driver
-  DEPENDS:=@TARGET_msm89xx +kmod-video-core +kmod-video-videobuf2 +kmod-video-videobuf2-dma-contig +kmod-qcom-remoteproc +venus-firmware
+  DEPENDS:=@TARGET_msm89xx +kmod-video-core +kmod-video-gspca-core +kmod-video-videobuf2 +kmod-video-videobuf2-dma-contig +kmod-qcom-remoteproc +venus-firmware
   KCONFIG:= \
          CONFIG_V4L_MEM2MEM_DRIVERS=y \
          CONFIG_VIDEO_MEM2MEM_DEINTERLACE=y \
@@ -101,13 +101,16 @@ define KernelPackage/qcom-remoteproc
          $(LINUX_DIR)/drivers/remoteproc/qcom_sysmon.ko \
          $(LINUX_DIR)/drivers/rpmsg/qcom_glink.ko \
          $(LINUX_DIR)/drivers/rpmsg/qcom_glink_smem.ko \
-         $(LINUX_DIR)/drivers/soc/qcom/pdr_interface.ko \
          $(LINUX_DIR)/drivers/misc/fastrpc.ko \
          $(LINUX_DIR)/net/qrtr/qrtr.ko \
          $(LINUX_DIR)/net/qrtr/ns.ko \
          $(LINUX_DIR)/net/qrtr/qrtr-smd.ko \
          $(LINUX_DIR)/net/qrtr/qrtr-tun.ko
-  AUTOLOAD:=$(call AutoLoad,20,qcom_common qcom_pil_info qcom_sysmon mdt_loader qcom_memshare qrtr ns qrtr-smd qrtr-tun fastrpc pdr_interface qcom_glink qcom_glink_smem qmi_helpers)
+  AUTOLOAD:=$(call AutoLoad,20,qcom_common qcom_pil_info qcom_sysmon mdt_loader qcom_memshare qrtr ns qrtr-smd qrtr-tun fastrpc qcom_glink qcom_glink_smem qmi_helpers)
+  ifneq ($(wildcard $(LINUX_DIR)/drivers/soc/qcom/pdr_interface.ko),)
+         FILES += $(LINUX_DIR)/drivers/soc/qcom/pdr_interface.ko
+         AUTOLOAD += $(call AutoLoad,20,pdr_interface)
+  endif
 endef
 
 $(eval $(call KernelPackage,qcom-remoteproc))
