@@ -26,6 +26,6 @@ endef
 include $(INCLUDE_DIR)/target.mk
 
 DEFAULT_PACKAGES += partx-utils mkf2fs e2fsprogs
-DEFAULT_PACKAGES += kmod-wcn36xx kmod-qcom-remoteproc kmod-qcom-wcnss kmod-qcom-venus kmod-qcom-bluetooth
+DEFAULT_PACKAGES += kmod-wcn36xx kmod-qcom-remoteproc kmod-qcom-wcnss kmod-qcom-bluetooth
 
 $(eval $(call BuildTarget))
