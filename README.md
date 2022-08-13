@@ -51,7 +51,7 @@ This means those socs can get better support than others.
 HandsomeMod based on OpenWrt project.
 
 	* branch : openwrt-21.02
-	* commit: 09dae4feac941f3a6190cf361479bf8b2ba194bf
+	* commit: b93327c4692e605649ff1afade98899a9c4aa1ca
 
 https://github.com/openwrt/openwrt
 
