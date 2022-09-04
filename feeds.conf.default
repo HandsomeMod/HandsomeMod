@@ -1,13 +1,13 @@
-src-git packages https://github.com/HandsomeMod/packages.git
-src-git luci https://git.openwrt.org/project/luci.git;openwrt-21.02
-src-git routing https://git.openwrt.org/feed/routing.git;openwrt-21.02
-src-git telephony https://git.openwrt.org/feed/telephony.git;openwrt-21.02
+src-git-full packages https://github.com/HandsomeMod/packages.git
+src-git-full luci https://git.openwrt.org/project/luci.git;openwrt-21.02
+src-git-full routing https://git.openwrt.org/feed/routing.git;openwrt-21.02
+src-git-full telephony https://git.openwrt.org/feed/telephony.git;openwrt-21.02
 
 # HandsomeFeeds
-src-git handsomefeed https://github.com/HandsomeMod/handsomefeed.git
+src-git-full handsomefeed https://github.com/HandsomeMod/handsomefeed.git
 
 # Lean Feeds
-src-git extra https://github.com/HandsomeMod/extra.git
+src-git-full extra https://github.com/HandsomeMod/extra.git
 
 # Xorg Feeds (WIP)
-src-git xorg https://github.com/HandsomeMod/xorg.git
+src-git-full xorg https://github.com/HandsomeMod/xorg.git
